@@ -1,0 +1,1863 @@
+TPT App Media QC
+
+1. Product Definition
+
+Product name: TPT Media QC
+Repository: tpt-app-media-qc
+Product family: TPT Apps
+Category: Professional media quality-control and validation
+Primary distribution: Offline desktop application
+Secondary interfaces: CLI and local watch-folder/automation interface
+Target platforms: Windows first; Linux second; macOS only when the underlying TPT media stack is sufficiently mature
+
+1.1 Executive summary
+
+TPT Media QC is a native, offline-first professional application for automated quality control of audio-visual media assets.
+
+The application ingests media files, executes deterministic technical and perceptual checks, presents failures at exact time/frame locations, and produces auditable reports suitable for post-production, broadcast, OTT delivery, archival, advertising, and professional media workflows.
+
+The application is not intended to be another media player or video editor. Its core value proposition is:
+
+Find technical and quality defects before the customer, broadcaster, archive, platform, or audience does.
+
+The application should be substantially more capable than a simple metadata checker while remaining easier to deploy than enterprise media-QC platforms.
+
+The product should process media entirely on the user's machine by default. No upload to TPT infrastructure is required.
+
+2. Commercial Objective
+
+The initial product should target professional users who have a direct financial reason to prevent media defects.
+
+Primary customer profiles:
+
+Post-production houses
+
+Broadcast production teams
+
+Video agencies
+
+Advertising production
+
+OTT/content delivery teams
+
+Media archives
+
+Corporate media departments
+
+E-learning/video production companies
+
+Independent broadcasters
+
+Media localisation companies
+
+The product should be positioned as professional software rather than a consumer utility.
+
+2.1 Initial pricing hypothesis
+
+Pricing is a commercial hypothesis and must be validated before launch.
+
+Suggested initial structure:
+
+Edition
+
+Indicative price
+
+Intended buyer
+
+Professional
+
+$499
+
+Individual professional
+
+Studio
+
+$999
+
+Small production team
+
+Facility
+
+$1,999+
+
+Multi-user/specialist facility
+
+Avoid recurring cloud infrastructure costs in the initial product.
+
+A perpetual licence should be supported. Optional paid major-version upgrades can be introduced later.
+
+2.2 Competitive positioning
+
+Existing products such as Telestream Vidchecker, Interra BATON, Venera Pulsar, QScan and newer desktop QC tools demonstrate that automated media QC is an established professional category. Existing systems cover technical compliance, audio/video analysis, reporting, watch folders and broadcast standards. citeturn0search2turn0search6turn0search12
+
+TPT should therefore not attempt to win merely by implementing another list of media checks.
+
+The differentiators should be:
+
+Native Rust implementation.
+
+Offline-first operation.
+
+No mandatory cloud upload.
+
+Excellent performance on commodity hardware.
+
+Extremely clear operator workflow.
+
+Exact frame/timecode navigation from every finding.
+
+Unified video, audio, voice and media analysis.
+
+Highly configurable QC profiles.
+
+Reproducible deterministic reports.
+
+Strong developer/CLI automation.
+
+Open-source TPT media foundations underneath a commercial application.
+
+Simple licensing compared with enterprise media platforms.
+
+A current desktop competitor already markets local processing, native Windows/macOS support, 8K, HDR, multiple containers/codecs and PDF/Excel reporting, so those capabilities alone must not be treated as the product's moat. citeturn0search1
+
+3. Product Principles
+
+3.1 Offline first
+
+All core analysis must work without internet access.
+
+The application must not require:
+
+cloud media storage
+
+remote rendering
+
+remote AI APIs
+
+account creation
+
+telemetry
+
+cloud licensing checks
+
+Internet connectivity may optionally be used for:
+
+software updates
+
+licence activation
+
+downloading standards profiles
+
+optional model updates
+
+The user must be able to disable these features.
+
+3.2 Deterministic technical analysis
+
+Technical checks should produce the same result for the same:
+
+input bytes
+
+application version
+
+QC profile
+
+analysis configuration
+
+Results must include enough provenance to reproduce the decision.
+
+3.3 Explain every failure
+
+A result must never simply say:
+
+FAILED
+
+It must explain:
+
+what failed
+
+why it failed
+
+threshold/configuration
+
+measured value
+
+expected value
+
+timecode/frame
+
+affected stream/channel
+
+severity
+
+confidence where applicable
+
+3.4 Do not hide uncertainty
+
+Perceptual/heuristic checks must distinguish:
+
+PASS
+
+WARN
+
+FAIL
+
+INCONCLUSIVE
+
+Do not convert uncertain computer-vision/audio analysis into a false binary result.
+
+3.5 Analysis and presentation are separate
+
+The QC engine must be usable without the desktop GUI.
+
+Architecture:
+
+                    QC Application
+                         |
+             +-----------+-----------+
+             |                       |
+          Desktop                  CLI/API
+             |                       |
+             +-----------+-----------+
+                         |
+                     QC Engine
+                         |
+        +----------------+----------------+
+        |                |                |
+     Metadata         Signal          Perceptual
+       checks         checks            checks
+        |                |                |
+        +----------------+----------------+
+                         |
+                  Result/Event Model
+                         |
+              +----------+----------+
+              |                     |
+          Interactive            Reports
+             review
+
+4. Proposed Repository Structure
+
+tpt-app-media-qc/
+├── Cargo.toml
+├── README.md
+├── LICENSE
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── docs/
+│   ├── architecture.md
+│   ├── qc-model.md
+│   ├── profile-format.md
+│   ├── report-format.md
+│   ├── supported-formats.md
+│   ├── standards.md
+│   └── performance.md
+├── crates/
+│   ├── tpt-app-media-qc-core/
+│   ├── tpt-app-media-qc-model/
+│   ├── tpt-app-media-qc-rules/
+│   ├── tpt-app-media-qc-pipeline/
+│   ├── tpt-app-media-qc-profile/
+│   ├── tpt-app-media-qc-report/
+│   ├── tpt-app-media-qc-cli/
+│   ├── tpt-app-media-qc-tauri/
+│   └── tpt-app-media-qc-test/
+├── profiles/
+│   ├── generic/
+│   ├── broadcast/
+│   ├── streaming/
+│   └── examples/
+└── tests/
+    ├── fixtures/
+    ├── integration/
+    ├── golden/
+    └── performance/
+
+The exact workspace split can be simplified if the project is initially small. The important architectural boundary is between reusable analysis logic and the application shell.
+
+5. Foundation Dependencies
+
+The application should reuse TPT foundations rather than duplicate media functionality.
+
+5.1 Primary dependencies
+
+tpt-kinetix
+
+Primary media ingestion/decoding/demuxing/muxing and pipeline foundation.
+
+Responsibilities:
+
+container parsing
+
+stream discovery
+
+packet/frame decoding
+
+video processing
+
+timestamps
+
+frame access
+
+media pipeline execution
+
+supported codec/container handling
+
+streaming primitives where useful
+
+The application should never implement its own parallel media decoder stack.
+
+Kinetix is intended as a high-concurrency Rust media processing engine and should remain the source of truth for media primitives. citeturn1search5
+
+tpt-cadence
+
+Audio codec foundation.
+
+Responsibilities:
+
+audio packet decoding
+
+PCM extraction
+
+audio metadata
+
+codec-specific stream information
+
+Kinetix should hand audio packets to Cadence where appropriate.
+
+tpt-dsp
+
+Signal-level analysis.
+
+Candidate functionality:
+
+FFT
+
+spectral analysis
+
+RMS
+
+peak detection
+
+filtering
+
+DC offset
+
+phase analysis
+
+noise analysis
+
+silence detection
+
+frequency analysis
+
+loudness-related processing
+
+tpt-dsp is explicitly designed for real-time-safe, zero-allocation DSP and has dedicated core, I/O, control and visualisation crates. citeturn1search10
+
+tpt-voice
+
+Optional higher-level voice analysis.
+
+Potential uses:
+
+speech detection
+
+transcription
+
+speaker segmentation
+
+dialogue detection
+
+transcript alignment
+
+Voice analysis must be optional and must never be required for basic deterministic QC.
+
+tpt-visual
+
+Video/image analysis and visual pipeline support.
+
+Potential uses:
+
+frame inspection
+
+colour analysis
+
+HDR analysis
+
+visual artefact detection
+
+image metrics
+
+GPU acceleration
+
+tpt-av-asset
+
+Asset metadata/cache/job infrastructure.
+
+Potential uses:
+
+persistent asset metadata
+
+thumbnail cache
+
+waveform cache
+
+job persistence
+
+resumable analysis
+
+filesystem watching
+
+tpt-av-test
+
+Testing/conformance foundations.
+
+Potential uses:
+
+golden-media fixtures
+
+conformance tests
+
+deterministic regression tests
+
+fuzzing
+
+media test harnesses
+
+The commercial application must add product-level tests on top of this foundation rather than duplicating it.
+
+6. Core Domain Model
+
+6.1 Asset
+
+struct Asset {
+    id: AssetId,
+    path: PathBuf,
+    fingerprint: AssetFingerprint,
+    size_bytes: u64,
+    modified_time: SystemTime,
+    duration: Option<Duration>,
+    streams: Vec<Stream>,
+}
+
+The fingerprint must be content-based where practical.
+
+A file path alone must not identify an asset because files can be moved or replaced.
+
+6.2 Stream
+
+enum StreamKind {
+    Video,
+    Audio,
+    Subtitle,
+    Data,
+    Attachment,
+    Unknown,
+}
+
+Each stream records:
+
+codec
+
+codec profile
+
+dimensions
+
+pixel format
+
+frame rate
+
+time base
+
+bitrate
+
+duration
+
+language
+
+channel layout
+
+sample rate
+
+bit depth
+
+metadata
+
+stream index
+
+6.3 QC Result
+
+enum Severity {
+    Info,
+    Warning,
+    Error,
+    Critical,
+}
+
+enum ResultStatus {
+    Pass,
+    Warn,
+    Fail,
+    Inconclusive,
+}
+
+A result must contain:
+
+struct QcFinding {
+    rule_id: RuleId,
+    status: ResultStatus,
+    severity: Severity,
+    message: String,
+    measured: Option<Value>,
+    expected: Option<Value>,
+    stream_id: Option<StreamId>,
+    time_range: Option<TimeRange>,
+    frame_range: Option<FrameRange>,
+    evidence: Vec<Evidence>,
+}
+
+6.4 Evidence
+
+Evidence should support:
+
+thumbnail
+
+frame capture
+
+waveform region
+
+spectrum
+
+numerical measurement
+
+metadata excerpt
+
+JSON diagnostic payload
+
+Evidence should be lazily generated where possible.
+
+7. QC Rule Architecture
+
+Rules must be plugins/components in the application architecture.
+
+trait QcRule {
+    fn id(&self) -> RuleId;
+    fn description(&self) -> RuleDescription;
+    fn required_capabilities(&self) -> Capabilities;
+    fn execute(&self, context: &QcContext) -> RuleResult;
+}
+
+Rules should declare:
+
+required streams
+
+required decode capabilities
+
+whether they need full-frame access
+
+whether they can operate on metadata only
+
+whether they can operate incrementally
+
+GPU requirements
+
+expected computational cost
+
+This allows the scheduler to optimise execution.
+
+8. QC Categories
+
+8.1 Container checks
+
+Initial checks:
+
+file readability
+
+container validity
+
+malformed metadata
+
+stream count
+
+stream duration consistency
+
+bitrate
+
+timecode
+
+timebase
+
+timestamp continuity
+
+metadata consistency
+
+unexpected streams
+
+missing expected streams
+
+8.2 Codec checks
+
+codec identification
+
+profile
+
+level
+
+pixel format
+
+bit depth
+
+chroma subsampling
+
+bitrate mode
+
+GOP structure
+
+reference-frame configuration where available
+
+decoder errors
+
+unsupported features
+
+codec/container compatibility
+
+8.3 Video technical checks
+
+Initial target rules:
+
+resolution
+
+frame rate
+
+frame-rate changes
+
+aspect ratio
+
+pixel aspect ratio
+
+interlacing
+
+field order
+
+black frames
+
+freeze frames
+
+duplicate frames
+
+dropped/corrupt frames
+
+unexpected colour bars
+
+unexpected borders
+
+brightness/luma range
+
+chroma range
+
+clipping
+
+colour-space metadata
+
+HDR metadata
+
+scene/shot discontinuity anomalies
+
+8.4 Video perceptual checks
+
+Later-stage rules:
+
+blockiness
+
+blur
+
+ringing
+
+noise
+
+banding
+
+compression artefacts
+
+dead/stuck pixels
+
+flash detection
+
+PSE risk
+
+image corruption
+
+unusual frame anomalies
+
+Perceptual rules should expose thresholds and confidence.
+
+Existing professional systems already offer checks including dead pixels, freezes, black frames, PSE, colour/gamut issues, HDR metadata and compression defects. These should therefore be treated as baseline market expectations rather than unique selling points. citeturn0search2turn0search4
+
+8.5 Audio technical checks
+
+codec
+
+sample rate
+
+bit depth
+
+channel count
+
+channel layout
+
+channel mapping
+
+phase
+
+clipping
+
+peak level
+
+true peak
+
+silence
+
+unexpected silence
+
+dropouts
+
+clicks/pops
+
+DC offset
+
+duration mismatch
+
+8.6 Audio level checks
+
+Support configurable standards/profiles including:
+
+EBU R128
+
+ATSC A/85
+
+BS.1770-derived measurements
+
+configurable LUFS/LKFS targets
+
+The application should store the standard/profile used with every result.
+
+Existing professional QC products already support EBU R128, ATSC/A85 and related loudness measurements, so standards compliance is table stakes for the target market. citeturn0search2
+
+8.7 Subtitle/caption checks
+
+Architecture should support:
+
+subtitle presence
+
+stream language
+
+timing
+
+overlapping cues
+
+invalid durations
+
+malformed data
+
+character limits
+
+missing captions
+
+subtitle/video duration mismatch
+
+Format support should be driven by capabilities of the TPT media foundation.
+
+8.8 Voice/content checks
+
+Optional analysis:
+
+speech present
+
+speech absent
+
+dialogue overlap
+
+speaker changes
+
+transcript alignment
+
+words outside expected transcript
+
+excessive silence
+
+voice intelligibility metrics where defensible
+
+AI/ML checks must be clearly labelled as probabilistic.
+
+9. QC Profiles
+
+A QC profile is the central product abstraction.
+
+Example:
+
+name: "Client Delivery - Example"
+version: 1
+
+rules:
+  container:
+    readable: error
+    duration_consistency: error
+
+  video:
+    resolution:
+      expected: "3840x2160"
+      severity: error
+
+    frame_rate:
+      expected: 25
+      tolerance: 0
+
+    black_frames:
+      max_duration_ms: 500
+      severity: warning
+
+  audio:
+    loudness:
+      standard: ebu-r128
+      target_lufs: -23
+      tolerance_lu: 1
+
+    true_peak:
+      max_db_tp: -1
+
+policy:
+  fail_on: error
+
+Profiles must be:
+
+human-readable
+
+versioned
+
+exportable
+
+importable
+
+deterministic
+
+diffable
+
+testable
+
+A user must be able to create a profile without programming.
+
+10. Analysis Pipeline
+
+The pipeline should avoid decoding the same media repeatedly.
+
+Input
+  |
+  v
+Fingerprint
+  |
+  v
+Container scan
+  |
+  v
+Stream discovery
+  |
+  +----> Metadata rules
+  |
+  v
+Decode planning
+  |
+  +----> Video frame pipeline
+  |
+  +----> Audio sample pipeline
+  |
+  +----> Subtitle pipeline
+  |
+  +----> Optional voice pipeline
+  |
+  v
+Rule aggregation
+  |
+  v
+Finding normalization
+  |
+  v
+Severity evaluation
+  |
+  v
+QC verdict
+  |
+  +----> UI
+  +----> JSON
+  +----> HTML
+  +----> PDF
+  +----> CSV
+
+10.1 Two-pass strategy
+
+Use two analysis levels.
+
+Pass 1: Quick scan
+
+Target:
+
+metadata
+
+container
+
+streams
+
+codecs
+
+durations
+
+timestamps
+
+basic parameters
+
+Goal:
+
+Produce useful results in seconds without full decode.
+
+Pass 2: Full QC
+
+Run only checks that require decoding.
+
+This is important because existing QC systems explicitly distinguish quick container/codec scans from deeper video/audio analysis. citeturn0search24
+
+11. Scheduler
+
+The scheduler should classify jobs by cost.
+
+enum CostClass {
+    Metadata,
+    CheapDecode,
+    FullDecode,
+    Gpu,
+    ExpensiveAnalysis,
+}
+
+It should schedule independent stream analyses concurrently.
+
+Constraints:
+
+configurable CPU worker count
+
+GPU queue where available
+
+bounded memory
+
+backpressure
+
+cancellation
+
+priority
+
+resumability
+
+no unbounded buffering
+
+Large files must not require loading the complete asset into memory.
+
+12. Desktop UI
+
+Use a native Tauri application.
+
+The UI should have these primary screens.
+
+12.1 Dashboard
+
+Displays:
+
+recent jobs
+
+queued jobs
+
+pass/fail statistics
+
+failed assets
+
+active profile
+
+processing throughput
+
+12.2 Import
+
+Support:
+
+drag-and-drop
+
+file picker
+
+folder import
+
+recursive folder import
+
+watch folders
+
+12.3 Job Queue
+
+Columns:
+
+filename
+
+profile
+
+progress
+
+throughput
+
+status
+
+failures
+
+duration
+
+Actions:
+
+pause
+
+resume
+
+cancel
+
+retry
+
+open report
+
+12.4 Asset Inspector
+
+Show:
+
+file information
+
+stream list
+
+metadata
+
+codec information
+
+technical measurements
+
+12.5 Timeline
+
+When a finding has a time range:
+
+display marker
+
+jump to timestamp
+
+show relevant frame
+
+show waveform if audio
+
+show evidence
+
+show rule details
+
+12.6 Finding Inspector
+
+Example:
+
+FAIL — VIDEO.FREEZE_FRAME
+
+Time:
+00:12:34.520 → 00:12:38.760
+
+Measured:
+4.240 seconds
+
+Maximum:
+2.000 seconds
+
+Stream:
+Video 0
+
+Reason:
+No significant frame-to-frame change exceeded the configured
+motion threshold for the configured duration.
+
+The UI should make it possible to go from report → finding → exact media location in one interaction.
+
+13. Watch Folders
+
+Watch folders are essential for professional workflows.
+
+Example:
+
+/Incoming
+    |
+    v
+TPT Media QC
+    |
+    +---- PASS ----> /Approved
+    |
+    +---- FAIL ----> /Rejected
+    |
+    +---- WARN ----> /Review
+
+Configuration:
+
+watch_folder:
+  input: "/Incoming"
+  profile: "Client A"
+  pass: "/Approved"
+  warn: "/Review"
+  fail: "/Rejected"
+  report: "/Reports"
+
+The feature must remain fully local.
+
+14. Reporting
+
+Reports must be generated from an immutable QC result set.
+
+Formats:
+
+Interactive application report
+
+HTML
+
+JSON
+
+CSV
+
+PDF
+
+A report should contain:
+
+application version
+
+profile name/version
+
+profile hash
+
+input fingerprint
+
+analysis timestamp
+
+host information
+
+rule versions
+
+all findings
+
+final verdict
+
+evidence
+
+operator notes
+
+14.1 Report integrity
+
+Every report should contain:
+
+Asset SHA-256
+Profile SHA-256
+Application version
+Ruleset version
+Analysis ID
+
+This makes reports auditable.
+
+15. Comparison Mode
+
+A major usability feature should be file-to-file comparison.
+
+Example:
+
+master_v1.mov
+master_v2.mov
+
+Compare:
+
+metadata
+
+streams
+
+duration
+
+frame rate
+
+resolution
+
+codec
+
+audio layout
+
+loudness
+
+visual differences
+
+audio differences
+
+The UI should show:
+
+Changed:
+Video bitrate       48 Mbps -> 41 Mbps
+Audio channels      6 -> 2
+Loudness            -23.1 -> -19.2 LUFS
+Resolution           3840x2160 -> 1920x1080
+
+This is useful for verifying transcodes and delivery variants.
+
+16. Automation Interface
+
+The CLI should be first-class, not an afterthought.
+
+Example:
+
+tpt-media-qc check \
+  --profile client-a.yaml \
+  --input episode-01.mov \
+  --report episode-01.json
+
+Batch:
+
+tpt-media-qc batch \
+  --profile client-a.yaml \
+  --input ./incoming \
+  --output ./reports
+
+Machine-readable result:
+
+{
+  "status": "fail",
+  "asset": "episode-01.mov",
+  "profile": "client-a",
+  "findings": 3
+}
+
+Exit codes:
+
+0 = PASS
+1 = WARN
+2 = FAIL
+3 = INCONCLUSIVE
+4 = CONFIGURATION_ERROR
+5 = INPUT_ERROR
+6 = INTERNAL_ERROR
+
+The exit-code contract must remain stable.
+
+17. Local API
+
+The desktop application may expose an optional localhost-only API.
+
+Default:
+
+127.0.0.1
+
+Never bind externally by default.
+
+Potential endpoints:
+
+POST /jobs
+GET  /jobs/:id
+GET  /jobs/:id/results
+POST /jobs/:id/cancel
+GET  /profiles
+GET  /health
+
+The API should be disabled by default unless explicitly enabled.
+
+18. Persistence
+
+Use SQLite for local application state.
+
+Store:
+
+projects
+
+assets
+
+fingerprints
+
+QC jobs
+
+profiles
+
+results
+
+findings
+
+report metadata
+
+user preferences
+
+Do not store original media inside the application database.
+
+Store paths and fingerprints.
+
+Cached derived media should be stored separately.
+
+19. Caching
+
+Caching is important for expensive analysis.
+
+Cache keys should include:
+
+asset fingerprint
+application version
+ruleset version
+profile hash
+analysis configuration hash
+
+If any component changes, invalidate only affected results.
+
+Example:
+
+same asset
+same profile
+same rules
+        |
+        +--> reuse existing QC result
+
+But changing:
+
+black-frame threshold
+
+should invalidate only the affected rule, not necessarily the entire analysis.
+
+20. Performance Targets
+
+Initial targets should be treated as engineering goals rather than guarantees.
+
+Metadata scan
+
+Begin displaying results within 1 second for ordinary files.
+
+Process large batches concurrently.
+
+Full QC
+
+Aim for faster-than-real-time processing for common technical checks on commodity modern hardware.
+
+Expensive perceptual checks may legitimately be slower.
+
+Memory
+
+Do not scale memory linearly with media duration.
+
+A 2-hour video should not require 2 hours of decoded frames in RAM.
+
+Concurrency
+
+Use all useful CPU cores while respecting user-configurable limits.
+
+Avoid starving the desktop UI.
+
+GPU
+
+GPU acceleration should be optional.
+
+CPU execution must remain correct.
+
+21. Failure Handling
+
+A single corrupt asset must not terminate a batch.
+
+Each job must have an isolated failure state.
+
+Example:
+
+Batch
+ ├── file01 PASS
+ ├── file02 PASS
+ ├── file03 FAIL
+ ├── file04 INPUT_ERROR
+ └── file05 PASS
+
+The batch itself completes.
+
+Internal panics should be treated as application defects and captured through crash reporting only if the user explicitly enables it.
+
+22. Security and Privacy
+
+The application processes potentially confidential media.
+
+Requirements:
+
+no mandatory network access
+
+no cloud upload
+
+no external telemetry
+
+sandboxed optional AI integrations
+
+safe handling of malformed media
+
+no execution of embedded media content
+
+strict path validation
+
+safe temporary-file handling
+
+secure report generation
+
+no sensitive filenames in telemetry
+
+no automatic external asset fetching
+
+Media parsers must be fuzz tested.
+
+23. Licensing and Commercial Boundaries
+
+The commercial application should remain separate from the open-source TPT foundation repositories.
+
+Example:
+
+Open source:
+    tpt-kinetix
+    tpt-cadence
+    tpt-dsp
+    tpt-visual
+    tpt-voice
+    tpt-av-asset
+    tpt-av-test
+
+Commercial:
+    tpt-app-media-qc
+
+Do not copy product-specific business logic back into the foundation crates unless it is genuinely reusable infrastructure.
+
+The product may contribute generic improvements back to the foundations.
+
+24. Testing Strategy
+
+24.1 Unit tests
+
+Every QC rule must have:
+
+valid input
+
+invalid input
+
+boundary case
+
+malformed input
+
+expected result
+
+24.2 Golden media tests
+
+Maintain a controlled fixture set:
+
+fixtures/
+├── valid/
+├── corrupt/
+├── loudness/
+├── freeze/
+├── black/
+├── clipping/
+├── sync/
+├── hdr/
+├── interlace/
+└── subtitles/
+
+Each fixture must have an expected result.
+
+24.3 Property tests
+
+Useful for:
+
+timecode conversion
+
+frame indexing
+
+duration calculations
+
+threshold logic
+
+profile parsing
+
+result aggregation
+
+24.4 Fuzzing
+
+Fuzz:
+
+containers
+
+metadata
+
+profile parser
+
+result parser
+
+CLI arguments
+
+report generation
+
+media boundary handling
+
+Reuse tpt-av-test where possible.
+
+24.5 Regression tests
+
+Every production bug should produce a permanent regression fixture.
+
+25. Standards Architecture
+
+Standards should be implemented as profiles/rules, not hard-coded into the UI.
+
+Example:
+
+standards/
+├── ebu-r128
+├── atsc-a85
+├── bt-1702
+├── generic-broadcast
+├── streaming
+└── custom
+
+The application should distinguish:
+
+measurement algorithm
+
+standard
+
+profile
+
+customer-specific tolerance
+
+Do not claim formal compliance with an industry standard until the implementation has been validated against appropriate reference material/test suites.
+
+26. MVP
+
+The first commercial MVP should not implement every possible QC feature.
+
+MVP scope:
+
+Ingestion
+
+file/folder import
+
+drag-and-drop
+
+recursive batch processing
+
+Media inspection
+
+container
+
+streams
+
+codec
+
+duration
+
+resolution
+
+frame rate
+
+audio layout
+
+metadata
+
+Video QC
+
+corrupt decode
+
+black frames
+
+freeze frames
+
+duplicate frames
+
+frame-rate consistency
+
+resolution
+
+aspect ratio
+
+luma range
+
+colour metadata
+
+Audio QC
+
+sample rate
+
+bit depth
+
+channel layout
+
+silence
+
+clipping
+
+peak
+
+loudness
+
+phase
+
+Results
+
+PASS/WARN/FAIL
+
+exact timecode
+
+evidence frame
+
+waveform evidence
+
+JSON
+
+HTML
+
+PDF
+
+UX
+
+queue
+
+profile selection
+
+timeline findings
+
+asset inspector
+
+report viewer
+
+Automation
+
+CLI
+
+watch folder
+
+This is enough to create a commercially credible product.
+
+27. Post-MVP
+
+Phase 2:
+
+HDR analysis
+
+PSE analysis
+
+advanced compression artefacts
+
+dead pixel detection
+
+subtitle/caption validation
+
+file comparison
+
+custom rule builder
+
+richer report templates
+
+GPU acceleration
+
+Phase 3:
+
+Voice integration
+
+transcription validation
+
+speaker analysis
+
+semantic/content checks
+
+automated correction
+
+advanced broadcast/OTT profiles
+
+Phase 4:
+
+plugin SDK
+
+third-party rules
+
+facility management
+
+distributed local workers
+
+optional LAN processing
+
+Cloud infrastructure should not be introduced unless customers demonstrate a real need.
+
+28. Product Differentiation Roadmap
+
+The product should eventually become more than a checklist.
+
+Level 1 — Technical QC
+
+"Is the file technically valid?"
+
+Level 2 — Quality QC
+
+"Does the media contain visible/audible defects?"
+
+Level 3 — Delivery QC
+
+"Does this asset meet this customer's exact delivery specification?"
+
+Level 4 — Workflow QC
+
+"Can I automatically process thousands of assets and route failures?"
+
+Level 5 — Explainable QC
+
+"Can I prove why this asset passed or failed?"
+
+The final level is important for the high-ticket positioning.
+
+29. Commercial Product Packaging
+
+Professional
+
+unlimited local files
+
+full technical QC
+
+reports
+
+profiles
+
+CLI
+
+one-machine licence
+
+Studio
+
+multiple local machines
+
+advanced perceptual checks
+
+custom profiles
+
+automation
+
+priority updates
+
+Facility
+
+multiple machines
+
+LAN workers
+
+central profile distribution
+
+audit history
+
+advanced integrations
+
+commercial support
+
+Do not build the Facility features until there is evidence customers need them.
+
+30. Definition of Done
+
+The first release is ready for paid users when:
+
+A user can install the application without development tooling.
+
+A user can drag a media file into the application.
+
+The application can inspect all supported streams.
+
+A QC profile can be selected or created.
+
+A complete QC job can run offline.
+
+Multiple files can be processed concurrently.
+
+A failure identifies an exact time/frame when applicable.
+
+Findings include measured and expected values where applicable.
+
+The user can navigate directly from a finding to evidence.
+
+Reports can be exported to PDF and JSON.
+
+The CLI can run the same QC engine as the GUI.
+
+Watch-folder processing works.
+
+A corrupt media file cannot crash the entire batch.
+
+Golden-media tests cover every production rule.
+
+Fuzz testing covers parsers and media-boundary code.
+
+Results are reproducible from asset fingerprint + profile + application/ruleset version.
+
+No internet connection is required for core operation.
+
+A clean-machine installation has been tested.
+
+Performance has been benchmarked against representative HD/UHD files.
+
+31. Recommended Implementation Order
+
+Establish Cargo workspace and application shell.
+
+Integrate Kinetix and enumerate media capabilities.
+
+Implement asset fingerprinting.
+
+Implement stream/container inspection.
+
+Implement the QC domain model.
+
+Implement profile parsing.
+
+Implement metadata QC rules.
+
+Implement video decode pipeline.
+
+Implement basic video QC.
+
+Implement audio decode through Cadence.
+
+Implement DSP-based audio QC.
+
+Implement result aggregation.
+
+Implement SQLite persistence.
+
+Implement job scheduler.
+
+Implement desktop queue UI.
+
+Implement timeline/evidence viewer.
+
+Implement JSON/HTML reporting.
+
+Implement PDF reporting.
+
+Implement CLI.
+
+Implement watch folders.
+
+Add golden-media test suite.
+
+Add fuzzing.
+
+Benchmark and profile.
+
+Harden error handling.
+
+Package Windows release.
+
+Run a private beta with real professional media.
+
+Only then expand the rule catalogue.
+
+32. Strategic Constraint
+
+Do not attempt to match every feature of Vidchecker/BATON/Pulsar on version 1.
+
+Those products have years of standards coverage and enterprise integrations. Current competitors demonstrate that broad broadcast compliance, HDR, IMF, DPP/AS-11 and advanced audio/video testing are already expected in the high end of this category. citeturn0search2turn0search6turn0search12
+
+TPT's first advantage should instead be:
+
+A modern, extremely fast, offline, developer-friendly QC engine with a dramatically better operator experience.
+
+Then use the open TPT media foundation to expand coverage rapidly.
+
+The commercial application should be the place where these foundations become a coherent professional product.
