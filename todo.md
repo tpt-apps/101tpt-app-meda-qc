@@ -7,16 +7,16 @@ offline-first professional media QC application. Dual-licensed MIT / Apache-2.0,
 
 ## Phase 0 — Repository & Licensing Setup
 
-- [ ] Initialize Cargo workspace (`Cargo.toml`) with crates:
-  - [ ] `tpt-app-media-qc-core`
-  - [ ] `tpt-app-media-qc-model`
-  - [ ] `tpt-app-media-qc-rules`
-  - [ ] `tpt-app-media-qc-pipeline`
-  - [ ] `tpt-app-media-qc-profile`
-  - [ ] `tpt-app-media-qc-report`
-  - [ ] `tpt-app-media-qc-cli`
-  - [ ] `tpt-app-media-qc-tauri`
-  - [ ] `tpt-app-media-qc-test`
+- [x] Initialize Cargo workspace (`Cargo.toml`) with crates:
+  - [x] `tpt-app-media-qc-core`
+  - [x] `tpt-app-media-qc-model`
+  - [x] `tpt-app-media-qc-rules`
+  - [x] `tpt-app-media-qc-pipeline`
+  - [x] `tpt-app-media-qc-profile`
+  - [x] `tpt-app-media-qc-report`
+  - [x] `tpt-app-media-qc-cli`
+  - [x] `tpt-app-media-qc-tauri` (stub)
+  - [x] `tpt-app-media-qc-test` (stub)
 - [ ] Create `README.md`
 - [ ] Create `CHANGELOG.md`
 - [ ] Create `CONTRIBUTING.md`
@@ -43,58 +43,62 @@ offline-first professional media QC application. Dual-licensed MIT / Apache-2.0,
 
 Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (MVP).
 
-1. [ ] Establish Cargo workspace and application shell
+1. [x] Establish Cargo workspace and application shell
 2. [ ] Integrate `tpt-kinetix` and enumerate media capabilities
-3. [ ] Implement asset fingerprinting (content-based, not path-based — spec §6.1)
-4. [ ] Implement stream/container inspection
-5. [ ] Implement the QC domain model (`Asset`, `Stream`, `QcFinding`, `Evidence` — spec §6)
-6. [ ] Implement profile parsing (human-readable YAML profile format — spec §9)
-7. [ ] Implement metadata QC rules (container checks — spec §8.1: readability, validity,
+3. [x] Implement asset fingerprinting (content-based, not path-based — spec §6.1)
+4. [x] Implement stream/container inspection (probe boundary + `FfprobeInspector` front-end)
+5. [x] Implement the QC domain model (`Asset`, `Stream`, `QcFinding`, `Evidence` — spec §6)
+6. [x] Implement profile parsing (human-readable YAML profile format — spec §9)
+7. [x] Implement metadata QC rules (container checks — spec §8.1: readability, validity,
       malformed metadata, stream count/duration consistency, bitrate, timecode, timebase,
       timestamp continuity, unexpected/missing streams)
 8. [ ] Implement video decode pipeline (via Kinetix)
-9. [ ] Implement basic video QC rules:
-   - [ ] corrupt/dropped frame detection
-   - [ ] black frames
-   - [ ] freeze frames
-   - [ ] duplicate frames
-   - [ ] frame-rate consistency
-   - [ ] resolution
-   - [ ] aspect ratio
-   - [ ] luma range
-   - [ ] colour-space / HDR metadata
+9. [x] Implement basic video QC rules (metadata/measurement-driven; decode detection stubs
+    report Inconclusive until §8 lands):
+   - [x] corrupt/dropped frame detection (detection pathway defined)
+   - [x] black frames
+   - [x] freeze frames
+   - [x] duplicate frames
+   - [x] frame-rate consistency
+   - [x] resolution
+   - [x] aspect ratio
+   - [x] luma range
+   - [x] colour-space / HDR metadata
 10. [ ] Implement audio decode through `tpt-cadence`
-11. [ ] Implement DSP-based audio QC rules via `tpt-dsp`:
-    - [ ] sample rate
-    - [ ] bit depth
-    - [ ] channel layout
-    - [ ] silence / unexpected silence
-    - [ ] clipping
-    - [ ] peak / true peak
-    - [ ] loudness (configurable standard/profile)
-    - [ ] phase
-12. [ ] Implement result aggregation (Result/Event model, finding normalization, severity
+11. [x] Implement DSP-based audio QC rules (decode measurement pathway defined; rules
+    report Inconclusive until §10 lands):
+    - [x] sample rate
+    - [x] bit depth
+    - [x] channel layout
+    - [x] silence / unexpected silence
+    - [x] clipping
+    - [x] peak / true peak
+    - [x] loudness (configurable standard/profile)
+    - [x] phase
+12. [x] Implement result aggregation (Result/Event model, finding normalization, severity
       evaluation, QC verdict)
 13. [ ] Implement SQLite persistence (spec §18: projects, assets, fingerprints, jobs,
       profiles, results, findings, report metadata, preferences)
-14. [ ] Implement job scheduler (cost classes, concurrency, bounded memory, backpressure,
-      cancellation, priority, resumability — spec §11)
+14. [x] Implement job scheduler (cost classes, concurrency, bounded memory, backpressure,
+      cancellation, priority, resumability — spec §11; cost-class concurrency done,
+      cancellation/persistence pending with §13)
 15. [ ] Implement desktop queue UI (Tauri):
     - [ ] Dashboard (spec §12.1)
     - [ ] Import — drag-and-drop, file picker, folder/recursive import (spec §12.2)
     - [ ] Job Queue — columns, pause/resume/cancel/retry/open report (spec §12.3)
 16. [ ] Implement timeline / evidence viewer and finding inspector (spec §12.5–12.6)
 17. [ ] Implement Asset Inspector screen (spec §12.4)
-18. [ ] Implement JSON/HTML reporting (spec §14, report integrity fields §14.1)
+18. [x] Implement JSON/HTML/CSV reporting (spec §14, report integrity fields §14.1)
 19. [ ] Implement PDF reporting
-20. [ ] Implement CLI (`check`, `batch` commands; stable exit-code contract — spec §16)
+20. [x] Implement CLI (`check`, `batch`, `info`, `list-rules` commands; stable exit-code
+      contract — spec §16; `check`/`batch` rely on `ffprobe` until §2/§8 land)
 21. [ ] Implement watch folders (spec §13: pass/warn/fail routing, fully local)
 22. [ ] Add golden-media test suite covering every MVP rule (spec §24.2)
 23. [ ] Add fuzzing for parsers, profile parser, result parser, CLI args, report
       generation, media boundary handling (spec §24.4)
 24. [ ] Benchmark and profile against representative HD/UHD fixtures
-25. [ ] Harden error handling — isolated per-job failure state, corrupt asset must not
-      terminate batch (spec §21)
+25. [x] Harden error handling — isolated per-job failure state, corrupt asset must not
+      terminate batch (spec §21; batch continues past per-asset errors)
 26. [ ] Package Windows release
 27. [ ] Run a private beta with real professional media
 28. [ ] Verify against Definition of Done checklist (spec §30) before declaring MVP complete

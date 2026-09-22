@@ -1,0 +1,23 @@
+[package]
+name = "tpt-app-media-qc-pipeline"
+description = "Analysis pipeline, inspection boundary, aggregation, verdict and scheduler (spec §10, §11)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid = { workspace = true, features = ["v4", "serde"] }
+thiserror.workspace = true
+tpt-app-media-qc-core = { path = "../tpt-app-media-qc-core" }
+tpt-app-media-qc-model = { path = "../tpt-app-media-qc-model" }
+tpt-app-media-qc-profile = { path = "../tpt-app-media-qc-profile" }
+tpt-app-media-qc-rules = { path = "../tpt-app-media-qc-rules" }

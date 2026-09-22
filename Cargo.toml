@@ -1,0 +1,60 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tpt-app-media-qc-core",
+    "crates/tpt-app-media-qc-model",
+    "crates/tpt-app-media-qc-rules",
+    "crates/tpt-app-media-qc-pipeline",
+    "crates/tpt-app-media-qc-profile",
+    "crates/tpt-app-media-qc-report",
+    "crates/tpt-app-media-qc-cli",
+    "crates/tpt-app-media-qc-tauri",
+    "crates/tpt-app-media-qc-test",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+authors = ["TPT Solutions"]
+repository = "https://github.com/tpt-solutions/tpt-app-media-qc"
+description = "Offline-first professional media quality-control and validation application."
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+thiserror = "2"
+sha2 = "0.10"
+hex = "0.4"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+tempfile = "3"
+
+# TPT foundations. These crates do not exist as published crates yet; the
+# workspace integrates them once available and otherwise uses its own probe
+# boundary (see crates/tpt-app-media-qc-pipeline). The commented dependency
+# slots document the intended integration points.
+# tpt-kinetix = { path = "../../kinetix" }
+# tpt-cadence = { path = "../../cadence" }
+# tpt-dsp = { path = "../../dsp" }
+# tpt-visual = { path = "../../visual" }
+# tpt-voice = { path = "../../voice" }
+# tpt-av-asset = { path = "../../av-asset" }
+# tpt-av-test = { path = "../../av-test" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+correctness = { level = "warn", priority = -1 }
+all = "warn"
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

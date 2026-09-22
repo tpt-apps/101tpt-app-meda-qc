@@ -1,0 +1,21 @@
+[package]
+name = "tpt-app-media-qc-profile"
+description = "Human-readable YAML QC profile format, validation and deterministic hashing (spec §9)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_yaml.workspace = true
+sha2.workspace = true
+hex.workspace = true
+thiserror.workspace = true
+tpt-app-media-qc-core = { path = "../tpt-app-media-qc-core" }
+tpt-app-media-qc-model = { path = "../tpt-app-media-qc-model" }
