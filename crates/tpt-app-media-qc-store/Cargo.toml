@@ -1,6 +1,6 @@
 [package]
-name = "tpt-app-media-qc-report"
-description = "Report generation from immutable QC result sets: JSON, CSV, HTML (spec §14)."
+name = "tpt-app-media-qc-store"
+description = "SQLite persistence for local application state: projects, assets, fingerprints, jobs, profiles, results, findings, report metadata and preferences (spec 18)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,12 +12,12 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
 uuid = { workspace = true, features = ["v4", "serde"] }
-lopdf.workspace = true
-tpt-app-media-qc-core = { path = "../tpt-app-media-qc-core" }
+tpt-app-media-qc-core = { path = "../tpt-app-media-qc-core", features = ["sqlite"] }
 tpt-app-media-qc-model = { path = "../tpt-app-media-qc-model" }
 tpt-app-media-qc-profile = { path = "../tpt-app-media-qc-profile" }
 tpt-app-media-qc-pipeline = { path = "../tpt-app-media-qc-pipeline" }

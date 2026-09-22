@@ -12,7 +12,7 @@ use tpt_app_media_qc_pipeline::{arc, InspectionLevel, Inspector, NoopInspector, 
 use tpt_app_media_qc_profile::model::Profile;
 use tpt_app_media_qc_profile::{parse_str, profile_sha256};
 use tpt_app_media_qc_rules::known_rule_ids;
-use tpt_app_media_qc_report::{build_report, render_html, write_csv, write_json_report, WriteCsvOptions, WriteHtmlOptions};
+use tpt_app_media_qc_report::{build_report, render_html, render_pdf, write_csv, write_json_report, WriteCsvOptions, WriteHtmlOptions, WritePdfOptions};
 
 use crate::cli::{Cli, Command};
 use crate::probe::FfprobeInspector;
@@ -24,14 +24,25 @@ use crate::exit::{
 /// Run the parsed CLI and return the process exit code.
 pub fn run(cli: Cli) -> i32 {
     match cli.command {
-        Command::Check { file, profile, quick, json, html, csv, quiet } => {
-            run_check(file, profile, quick, json, html, csv, quiet)
+        Command::Check { file, profile, quick, json, html, pdf, csv, quiet } => {
+            run_check(file, profile, quick, json, html, pdf, csv, quiet)
         }
         Command::Batch { files, profile, quick, out, fail_fast } => {
             run_batch(files, profile, quick, out, fail_fast)
         }
         Command::Info { file, profile, quick } => run_info(file, profile, quick),
         Command::ListRules { profile } => run_list_rules(profile),
+        Command::Watch { input, profile, pass, warn, fail, report, quick } => {
+            let profile = match load_profile(profile.as_deref()) {
+                Ok(p) => p,
+                Err(code) => return code,
+            };
+            crate::watch::run_watch(
+                crate::watch::WatchConfig { input, pass, warn, fail, report },
+                profile,
+                quick,
+            )
+        }
     }
 }
 
@@ -71,7 +82,7 @@ fn load_profile(path: Option<&Path>) -> Result<Profile, i32> {
     }
 }
 
-fn build_asset(path: &Path) -> Result<Asset, i32> {
+pub(crate) fn build_asset(path: &Path) -> Result<Asset, i32> {
     if !path.is_file() {
         return Err(EXIT_PATH);
     }
@@ -107,7 +118,7 @@ fn build_asset(path: &Path) -> Result<Asset, i32> {
     })
 }
 
-fn make_inspector(quick: bool) -> Result<Arc<dyn Inspector>, i32> {
+pub(crate) fn make_inspector(quick: bool) -> Result<Arc<dyn Inspector>, i32> {
     if quick {
         // Metadata-only path works without a probe binary but yields an empty
         // inspection; prefer the probe when available.
@@ -165,11 +176,12 @@ fn print_findings(run: &tpt_app_media_qc_pipeline::QcRun) {
     }
 }
 
-fn write_reports(
+pub(crate) fn write_reports(
     run: &tpt_app_media_qc_pipeline::QcRun,
     profile: &Profile,
     json: Option<&Path>,
     html: Option<&Path>,
+    pdf: Option<&Path>,
     csv: Option<&Path>,
 ) -> Result<(), i32> {
     let report = build_report(run, AnalysisId::default(), profile);
@@ -181,6 +193,11 @@ fn write_reports(
     if let Some(p) = html {
         if let Err(e) = render_html(p, &report, WriteHtmlOptions { embed_json: true }) {
             return Err(err_exit(format!("could not write HTML report: {e}"), EXIT_ERROR));
+        }
+    }
+    if let Some(p) = pdf {
+        if let Err(e) = render_pdf(p, &report, WritePdfOptions {}) {
+            return Err(err_exit(format!("could not write PDF report: {e}"), EXIT_ERROR));
         }
     }
     if let Some(p) = csv {
@@ -195,12 +212,14 @@ fn write_reports(
 // check
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 fn run_check(
     file: PathBuf,
     profile_path: Option<PathBuf>,
     quick: bool,
     json: Option<PathBuf>,
     html: Option<PathBuf>,
+    pdf: Option<PathBuf>,
     csv: Option<PathBuf>,
     quiet: bool,
 ) -> i32 {
@@ -237,7 +256,7 @@ fn run_check(
         println!("{} {}", file.display(), run.verdict.as_str());
     }
 
-    if let Err(code) = write_reports(&run, &profile, json.as_deref(), html.as_deref(), csv.as_deref()) {
+    if let Err(code) = write_reports(&run, &profile, json.as_deref(), html.as_deref(), pdf.as_deref(), csv.as_deref()) {
         return code;
     }
 
@@ -283,7 +302,7 @@ fn collect_dir(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), i32> {
     Ok(())
 }
 
-fn is_media_file(path: &Path) -> bool {
+pub fn is_media_file(path: &Path) -> bool {
     const EXTS: &[&str] = &["mov", "mp4", "mxf", "m4v", "mkv", "ts", "mts", "m2ts", "wav", "aac", "w64", "ac3", "eac3", "mp3", "flac", "opus", "webm", "avi"];
     path.extension()
         .and_then(|e| e.to_str())
@@ -338,7 +357,7 @@ fn run_batch(
                         "{}.json",
                         path.file_stem().and_then(|s| s.to_str()).unwrap_or("asset")
                     );
-                    write_reports(&run, &profile, Some(&dir.join(name)), None, None).map_err(|_| ()).ok();
+                    write_reports(&run, &profile, Some(&dir.join(name)), None, None, None).map_err(|_| ()).ok();
                 }
                 if fail_fast && run.verdict == VerdictDecision::Fail {
                     eprintln!("batch: failing fast after '{}'", path.display());

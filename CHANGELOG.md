@@ -1,0 +1,69 @@
+# Changelog
+
+All notable changes to TPT Media QC are documented in this file, per
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This project adheres
+to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- Cargo workspace with the crates `core`, `model`, `rules`, `pipeline`,
+  `profile`, `report`, `cli`, `tauri` (stub) and `test` (stub).
+- Content-based asset fingerprinting (SHA-256), independent of file path.
+- Container/stream inspection back-end (`ffprobe` probe boundary).
+- QC domain model: `Asset`, `Stream`, `QcFinding`, `Evidence`, timecode,
+  severity and the immutable report structure.
+- Human-readable, versioned YAML QC profile format with strict parsing and
+  deterministic profile hashing.
+- Metadata QC rules: readability, container validity, malformed metadata,
+  stream presence/counts, duration consistency, bitrate, timecode presence,
+  timebase, timestamp continuity and unexpected streams.
+- Basic video QC rules (metadata/measurement-driven): corrupt/dropped frames,
+  black frames, freeze frames, duplicate frames, frame-rate consistency,
+  resolution, aspect ratio, luma range and colour-space/HDR metadata.
+- Basic audio QC rules via the decode measurement pathway: sample rate, bit
+  depth, channel layout, silence, clipping, peak/true peak, loudness
+  (EBU R128 / ATSC A/85 / BS.1770) and phase. Decode rules report
+  `Inconclusive` until the TPT decode stack is integrated (spec §8 cites the
+  decode pathway).
+- Result aggregation: finding normalization, per-rule status, status counts and
+  QC verdict resolution.
+- Job scheduler with cost-class concurrency (metadata vs. decode-based
+  inspection).
+- JSON, HTML and CSV report generation with the spec §14.1 integrity fields.
+- PDF report generation (lopdf, base-14 fonts) with integrity header, findings
+  table and automatic pagination; `check --pdf` writes it.
+- SQLite persistence crate (`tpt-app-media-qc-store`): assets, projects, jobs,
+  findings, profiles, preferences, report metadata and the spec §19 per-rule
+  analysis cache whose keys include the individual rule configuration hash.
+- CLI with `check`, `batch`, `info` and `list-rules` commands and the stable
+  spec §16 exit-code contract.
+- Watch-folder automation (`watch` command, spec §13): recursively monitors an
+  input folder, runs each new media file against a profile and routes the
+  verdict to configurable pass/warn/fail folders with optional per-asset JSON
+  reports; pre-existing files are scanned on start and copies are moved after
+  write stabilisation.
+- Error-handling hardening: isolated per-job failure state; corrupt assets do
+  not terminate a batch (spec §21).
+- Dual MIT / Apache-2.0 licensing, packaging and repository documentation.
+
+### Changed
+
+- None yet.
+
+### Deprecated
+
+- None yet.
+
+### Removed
+
+- None yet.
+
+### Fixed
+
+- None yet.
+
+### Security
+
+- None yet.

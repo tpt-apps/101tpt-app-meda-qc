@@ -1,0 +1,66 @@
+# Generic QC profile — the CLI default (spec §9).
+#
+# A tolerant, general-purpose profile: checks container correctness and the
+# most common technical defects without imposing a delivery format. Use the
+# broadcast/streaming profiles for format-specific delivery requirements.
+name: "generic"
+version: 1
+description: "General-purpose QC. Catches container problems and common technical defects with broadcast-neutral thresholds."
+
+rules:
+  container:
+    readable: error
+    container_validity: error
+    malformed_metadata: warning
+    bitrate:
+      min_bps: 1000000
+      severity: warning
+    timecode_present: warning
+    timestamp_continuity:
+      max_gap_ms: 150
+    stream_presence:
+      min_video: 1
+      max_streams: 32
+
+  video:
+    resolution:
+      expected: "1920x1080"
+      severity: warning
+    frame_rate:
+      expected: "25/1"
+      tolerance: 0.001
+      severity: warning
+    black_frames:
+      max_duration_ms: 500
+      severity: warning
+    freeze_frames:
+      max_duration_ms: 500
+      severity: warning
+    duplicate_frames:
+      max_events: 10
+      severity: warning
+    corrupt_frames:
+      max_events: 5
+      severity: warning
+
+  audio:
+    silence:
+      max_duration_ms: 4000
+      severity: warning
+    clipping:
+      max_events: 10
+      severity: warning
+    loudness:
+      standard: ebu-r128
+      target_lufs: -23
+      tolerance_lu: 1
+      severity: warning
+    true_peak:
+      max_db: -1
+      severity: warning
+    phase:
+      min_correlation: -0.5
+      severity: warning
+
+policy:
+  fail_on: error

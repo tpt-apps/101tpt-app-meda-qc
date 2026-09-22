@@ -1,0 +1,76 @@
+# Streaming / OTT delivery profile (spec §25).
+#
+# OTT platforms commonly target loudness below broadcast (-16 to -20 LUFS)
+# and tolerate higher codec-variant frame rates. This profile is a neutral
+# starting point for VOD delivery; adjust thresholds per platform spec.
+name: "streaming-vod"
+version: 1
+description: "OTT/VOD delivery baseline. Checks container health, 4K/1080p, 23.976/25/29.97 framerates, and -18 LUFS headroom target."
+
+rules:
+  container:
+    readable: error
+    container_validity: error
+    malformed_metadata: warning
+    duration_consistency:
+      tolerance_ms: 500
+      severity: warning
+    bitrate:
+      min_bps: 4000000
+      severity: warning
+    stream_presence:
+      min_video: 1
+      min_audio: 1
+      max_streams: 64
+
+  video:
+    resolution:
+      expected: "3840x2160"
+      severity: warning
+    frame_rate:
+      expected: "24000/1001"
+      tolerance: 0.01
+      severity: warning
+    black_frames:
+      max_duration_ms: 1000
+      severity: warning
+    freeze_frames:
+      max_duration_ms: 4000
+      severity: warning
+    duplicate_frames:
+      max_events: 20
+      severity: info
+    corrupt_frames:
+      max_events: 5
+      severity: error
+
+  audio:
+    sample_rate:
+      expected: 48000
+      severity: error
+    channel_layout:
+      channels: 2
+      severity: warning
+    silence:
+      max_duration_ms: 8000
+      severity: info
+    clipping:
+      max_events: 5
+      severity: warning
+    peak:
+      max_db: -3
+      severity: warning
+    true_peak:
+      max_db: -2
+      severity: error
+    loudness:
+      standard: bs1770
+      target_lufs: -18
+      tolerance_lu: 2
+      severity: warning
+    dc_offset:
+      max_offset_percent: 3
+      severity: info
+
+policy:
+  fail_on: error

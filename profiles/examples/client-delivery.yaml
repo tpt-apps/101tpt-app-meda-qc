@@ -1,0 +1,69 @@
+# Example profile mirroring spec §9 — a client-delivery template.
+# Start from this when you need to encode a specific delivery spec.
+name: "Client Delivery - Example"
+version: 1
+description: "Worked example from the product spec (spec §9). Customise thresholds to your client's delivery spec."
+
+rules:
+  container:
+    readable: error
+    duration_consistency:
+      tolerance_ms: 250
+      severity: error
+    bitrate:
+      min_bps: 15000000
+      severity: warning
+    timecode_present: warning
+
+  video:
+    resolution:
+      expected: "3840x2160"
+      severity: error
+    frame_rate:
+      expected: 25
+      tolerance: 0.001
+      severity: error
+    aspect_ratio:
+      expected: "16/9"
+      severity: error
+    black_frames:
+      max_duration_ms: 500
+      severity: warning
+    freeze_frames:
+      max_duration_ms: 750
+      severity: warning
+    corrupt_frames:
+      max_events: 0
+      severity: error
+
+  audio:
+    sample_rate:
+      expected: 48000
+      severity: error
+    channel_layout:
+      channels: 2
+      layout: "stereo"
+      severity: error
+    silence:
+      max_duration_ms: 1500
+      severity: warning
+    clipping:
+      max_events: 0
+      severity: error
+    peak:
+      max_db: -1
+      severity: warning
+    true_peak:
+      max_db: -1
+      severity: error
+    loudness:
+      standard: ebu-r128
+      target_lufs: -23
+      tolerance_lu: 1
+      severity: error
+    phase:
+      min_correlation: -0.5
+      severity: warning
+
+policy:
+  fail_on: error

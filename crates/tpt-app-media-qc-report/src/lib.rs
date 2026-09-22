@@ -8,7 +8,9 @@ mod builder;
 mod csv;
 mod html;
 mod json;
+mod pdf;
 
 pub use builder::{build_report, report_host_info, write_json_report};
 pub use csv::{write_csv, WriteCsvOptions};
 pub use html::{render_html, WriteHtmlOptions};
+pub use pdf::{render_pdf, WritePdfOptions};

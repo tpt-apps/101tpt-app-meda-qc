@@ -9,7 +9,7 @@ pub mod hash;
 pub mod model;
 pub mod parse;
 
-pub use hash::profile_sha256;
+pub use hash::{per_rule_config_hash, profile_sha256};
 pub use model::{
     AudioRules, ChannelLayoutRule, ContainerRules, CountThresholdRule, DbThresholdRule,
     DurationThresholdRule, ExpectValueRule, FrameRateRule, LoudnessRule, LoudnessStandard,

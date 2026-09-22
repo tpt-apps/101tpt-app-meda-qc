@@ -77,7 +77,7 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
     - [x] phase
 12. [x] Implement result aggregation (Result/Event model, finding normalization, severity
       evaluation, QC verdict)
-13. [ ] Implement SQLite persistence (spec §18: projects, assets, fingerprints, jobs,
+13. [x] Implement SQLite persistence (spec §18: projects, assets, fingerprints, jobs,
       profiles, results, findings, report metadata, preferences)
 14. [x] Implement job scheduler (cost classes, concurrency, bounded memory, backpressure,
       cancellation, priority, resumability — spec §11; cost-class concurrency done,
@@ -89,10 +89,11 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
 16. [ ] Implement timeline / evidence viewer and finding inspector (spec §12.5–12.6)
 17. [ ] Implement Asset Inspector screen (spec §12.4)
 18. [x] Implement JSON/HTML/CSV reporting (spec §14, report integrity fields §14.1)
-19. [ ] Implement PDF reporting
+19. [x] Implement PDF reporting
 20. [x] Implement CLI (`check`, `batch`, `info`, `list-rules` commands; stable exit-code
       contract — spec §16; `check`/`batch` rely on `ffprobe` until §2/§8 land)
-21. [ ] Implement watch folders (spec §13: pass/warn/fail routing, fully local)
+21. [x] Implement watch folders (spec §13: pass/warn/fail routing, fully local; CLI
+      `watch` command)
 22. [ ] Add golden-media test suite covering every MVP rule (spec §24.2)
 23. [ ] Add fuzzing for parsers, profile parser, result parser, CLI args, report
       generation, media boundary handling (spec §24.4)
@@ -125,8 +126,8 @@ Applies continuously across all phases, not a one-time gate.
   - [ ] Distinguish measurement algorithm vs. standard vs. profile vs. customer tolerance
   - [ ] Do not claim formal standards compliance until validated against reference material/test suites
 - [ ] **Determinism & caching (spec §19)**
-  - [ ] Cache keys include: asset fingerprint, application version, ruleset version, profile hash, analysis configuration hash
-  - [ ] Changing one rule's configuration invalidates only that rule's cached results, not the whole analysis
+  - [x] Cache keys include: asset fingerprint, application version, ruleset version, profile hash, analysis configuration hash
+  - [x] Changing one rule's configuration invalidates only that rule's cached results, not the whole analysis
 - [ ] **Local API (spec §17)**
   - [ ] Disabled by default; binds only to `127.0.0.1` when enabled
 

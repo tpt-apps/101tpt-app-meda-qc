@@ -1,4 +1,4 @@
-//! TPT Media QC command-line interface ([spec § 16], § 21).
+//! TPT Media QC command-line entry point ([spec § 16], § 21).
 //!
 //! Exit codes are a stable contract:
 //! * `0` — all rules passed
@@ -9,15 +9,9 @@
 //! * `5` — profile missing or invalid
 //! * `6` — no usable inspector available for the requested depth
 
-mod app;
-mod cli;
-mod exit;
-mod probe;
-
 use clap::Parser;
 
 fn main() {
-    let args = cli::Cli::parse();
-    let code = app::run(args);
+    let code = tpt_app_media_qc_cli::run(tpt_app_media_qc_cli::Cli::parse());
     std::process::exit(code);
 }

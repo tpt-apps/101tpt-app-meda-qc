@@ -7,6 +7,7 @@ members = [
     "crates/tpt-app-media-qc-pipeline",
     "crates/tpt-app-media-qc-profile",
     "crates/tpt-app-media-qc-report",
+    "crates/tpt-app-media-qc-store",
     "crates/tpt-app-media-qc-cli",
     "crates/tpt-app-media-qc-tauri",
     "crates/tpt-app-media-qc-test",
@@ -32,6 +33,8 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 tempfile = "3"
+lopdf = "0.36"
+notify = "7"
 
 # TPT foundations. These crates do not exist as published crates yet; the
 # workspace integrates them once available and otherwise uses its own probe

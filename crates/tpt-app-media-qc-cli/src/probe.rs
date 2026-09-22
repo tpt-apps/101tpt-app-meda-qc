@@ -20,7 +20,7 @@ use tpt_app_media_qc_model::time::Rational;
 use tpt_app_media_qc_pipeline::{InspectionLevel, Inspector};
 
 #[derive(Deserialize)]
-struct FfprobeOutput {
+pub(crate) struct FfprobeOutput {
     #[serde(default)]
     streams: Vec<FfStream>,
     #[serde(default)]
@@ -28,7 +28,7 @@ struct FfprobeOutput {
 }
 
 #[derive(Deserialize, Default)]
-struct FfFormat {
+pub(crate) struct FfFormat {
     format_name: Option<String>,
     format_long_name: Option<String>,
     duration: Option<String>,
@@ -38,7 +38,7 @@ struct FfFormat {
 }
 
 #[derive(Deserialize, Default)]
-struct FfStream {
+pub(crate) struct FfStream {
     index: u64,
     codec_type: Option<String>,
     codec_name: Option<String>,
@@ -114,6 +114,93 @@ fn stream_kind(codec_type: &str) -> StreamKind {
     }
 }
 
+/// Parse ffprobe `-of json` output into an [`Inspection`] without spawning a
+/// process. Pure and total: any bytes yield `Err` or a valid inspection.
+///
+/// This is the fuzzable "result parser" boundary (spec § 24.4).
+pub fn parse_ffprobe_json(bytes: &[u8]) -> Result<Inspection> {
+    let out: FfprobeOutput = serde_json::from_slice(bytes)
+        .map_err(|e| Error::Probe(format!("ffprobe output was not valid JSON: {e}")))?;
+    Ok(inspection_from_output(&out))
+}
+
+fn inspection_from_output(out: &FfprobeOutput) -> Inspection {
+    let mut streams = Vec::new();
+    let mut video_meas = Vec::new();
+    let mut audio_meas = Vec::new();
+
+    for s in &out.streams {
+        let kind = s.codec_type.as_deref().map(stream_kind).unwrap_or(StreamKind::Unknown);
+        let duration_secs = s
+            .duration
+            .as_deref()
+            .and_then(|d| d.trim().parse::<f64>().ok())
+            .map(|secs| tpt_app_media_qc_model::time::DurationSeconds::from_millis((secs * 1000.0).round() as u64));
+
+        let mut metadata: BTreeMap<String, String> = BTreeMap::new();
+        for (k, v) in &s.tags {
+            metadata.insert(k.clone(), v.clone());
+        }
+
+        streams.push(Stream {
+            index: StreamId::new(s.index),
+            kind,
+            codec: s.codec_name.clone(),
+            codec_profile: s.codec_long_name.clone(),
+            width: s.width,
+            height: s.height,
+            pixel_format: s.pix_fmt.clone(),
+            frame_rate: s.r_frame_rate.as_deref().and_then(parse_rational),
+            time_base: s.time_base.as_deref().and_then(parse_rational),
+            bitrate: s.bit_rate.as_deref().and_then(|b| b.trim().parse().ok()),
+            duration: duration_secs,
+            language: s.tags.get("language").cloned(),
+            channel_layout: s.channel_layout.clone(),
+            channels: s.channels,
+            sample_rate: s.sample_rate.as_deref().and_then(|r| r.trim().parse().ok()),
+            bit_depth: s.bits_per_sample.as_deref().and_then(|b| b.trim().parse().ok()),
+            metadata,
+        });
+
+        match kind {
+            StreamKind::Video => video_meas.push(VideoMeasurements {
+                stream_idx: s.index,
+                frame_rate_observed: s.r_frame_rate.as_deref().and_then(parse_rational),
+                colorspace: s.tags.get("color_space").cloned(),
+                ..Default::default()
+            }),
+            StreamKind::Audio => audio_meas.push(AudioMeasurements {
+                stream_idx: s.index,
+                ..Default::default()
+            }),
+            _ => {}
+        }
+    }
+
+    let format = &out.format;
+    let timecode_present =
+        format.tags.iter().any(|(k, _)| {
+            k.eq_ignore_ascii_case("start_timecode")
+                || k.eq_ignore_ascii_case("timecode")
+        });
+
+    let container = ContainerInspection {
+        validity: ContainerValidity::Ok,
+        format: format.format_long_name.clone().or_else(|| format.format_name.clone()),
+        bitrate_bps: format.bit_rate.as_deref().and_then(|b| b.trim().parse().ok()),
+        duration: format.duration.as_deref().and_then(parse_duration_ms).map(DurationMillis),
+        timecode_present: Some(timecode_present),
+        ..Default::default()
+    };
+
+    Inspection {
+        container,
+        video: video_meas,
+        audio: audio_meas,
+        diagnostics: BTreeMap::new(),
+    }
+}
+
 impl Inspector for FfprobeInspector {
     fn name(&self) -> &str {
         "ffprobe"
@@ -121,81 +208,7 @@ impl Inspector for FfprobeInspector {
 
     fn inspect_metadata(&self, asset: &Asset) -> Result<Inspection> {
         let out = self.run_probe(&asset.path)?;
-
-        let mut streams = Vec::new();
-        let mut video_meas = Vec::new();
-        let mut audio_meas = Vec::new();
-
-        for s in &out.streams {
-            let kind = s.codec_type.as_deref().map(stream_kind).unwrap_or(StreamKind::Unknown);
-            let duration_secs = s
-                .duration
-                .as_deref()
-                .and_then(|d| d.trim().parse::<f64>().ok())
-                .map(|secs| tpt_app_media_qc_model::time::DurationSeconds::from_millis((secs * 1000.0).round() as u64));
-
-            let mut metadata: BTreeMap<String, String> = BTreeMap::new();
-            for (k, v) in &s.tags {
-                metadata.insert(k.clone(), v.clone());
-            }
-
-            streams.push(Stream {
-                index: StreamId::new(s.index),
-                kind,
-                codec: s.codec_name.clone(),
-                codec_profile: s.codec_long_name.clone(),
-                width: s.width,
-                height: s.height,
-                pixel_format: s.pix_fmt.clone(),
-                frame_rate: s.r_frame_rate.as_deref().and_then(parse_rational),
-                time_base: s.time_base.as_deref().and_then(parse_rational),
-                bitrate: s.bit_rate.as_deref().and_then(|b| b.trim().parse().ok()),
-                duration: duration_secs,
-                language: s.tags.get("language").cloned(),
-                channel_layout: s.channel_layout.clone(),
-                channels: s.channels,
-                sample_rate: s.sample_rate.as_deref().and_then(|r| r.trim().parse().ok()),
-                bit_depth: s.bits_per_sample.as_deref().and_then(|b| b.trim().parse().ok()),
-                metadata,
-            });
-
-            match kind {
-                StreamKind::Video => video_meas.push(VideoMeasurements {
-                    stream_idx: s.index,
-                    frame_rate_observed: s.r_frame_rate.as_deref().and_then(parse_rational),
-                    colorspace: s.tags.get("color_space").cloned(),
-                    ..Default::default()
-                }),
-                StreamKind::Audio => audio_meas.push(AudioMeasurements {
-                    stream_idx: s.index,
-                    ..Default::default()
-                }),
-                _ => {}
-            }
-        }
-
-        let format = &out.format;
-        let timecode_present =
-            format.tags.iter().any(|(k, _)| {
-                k.eq_ignore_ascii_case("start_timecode")
-                    || k.eq_ignore_ascii_case("timecode")
-            });
-
-        let container = ContainerInspection {
-            validity: ContainerValidity::Ok,
-            format: format.format_long_name.clone().or_else(|| format.format_name.clone()),
-            bitrate_bps: format.bit_rate.as_deref().and_then(|b| b.trim().parse().ok()),
-            duration: format.duration.as_deref().and_then(parse_duration_ms).map(DurationMillis),
-            timecode_present: Some(timecode_present),
-            ..Default::default()
-        };
-
-        Ok(Inspection {
-            container,
-            video: video_meas,
-            audio: audio_meas,
-            diagnostics: BTreeMap::new(),
-        })
+        Ok(inspection_from_output(&out))
     }
 
     fn inspect_decode(

@@ -1,0 +1,89 @@
+# Broadcast delivery profile — ATSC A/85 loudness (spec §25, §8.6).
+#
+# A North-American broadcast flavour: dialnorm-aligned A/85 target,
+# hard upper true-peak ceiling, and a strict legal luma range.
+name: "broadcast-atsc-a85"
+version: 1
+description: "US broadcast delivery. Checks container integrity, -24 LKFS loudness per ATSC A/85, -2 dBTP ceiling and legal luma."
+
+rules:
+  container:
+    readable: error
+    container_validity: error
+    malformed_metadata: warning
+    duration_consistency:
+      tolerance_ms: 250
+      severity: error
+    bitrate:
+      min_bps: 8000000
+      severity: warning
+    timecode_present: info
+    timestamp_continuity:
+      max_gap_ms: 100
+      severity: error
+    stream_presence:
+      min_video: 1
+      min_audio: 1
+      max_streams: 32
+
+  video:
+    resolution:
+      expected: "1920x1080"
+      severity: error
+    frame_rate:
+      expected: "30000/1001"
+      tolerance: 0.001
+      severity: error
+    aspect_ratio:
+      expected: "16/9"
+      severity: error
+    black_frames:
+      max_duration_ms: 500
+      severity: warning
+    freeze_frames:
+      max_duration_ms: 2000
+      severity: error
+    corrupt_frames:
+      max_events: 0
+      severity: error
+    luma_range:
+      max_out_of_legal: 0.005
+      severity: warning
+    color_space:
+      expected: "bt709"
+      severity: warning
+
+  audio:
+    sample_rate:
+      expected: 48000
+      severity: error
+    bit_depth:
+      expected: 24
+      severity: warning
+    channel_layout:
+      channels: 2
+      layout: "stereo"
+      severity: error
+    silence:
+      max_duration_ms: 3000
+      severity: warning
+    clipping:
+      max_events: 0
+      severity: error
+    peak:
+      max_db: -2
+      severity: warning
+    true_peak:
+      max_db: -2
+      severity: error
+    loudness:
+      standard: atsc-a85
+      target_lufs: -24
+      tolerance_lu: 2
+      severity: error
+    phase:
+      min_correlation: -0.5
+      severity: warning
+
+policy:
+  fail_on: error

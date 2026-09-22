@@ -1,0 +1,82 @@
+# Broadcast delivery profile — EBU R128 loudness (spec §25, §8.6).
+#
+# An EBU-region broadcast flavour: -23 LUFS target, -1 dBTP ceiling and
+# strict container/duration checks for playout delivery.
+name: "broadcast-ebu-r128"
+version: 1
+description: "EBU broadcast delivery. -23 LUFS per EBU R128, -1 dBTP ceiling, strict container and stream checks."
+
+rules:
+  container:
+    readable: error
+    container_validity: error
+    duration_consistency:
+      tolerance_ms: 250
+      severity: error
+    bitrate:
+      min_bps: 10000000
+      severity: warning
+    timecode_present: warning
+    timestamp_continuity:
+      max_gap_ms: 100
+      severity: error
+    stream_presence:
+      min_video: 1
+      min_audio: 1
+      max_streams: 32
+
+  video:
+    resolution:
+      expected: "1920x1080"
+      severity: error
+    frame_rate:
+      expected: "25/1"
+      tolerance: 0.001
+      severity: error
+    aspect_ratio:
+      expected: "16/9"
+      severity: error
+    black_frames:
+      max_duration_ms: 500
+      severity: error
+    freeze_frames:
+      max_duration_ms: 2000
+      severity: error
+    duplicate_frames:
+      max_events: 0
+      severity: warning
+    corrupt_frames:
+      max_events: 0
+      severity: error
+    luma_range:
+      max_out_of_legal: 0.005
+      severity: warning
+
+  audio:
+    sample_rate:
+      expected: 48000
+      severity: error
+    channel_layout:
+      channels: 2
+      layout: "stereo"
+      severity: warning
+    silence:
+      max_duration_ms: 2000
+      severity: error
+    clipping:
+      max_events: 0
+      severity: error
+    true_peak:
+      max_db: -1
+      severity: error
+    loudness:
+      standard: ebu-r128
+      target_lufs: -23
+      tolerance_lu: 0.5
+      severity: error
+    phase:
+      min_correlation: -0.5
+      severity: warning
+
+policy:
+  fail_on: error

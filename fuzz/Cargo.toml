@@ -1,0 +1,63 @@
+[package]
+name = "tpt-app-media-qc-fuzz"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "libFuzzer harnesses for TPT Media QC (spec §24.4). Run with `cargo fuzz`."
+
+[package.metadata]
+cargo-fuzz = true
+
+# Standalone workspace: the parent project's workspace lints (notably
+# `unsafe_code = "forbid"`) must not apply to libFuzzer-generated code, and
+# stable `cargo test --workspace` must not build libFuzzer harnesses.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
+tempfile = "3"
+notify = "7"
+tpt-app-media-qc-model = { path = "../crates/tpt-app-media-qc-model" }
+tpt-app-media-qc-profile = { path = "../crates/tpt-app-media-qc-profile" }
+tpt-app-media-qc-report = { path = "../crates/tpt-app-media-qc-report" }
+tpt-app-media-qc-cli = { path = "../crates/tpt-app-media-qc-cli" }
+
+[[bin]]
+name = "profile_parse"
+path = "fuzz_targets/profile_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ffprobe_json"
+path = "fuzz_targets/ffprobe_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "clap_args"
+path = "fuzz_targets/clap_args.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "report_generation"
+path = "fuzz_targets/report_generation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "media_boundary"
+path = "fuzz_targets/media_boundary.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1
