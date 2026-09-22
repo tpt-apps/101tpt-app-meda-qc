@@ -46,6 +46,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   write stabilisation.
 - Error-handling hardening: isolated per-job failure state; corrupt assets do
   not terminate a batch (spec §21).
+- Golden-media test suite (spec §24.2): deterministic measurement fixtures in
+  `tests/fixtures/` paired with golden manifests in `tests/golden/` covering
+  every built-in MVP rule; runner lives in `tpt-app-media-qc-test`
+  (`MEDIA_QC_UPDATE_GOLDEN=1` regenerates manifests).
+- End-to-end pipeline integration tests (engine → report → JSON/HTML/CSV/PDF
+  round-trip) in `tpt-app-media-qc-test/tests/`.
+- `result_parser` fuzz target for the machine-readable result/report parser
+  (spec §24.4), completing the `fuzz/` target set: `ffprobe_json`,
+  `profile_parse`, `clap_args`, `report_generation`, `media_boundary`,
+  `result_parser`.
+- `qc-bench` micro-benchmark harness and committed baseline
+  (`tests/performance/baseline.md`) covering fingerprinting, profile parsing,
+  rule building/execution, engine checks and report rendering (spec §20).
 - Dual MIT / Apache-2.0 licensing, packaging and repository documentation.
 
 ### Changed

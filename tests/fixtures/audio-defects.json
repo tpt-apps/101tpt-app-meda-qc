@@ -1,0 +1,68 @@
+{
+  "asset": {
+    "id": "00000000-0000-0000-0000-000000000004",
+    "path": "fixtures/audio-defects.wav",
+    "fingerprint": { "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "size_bytes": 230686720 },
+    "size_bytes": 230686720,
+    "modified_time": 1700000300,
+    "duration": 120,
+    "streams": [
+      {
+        "index": 0, "kind": "video", "codec": "h264", "codec_profile": "High",
+        "width": 1920, "height": 1080, "pixel_format": "yuv420p",
+        "frame_rate": "25/1", "time_base": "1/12800",
+        "bitrate": 15000000, "duration": 120,
+        "language": null, "channel_layout": null, "channels": null,
+        "sample_rate": null, "bit_depth": null, "metadata": {}
+      },
+      {
+        "index": 1, "kind": "audio", "codec": "pcm_s16le", "codec_profile": null,
+        "width": null, "height": null, "pixel_format": null,
+        "frame_rate": null, "time_base": "1/44100",
+        "bitrate": 705600, "duration": 120,
+        "language": "en", "channel_layout": "mono", "channels": 1,
+        "sample_rate": 44100, "bit_depth": 16, "metadata": {}
+      }
+    ]
+  },
+  "inspection": {
+    "container": {
+      "validity": "ok",
+      "format": "Waveform Audio File Format",
+      "bitrate_bps": 15000000,
+      "duration": 120000,
+      "timestamps_contiguous": true,
+      "timecode_present": true,
+      "timestamp_gaps": [],
+      "malformed_metadata": [],
+      "decode_errors": 0
+    },
+    "video": [
+      {
+        "stream_idx": 0,
+        "frame_rate_observed": "25/1",
+        "decode_errors": 0,
+        "black_frames": [],
+        "freeze_frames": [],
+        "duplicate_frames": [],
+        "luma": { "min": 16, "max": 235, "mean": 52.5, "below_legal": 0.0, "above_legal": 0.0, "clipped_white": 0.0 },
+        "colorspace": "bt709"
+      }
+    ],
+    "audio": [
+      {
+        "stream_idx": 1,
+        "decode_errors": 0,
+        "silence": [{ "start_ms": 5000, "end_ms": 11000 }],
+        "clipping_events": 15,
+        "peak_db": -0.3,
+        "true_peak_db": -0.1,
+        "loudness_lufs": -18.0,
+        "loudness_range_lu": 3.0,
+        "phase_correlation": -0.8,
+        "dc_offset_percent": 3.2
+      }
+    ],
+    "diagnostics": {}
+  }
+}

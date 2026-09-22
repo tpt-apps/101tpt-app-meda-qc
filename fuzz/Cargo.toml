@@ -20,6 +20,7 @@ chrono = "0.4"
 tempfile = "3"
 notify = "7"
 tpt-app-media-qc-model = { path = "../crates/tpt-app-media-qc-model" }
+serde_json = "1"
 tpt-app-media-qc-profile = { path = "../crates/tpt-app-media-qc-profile" }
 tpt-app-media-qc-report = { path = "../crates/tpt-app-media-qc-report" }
 tpt-app-media-qc-cli = { path = "../crates/tpt-app-media-qc-cli" }
@@ -55,6 +56,13 @@ bench = false
 [[bin]]
 name = "media_boundary"
 path = "fuzz_targets/media_boundary.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "result_parser"
+path = "fuzz_targets/result_parser.rs"
 test = false
 doc = false
 bench = false

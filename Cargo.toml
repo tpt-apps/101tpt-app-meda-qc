@@ -8,6 +8,7 @@ members = [
     "crates/tpt-app-media-qc-profile",
     "crates/tpt-app-media-qc-report",
     "crates/tpt-app-media-qc-store",
+    "crates/tpt-app-media-qc-decode",
     "crates/tpt-app-media-qc-cli",
     "crates/tpt-app-media-qc-tauri",
     "crates/tpt-app-media-qc-test",
@@ -16,7 +17,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.82"
 license = "MIT OR Apache-2.0"
 authors = ["TPT Solutions"]
 repository = "https://github.com/tpt-solutions/tpt-app-media-qc"
@@ -36,12 +37,16 @@ tempfile = "3"
 lopdf = "0.36"
 notify = "7"
 
-# TPT foundations. These crates do not exist as published crates yet; the
-# workspace integrates them once available and otherwise uses its own probe
-# boundary (see crates/tpt-app-media-qc-pipeline). The commented dependency
-# slots document the intended integration points.
-# tpt-kinetix = { path = "../../kinetix" }
-# tpt-cadence = { path = "../../cadence" }
+# TPT foundations. tpt-kinetix-core is published on crates.io; the demux,
+# decoder and mux crates are not published yet and are pulled from the
+# tpt-kinetix repository, pinned by revision (spec §10 decode pathway).
+tpt-kinetix-core = "0.1.0"
+tpt-kinetix-demux = { git = "https://github.com/tpt-solutions/tpt-kinetix", rev = "a43959c009a2801efa2a8b998c7848ea9240483e" }
+tpt-kinetix-h264 = { git = "https://github.com/tpt-solutions/tpt-kinetix", rev = "a43959c009a2801efa2a8b998c7848ea9240483e" }
+tpt-kinetix-mux = { git = "https://github.com/tpt-solutions/tpt-kinetix", rev = "a43959c009a2801efa2a8b998c7848ea9240483e" }
+# Further integration points once available/published (spec §8.4–§8.8):
+# tpt-cadence (audio decode, github.com/tpt-solutions/tpt-cadence, crates
+# tpt-av-cadence-*; WAV/AIFF/FLAC/PCM stable) — item 10.
 # tpt-dsp = { path = "../../dsp" }
 # tpt-visual = { path = "../../visual" }
 # tpt-voice = { path = "../../voice" }

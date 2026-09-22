@@ -14,28 +14,29 @@ offline-first professional media QC application. Dual-licensed MIT / Apache-2.0,
   - [x] `tpt-app-media-qc-pipeline`
   - [x] `tpt-app-media-qc-profile`
   - [x] `tpt-app-media-qc-report`
+  - [x] `tpt-app-media-qc-store`
   - [x] `tpt-app-media-qc-cli`
-  - [x] `tpt-app-media-qc-tauri` (stub)
+  - [x] `tpt-app-media-qc-tauri` (stub — still empty `lib.rs`, UI work tracked in Phase 1 item 15)
   - [x] `tpt-app-media-qc-test` (stub)
-- [ ] Create `README.md`
-- [ ] Create `CHANGELOG.md`
-- [ ] Create `CONTRIBUTING.md`
-- [ ] Create `docs/` skeleton:
-  - [ ] `docs/architecture.md`
-  - [ ] `docs/qc-model.md`
-  - [ ] `docs/profile-format.md`
-  - [ ] `docs/report-format.md`
-  - [ ] `docs/supported-formats.md`
-  - [ ] `docs/standards.md`
-  - [ ] `docs/performance.md`
-- [ ] Create `profiles/` skeleton: `generic/`, `broadcast/`, `streaming/`, `examples/`
-- [ ] Create `tests/` skeleton: `fixtures/`, `integration/`, `golden/`, `performance/`
-- [ ] Licensing:
-  - [ ] Add `LICENSE-MIT` file
-  - [ ] Add `LICENSE-APACHE` file
-  - [ ] Set `license = "MIT OR Apache-2.0"` in workspace `Cargo.toml`
-  - [ ] Set copyright holder as "TPT Solutions" in license headers/files
-  - [ ] Add licensing section to `README.md`
+- [x] Create `README.md`
+- [x] Create `CHANGELOG.md`
+- [x] Create `CONTRIBUTING.md`
+- [x] Create `docs/` skeleton:
+  - [x] `docs/architecture.md`
+  - [x] `docs/qc-model.md`
+  - [x] `docs/profile-format.md`
+  - [x] `docs/report-format.md`
+  - [x] `docs/supported-formats.md`
+  - [x] `docs/standards.md`
+  - [x] `docs/performance.md`
+- [x] Create `profiles/` skeleton: `generic/`, `broadcast/`, `streaming/`, `examples/`
+- [x] Create `tests/` skeleton: `fixtures/`, `integration/`, `golden/`, `performance/` (dirs + README placeholders only — no fixtures/tests populated yet, see Phase 1 item 22)
+- [x] Licensing:
+  - [x] Add `LICENSE-MIT` file
+  - [x] Add `LICENSE-APACHE` file
+  - [x] Set `license = "MIT OR Apache-2.0"` in workspace `Cargo.toml`
+  - [x] Set copyright holder as "TPT Solutions" in license headers/files
+  - [x] Add licensing section to `README.md`
 
 ---
 
@@ -94,10 +95,22 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
       contract — spec §16; `check`/`batch` rely on `ffprobe` until §2/§8 land)
 21. [x] Implement watch folders (spec §13: pass/warn/fail routing, fully local; CLI
       `watch` command)
-22. [ ] Add golden-media test suite covering every MVP rule (spec §24.2)
-23. [ ] Add fuzzing for parsers, profile parser, result parser, CLI args, report
-      generation, media boundary handling (spec §24.4)
-24. [ ] Benchmark and profile against representative HD/UHD fixtures
+22. [x] Add golden-media test suite covering every MVP rule (spec §24.2) — deterministic
+      *measurement* fixtures (`tests/fixtures/*.json`: `Asset` + canned `Inspection`) run
+      through the real engine via a fixture `Inspector`; golden manifests in `tests/golden`
+      pin verdict + per-rule status for every built-in rule (coverage is asserted);
+      `MEDIA_QC_UPDATE_GOLDEN=1` regenerates. Encoded-media fixtures arrive with the
+      decode stack (§2/§8/§10); the runner accepts any `Inspector`
+23. [x] Add fuzzing for parsers, profile parser, result parser, CLI args, report
+      generation, media boundary handling (spec §24.4) — `fuzz/` targets: `ffprobe_json`,
+      `profile_parse`, `clap_args`, `report_generation`, `media_boundary`, `result_parser`
+      (all compile-checked via `cargo check --all-targets`; run under `cargo fuzz`)
+24. [x] Benchmark and profile against representative HD/UHD fixtures — `qc-bench`
+      micro-benchmark harness (`cargo run -p tpt-app-media-qc-test --release --bin
+      qc-bench`): fingerprinting, profile parse, rule build/run, engine check, fixture
+      deserialize, report build + JSON/HTML/PDF render; baseline committed to
+      `tests/performance/baseline.md`. Representative HD/UHD *media* benchmarks follow
+      the decode stack
 25. [x] Harden error handling — isolated per-job failure state, corrupt asset must not
       terminate batch (spec §21; batch continues past per-asset errors)
 26. [ ] Package Windows release

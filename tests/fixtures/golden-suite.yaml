@@ -1,0 +1,103 @@
+# Golden-suite QC profile — enables every production rule (spec §24.2, §30).
+#
+# Used by the golden-media test suite (tests/golden) so each fixture pins the
+# best-status of the complete built-in rule catalogue. Thresholds are aligned
+# with the measurement fixtures in tests/fixtures/ (see that directory's
+# README for the exact scenario table).
+name: "golden-suite"
+version: 1
+description: "All-rules profile for the golden-media test suite (spec §24.2)."
+
+rules:
+  container:
+    readable: error
+    container_validity: error
+    malformed_metadata: error
+    duration_consistency:
+      tolerance_ms: 100
+      severity: error
+    bitrate:
+      min_bps: 10000000
+      severity: error
+    timecode_present: error
+    timebase:
+      value: "1/12800"
+      severity: error
+    timestamp_continuity:
+      max_gap_ms: 150
+      severity: error
+    unexpected_streams: error
+    stream_presence:
+      min_video: 1
+      min_audio: 1
+      max_streams: 32
+      severity: error
+
+  video:
+    resolution:
+      expected: "1920x1080"
+      severity: error
+    frame_rate:
+      expected: "25/1"
+      tolerance: 0.001
+      severity: error
+    aspect_ratio:
+      expected: "16/9"
+      tolerance: 0.01
+      severity: error
+    color_space:
+      expected: "bt709"
+      severity: error
+    black_frames:
+      max_duration_ms: 500
+      severity: error
+    freeze_frames:
+      max_duration_ms: 500
+      severity: error
+    duplicate_frames:
+      max_events: 2
+      severity: error
+    corrupt_frames:
+      max_events: 5
+      severity: error
+    luma_range:
+      max_out_of_legal: 0.02
+      severity: error
+
+  audio:
+    sample_rate:
+      expected: 48000
+      severity: error
+    bit_depth:
+      expected: 24
+      severity: error
+    channel_layout:
+      channels: 2
+      layout: stereo
+      severity: error
+    silence:
+      max_duration_ms: 4000
+      severity: error
+    clipping:
+      max_events: 10
+      severity: error
+    peak:
+      max_db: -1
+      severity: error
+    true_peak:
+      max_db: -1
+      severity: error
+    loudness:
+      standard: ebu-r128
+      target_lufs: -23
+      tolerance_lu: 1
+      severity: error
+    phase:
+      min_correlation: -0.5
+      severity: error
+    dc_offset:
+      max_offset_percent: 1
+      severity: error
+
+policy:
+  fail_on: error

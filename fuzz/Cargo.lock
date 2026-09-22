@@ -1281,6 +1281,7 @@ dependencies = [
  "clap",
  "libfuzzer-sys",
  "notify",
+ "serde_json",
  "tempfile",
  "tpt-app-media-qc-cli",
  "tpt-app-media-qc-model",

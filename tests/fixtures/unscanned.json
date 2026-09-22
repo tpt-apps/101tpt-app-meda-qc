@@ -1,0 +1,44 @@
+{
+  "asset": {
+    "id": "00000000-0000-0000-0000-000000000006",
+    "path": "fixtures/unscanned.mov",
+    "fingerprint": { "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "size_bytes": 157286400 },
+    "size_bytes": 157286400,
+    "modified_time": 1700000500,
+    "duration": 120,
+    "streams": [
+      {
+        "index": 0, "kind": "video", "codec": "h264", "codec_profile": "High",
+        "width": 1920, "height": 1080, "pixel_format": "yuv420p",
+        "frame_rate": "25/1", "time_base": "1/12800",
+        "bitrate": 15000000, "duration": 120,
+        "language": null, "channel_layout": null, "channels": null,
+        "sample_rate": null, "bit_depth": null, "metadata": {}
+      },
+      {
+        "index": 1, "kind": "audio", "codec": "pcm_s24le", "codec_profile": null,
+        "width": null, "height": null, "pixel_format": null,
+        "frame_rate": null, "time_base": "1/48000",
+        "bitrate": 2304000, "duration": 120,
+        "language": "en", "channel_layout": "stereo", "channels": 2,
+        "sample_rate": 48000, "bit_depth": 24, "metadata": {}
+      }
+    ]
+  },
+  "inspection": {
+    "container": {
+      "validity": "not_scanned",
+      "format": null,
+      "bitrate_bps": null,
+      "duration": null,
+      "timestamps_contiguous": null,
+      "timecode_present": null,
+      "timestamp_gaps": [],
+      "malformed_metadata": [],
+      "decode_errors": 0
+    },
+    "video": [],
+    "audio": [],
+    "diagnostics": {}
+  }
+}

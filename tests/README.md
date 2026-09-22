@@ -14,7 +14,9 @@ tests/
   ships valid-input, invalid-input, boundary, malformed-input and
   expected-result tests.
 - **Golden media tests** (spec §24.2) pair a fixture in `fixtures/` with an
-  expected result in `golden/` — each fixture must have an expected result.
+  expected result in `golden/` — implemented and enforced: the runner in
+  `tpt-app-media-qc-test` verifies every manifest on `cargo test --workspace`
+  and asserts coverage of every production rule.
 - **Property tests** (spec §24.3) cover timecode conversion, frame indexing,
   duration calculations, threshold logic, profile parsing and result
   aggregation (planned).

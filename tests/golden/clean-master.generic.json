@@ -1,0 +1,26 @@
+{
+  "fixture": "clean-master",
+  "profile": "generic",
+  "expected_verdict": "pass",
+  "expected_statuses": {
+    "audio.clipping": "pass",
+    "audio.loudness": "pass",
+    "audio.phase": "pass",
+    "audio.silence": "pass",
+    "audio.true_peak": "pass",
+    "container.bitrate": "pass",
+    "container.container_validity": "pass",
+    "container.malformed_metadata": "pass",
+    "container.readable": "pass",
+    "container.stream_presence": "pass",
+    "container.timecode_present": "pass",
+    "container.timestamp_continuity": "pass",
+    "video.black_frames": "pass",
+    "video.corrupt_frames": "pass",
+    "video.duplicate_frames": "pass",
+    "video.frame_rate": "pass",
+    "video.freeze_frames": "pass",
+    "video.resolution": "pass"
+  },
+  "allow_critical_empty": false
+}

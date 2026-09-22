@@ -1,6 +1,6 @@
 [package]
-name = "tpt-app-media-qc-test"
-description = "Shared test utilities and integration/golden support for TPT Media QC (spec §24)."
+name = "tpt-app-media-qc-decode"
+description = "Kinetix-backed decode inspector: real container/video-decode measurements for TPT Media QC (spec §10, §8.2–§8.3)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,11 +12,12 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-serde.workspace = true
-serde_json.workspace = true
 tpt-app-media-qc-core = { path = "../tpt-app-media-qc-core" }
 tpt-app-media-qc-model = { path = "../tpt-app-media-qc-model" }
-tpt-app-media-qc-profile = { path = "../tpt-app-media-qc-profile" }
-tpt-app-media-qc-rules = { path = "../tpt-app-media-qc-rules" }
 tpt-app-media-qc-pipeline = { path = "../tpt-app-media-qc-pipeline" }
-tpt-app-media-qc-report = { path = "../tpt-app-media-qc-report" }
+tpt-kinetix-core.workspace = true
+tpt-kinetix-demux.workspace = true
+tpt-kinetix-h264.workspace = true
+
+[dev-dependencies]
+tpt-kinetix-mux.workspace = true

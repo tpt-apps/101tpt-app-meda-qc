@@ -1,0 +1,58 @@
+{
+  "asset": {
+    "id": "00000000-0000-0000-0000-000000000002",
+    "path": "fixtures/container-problems.mov",
+    "fingerprint": { "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "size_bytes": 209715200 },
+    "size_bytes": 209715200,
+    "modified_time": 1700000100,
+    "duration": 120,
+    "streams": [
+      {
+        "index": 0, "kind": "video", "codec": "h264", "codec_profile": "High",
+        "width": 1920, "height": 1080, "pixel_format": "yuv420p",
+        "frame_rate": "25/1", "time_base": "1/90000",
+        "bitrate": 4000000, "duration": 120,
+        "language": null, "channel_layout": null, "channels": null,
+        "sample_rate": null, "bit_depth": null, "metadata": {}
+      },
+      {
+        "index": 1, "kind": "data", "codec": "tmcd", "codec_profile": null,
+        "width": null, "height": null, "pixel_format": null,
+        "frame_rate": null, "time_base": "1/1000",
+        "bitrate": null, "duration": 120,
+        "language": null, "channel_layout": null, "channels": null,
+        "sample_rate": null, "bit_depth": null, "metadata": {}
+      }
+    ]
+  },
+  "inspection": {
+    "container": {
+      "validity": { "corrupt": "moov atom truncated at offset 209713341" },
+      "format": "QuickTime / MOV",
+      "bitrate_bps": 4000000,
+      "duration": 121500,
+      "timestamps_contiguous": false,
+      "timecode_present": false,
+      "timestamp_gaps": [
+        { "start_ms": 0, "end_ms": 2000 },
+        { "start_ms": 5000, "end_ms": 5600 }
+      ],
+      "malformed_metadata": ["\u00a9xyz: <non-utf8 payload 0x00 0xFF 0xFE>"],
+      "decode_errors": 0
+    },
+    "video": [
+      {
+        "stream_idx": 0,
+        "frame_rate_observed": "25/1",
+        "decode_errors": 0,
+        "black_frames": [],
+        "freeze_frames": [],
+        "duplicate_frames": [],
+        "luma": null,
+        "colorspace": null
+      }
+    ],
+    "audio": [],
+    "diagnostics": {}
+  }
+}
