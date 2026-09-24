@@ -246,7 +246,9 @@ impl QcRule for DurationConsistencyRule {
                         self.cfg.severity,
                         format!(
                             "duration mismatch: {label} {}ms vs {jlabel} {}ms (tolerance {}ms)",
-                            dur / 1000, jdur / 1000, self.cfg.tolerance_ms
+                            dur / 1000,
+                            jdur / 1000,
+                            self.cfg.tolerance_ms
                         ),
                         Some(Value::DurationMs(*dur)),
                         Some(Value::DurationMs(*jdur)),
@@ -260,7 +262,10 @@ impl QcRule for DurationConsistencyRule {
             RuleResult::from_finding(info(
                 &self.id(),
                 Severity::Info,
-                format!("all durations agree within tolerance ({label} = {}s)", dur / 1000),
+                format!(
+                    "all durations agree within tolerance ({label} = {}s)",
+                    dur / 1000
+                ),
                 Some(Value::DurationMs(*dur)),
             ))
         } else {
@@ -306,7 +311,11 @@ impl QcRule for BitrateRule {
             RuleResult::from_finding(fail(
                 &self.id(),
                 self.cfg.severity,
-                format!("container bitrate {:.1} Mbps is below the {:.1} Mbps minimum", bitrate as f64 / 1_000_000.0, self.cfg.min_bps as f64 / 1_000_000.0),
+                format!(
+                    "container bitrate {:.1} Mbps is below the {:.1} Mbps minimum",
+                    bitrate as f64 / 1_000_000.0,
+                    self.cfg.min_bps as f64 / 1_000_000.0
+                ),
                 Some(Value::bytes(bitrate)),
                 Some(Value::bytes(self.cfg.min_bps)),
             ))
@@ -399,7 +408,10 @@ impl QcRule for TimebaseRule {
                 findings.push(fail(
                     &self.id(),
                     self.cfg.severity,
-                    format!("stream {} time base {} != expected {}", stream.index, tb, self.cfg.value),
+                    format!(
+                        "stream {} time base {} != expected {}",
+                        stream.index, tb, self.cfg.value
+                    ),
                     Some(Value::Text(tb.to_string())),
                     Some(Value::Text(self.cfg.value.to_string())),
                 ));
@@ -470,7 +482,11 @@ impl QcRule for TimestampContinuityRuleImpl {
         if offending.is_empty() {
             return RuleResult::pass();
         }
-        RuleResult::findings(segment_failures(&self.id(), self.cfg.severity, offending.into_iter()))
+        RuleResult::findings(segment_failures(
+            &self.id(),
+            self.cfg.severity,
+            offending.into_iter(),
+        ))
     }
 }
 
@@ -499,12 +515,17 @@ impl QcRule for UnexpectedStreamsRule {
     fn run(&self, ctx: &RuleContext<'_>) -> RuleResult {
         let mut findings = Vec::new();
         for stream in &ctx.asset.streams {
-            if matches!(stream.kind, StreamKind::Data | StreamKind::Attachment | StreamKind::Unknown) {
-                findings.push(QcFinding::new(self.id())
-                    .status(tpt_app_media_qc_model::severity::VerdictDecision::Fail)
-                    .severity(self.severity)
-                    .stream(stream.index)
-                    .set_message(format!("unexpected stream kind '{}'", stream.kind.as_str())));
+            if matches!(
+                stream.kind,
+                StreamKind::Data | StreamKind::Attachment | StreamKind::Unknown
+            ) {
+                findings.push(
+                    QcFinding::new(self.id())
+                        .status(tpt_app_media_qc_model::severity::VerdictDecision::Fail)
+                        .severity(self.severity)
+                        .stream(stream.index)
+                        .set_message(format!("unexpected stream kind '{}'", stream.kind.as_str())),
+                );
             }
         }
         if findings.is_empty() && !ctx.asset.streams.is_empty() {
@@ -559,7 +580,10 @@ impl QcRule for StreamPresenceRuleImpl {
             findings.push(fail(
                 &self.id(),
                 self.cfg.severity,
-                format!("expected at least {} video stream(s), found {video}", self.cfg.min_video),
+                format!(
+                    "expected at least {} video stream(s), found {video}",
+                    self.cfg.min_video
+                ),
                 Some(Value::UInt(video)),
                 Some(Value::UInt(self.cfg.min_video)),
             ));
@@ -568,7 +592,10 @@ impl QcRule for StreamPresenceRuleImpl {
             findings.push(fail(
                 &self.id(),
                 self.cfg.severity,
-                format!("expected at least {} audio stream(s), found {audio}", self.cfg.min_audio),
+                format!(
+                    "expected at least {} audio stream(s), found {audio}",
+                    self.cfg.min_audio
+                ),
                 Some(Value::UInt(audio)),
                 Some(Value::UInt(self.cfg.min_audio)),
             ));
@@ -577,7 +604,10 @@ impl QcRule for StreamPresenceRuleImpl {
             findings.push(fail(
                 &self.id(),
                 self.cfg.severity,
-                format!("expected at most {} streams, found {total}", self.cfg.max_streams),
+                format!(
+                    "expected at most {} streams, found {total}",
+                    self.cfg.max_streams
+                ),
                 Some(Value::UInt(total)),
                 Some(Value::UInt(self.cfg.max_streams)),
             ));
@@ -593,24 +623,33 @@ mod tests {
     use tpt_app_media_qc_model::inspection::{ContainerInspection, Inspection};
     use tpt_app_media_qc_model::severity::VerdictDecision as Status;
 
-fn ctx_with(container: ContainerInspection) -> RuleContext<'static> {
-    let asset = bundled_asset();
-    let inspection: &'static Inspection =
-        Box::leak(Box::new(Inspection { container, ..Default::default() }));
-    RuleContext { asset, inspection }
-}
+    fn ctx_with(container: ContainerInspection) -> RuleContext<'static> {
+        let asset = bundled_asset();
+        let inspection: &'static Inspection = Box::leak(Box::new(Inspection {
+            container,
+            ..Default::default()
+        }));
+        RuleContext { asset, inspection }
+    }
 
     #[test]
     fn readable_ok_passes() {
-        let rule = ReadableRule { severity: Severity::Error };
-        let ctx = ctx_with(ContainerInspection { validity: ContainerValidity::Ok, ..Default::default() });
+        let rule = ReadableRule {
+            severity: Severity::Error,
+        };
+        let ctx = ctx_with(ContainerInspection {
+            validity: ContainerValidity::Ok,
+            ..Default::default()
+        });
         let r = rule.execute(&ctx);
         assert!(r.is_pass());
     }
 
     #[test]
     fn readable_unreadable_fails() {
-        let rule = ReadableRule { severity: Severity::Error };
+        let rule = ReadableRule {
+            severity: Severity::Error,
+        };
         let ctx = ctx_with(ContainerInspection {
             validity: ContainerValidity::Unreadable("permission denied".into()),
             ..Default::default()
@@ -622,7 +661,9 @@ fn ctx_with(container: ContainerInspection) -> RuleContext<'static> {
 
     #[test]
     fn not_scanned_is_inconclusive() {
-        let rule = ReadableRule { severity: Severity::Error };
+        let rule = ReadableRule {
+            severity: Severity::Error,
+        };
         let ctx = ctx_with(ContainerInspection::default());
         let r = rule.execute(&ctx);
         assert_eq!(r.findings[0].status, Status::Inconclusive);
@@ -631,7 +672,10 @@ fn ctx_with(container: ContainerInspection) -> RuleContext<'static> {
     #[test]
     fn duration_consistency_catches_mismatch() {
         let rule = DurationConsistencyRule {
-            cfg: ToleranceRule { tolerance_ms: 100, severity: Severity::Error },
+            cfg: ToleranceRule {
+                tolerance_ms: 100,
+                severity: Severity::Error,
+            },
         };
         let mut container = ContainerInspection {
             validity: ContainerValidity::Ok,
@@ -646,7 +690,10 @@ fn ctx_with(container: ContainerInspection) -> RuleContext<'static> {
     #[test]
     fn bitrate_below_minimum_fails() {
         let rule = BitrateRule {
-            cfg: MinBitrateRule { min_bps: 10_000_000, severity: Severity::Error },
+            cfg: MinBitrateRule {
+                min_bps: 10_000_000,
+                severity: Severity::Error,
+            },
         };
         let mut container = ContainerInspection {
             validity: ContainerValidity::Ok,
@@ -669,7 +716,10 @@ fn ctx_with(container: ContainerInspection) -> RuleContext<'static> {
             },
         };
         // bundled asset has a video stream → pass.
-        let ctx = ctx_with(ContainerInspection { validity: ContainerValidity::Ok, ..Default::default() });
+        let ctx = ctx_with(ContainerInspection {
+            validity: ContainerValidity::Ok,
+            ..Default::default()
+        });
         assert!(rule.execute(&ctx).is_pass());
 
         // Flip expectation to catch the audio stream instead.

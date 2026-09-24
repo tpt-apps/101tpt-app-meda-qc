@@ -31,7 +31,10 @@ pub enum ProfileError {
 }
 
 fn err(path: &str, msg: impl Into<String>) -> ProfileError {
-    ProfileError::Field { path: path.to_string(), msg: msg.into() }
+    ProfileError::Field {
+        path: path.to_string(),
+        msg: msg.into(),
+    }
 }
 
 /// Parse YAML source into a validated [`Profile`].
@@ -49,7 +52,7 @@ fn parse_value(root: &Value) -> Result<Profile, ProfileError> {
         None => 1,
     };
 
-let rules_map = match map.get(Value::String("rules".into())) {
+    let rules_map = match map.get(Value::String("rules".into())) {
         Some(v) => as_mapping(v, "rules")?.clone(),
         None => Mapping::new(),
     };
@@ -62,7 +65,16 @@ let rules_map = match map.get(Value::String("rules".into())) {
     // Reject unknown top-level keys to catch typos early.
     for k in map.keys() {
         let k = as_key(k);
-        if !["name", "version", "rules", "policy", "description", "comment"].contains(&k.as_str()) {
+        if ![
+            "name",
+            "version",
+            "rules",
+            "policy",
+            "description",
+            "comment",
+        ]
+        .contains(&k.as_str())
+        {
             return Err(err("$", format!("unknown top-level key '{k}'")));
         }
     }
@@ -120,7 +132,10 @@ fn parse_container(map: &Mapping) -> Result<ContainerRules, ProfileError> {
         ]
         .contains(&k.as_str())
         {
-            return Err(err("rules.container", format!("unknown container rule '{k}'")));
+            return Err(err(
+                "rules.container",
+                format!("unknown container rule '{k}'"),
+            ));
         }
     }
 
@@ -143,7 +158,9 @@ fn parse_severity_rule(
     name: &str,
     default: Severity,
 ) -> Result<Option<Severity>, ProfileError> {
-    let Some(v) = map.get(Value::String(name.into())) else { return Ok(None) };
+    let Some(v) = map.get(Value::String(name.into())) else {
+        return Ok(None);
+    };
     let path = format!("rules.container.{name}");
     let sev = match v {
         Value::Mapping(m) => match m.get(Value::String("severity".into())) {
@@ -156,28 +173,40 @@ fn parse_severity_rule(
 }
 
 fn parse_tolerance(map: &Mapping, name: &str) -> Result<Option<ToleranceRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, name) else { return Ok(None) };
+    let Some(spec) = rule_spec(map, name) else {
+        return Ok(None);
+    };
     let path = format!("rules.container.{name}");
     let (sev, cfg) = (spec.severity, spec.config);
     let tolerance_ms = match cfg {
         Some(m) => required_u64(m, "tolerance_ms", &path)?,
         None => return Err(err(&path, "missing 'tolerance_ms'")),
     };
-    Ok(Some(ToleranceRule { tolerance_ms, severity: sev }))
+    Ok(Some(ToleranceRule {
+        tolerance_ms,
+        severity: sev,
+    }))
 }
 
 fn parse_min_bitrate(map: &Mapping) -> Result<Option<MinBitrateRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "bitrate") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "bitrate") else {
+        return Ok(None);
+    };
     let path = "rules.container.bitrate";
     let min_bps = match spec.config {
         Some(m) => required_u64(m, "min_bps", path)?,
         None => return Err(err(path, "missing 'min_bps'")),
     };
-    Ok(Some(MinBitrateRule { min_bps, severity: spec.severity }))
+    Ok(Some(MinBitrateRule {
+        min_bps,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_expect_value(map: &Mapping) -> Result<Option<ExpectValueRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "timebase") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "timebase") else {
+        return Ok(None);
+    };
     let path = "rules.container.timebase";
     let value = match spec.config {
         Some(m) => required_rational(m, "value", path)?,
@@ -186,30 +215,44 @@ fn parse_expect_value(map: &Mapping) -> Result<Option<ExpectValueRule>, ProfileE
             None => return Err(err(path, "missing 'value'")),
         },
     };
-    Ok(Some(ExpectValueRule { value, severity: spec.severity }))
+    Ok(Some(ExpectValueRule {
+        value,
+        severity: spec.severity,
+    }))
 }
 
-fn parse_timestamp_continuity(map: &Mapping) -> Result<Option<TimestampContinuityRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "timestamp_continuity") else { return Ok(None) };
+fn parse_timestamp_continuity(
+    map: &Mapping,
+) -> Result<Option<TimestampContinuityRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "timestamp_continuity") else {
+        return Ok(None);
+    };
     let path = "rules.container.timestamp_continuity";
     let max_gap_ms = match spec.config {
         Some(m) => optional_u64(m, "max_gap_ms", path)?.unwrap_or(150),
         None => 150,
     };
-    Ok(Some(TimestampContinuityRule { max_gap_ms, severity: spec.severity }))
+    Ok(Some(TimestampContinuityRule {
+        max_gap_ms,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_stream_presence(map: &Mapping) -> Result<Option<StreamPresenceRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "stream_presence") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "stream_presence") else {
+        return Ok(None);
+    };
     let path = "rules.container.stream_presence";
     let m = match spec.config {
         Some(m) => m,
-        None => return Ok(Some(StreamPresenceRule {
-            min_video: 1,
-            min_audio: 0,
-            max_streams: default_max_streams(),
-            severity: spec.severity,
-        })),
+        None => {
+            return Ok(Some(StreamPresenceRule {
+                min_video: 1,
+                min_audio: 0,
+                max_streams: default_max_streams(),
+                severity: spec.severity,
+            }))
+        }
     };
     Ok(Some(StreamPresenceRule {
         min_video: optional_u64(m, "min_video", path)?.unwrap_or(1),
@@ -257,7 +300,9 @@ fn parse_video(map: &Mapping) -> Result<VideoRules, ProfileError> {
 }
 
 fn parse_resolution(map: &Mapping) -> Result<Option<ResolutionRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "resolution") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "resolution") else {
+        return Ok(None);
+    };
     let path = "rules.video.resolution";
     let expected = match spec.config {
         Some(m) => {
@@ -269,7 +314,10 @@ fn parse_resolution(map: &Mapping) -> Result<Option<ResolutionRule>, ProfileErro
             None => return Err(err(path, "missing 'expected'")),
         },
     };
-    Ok(Some(ResolutionRule { expected, severity: spec.severity }))
+    Ok(Some(ResolutionRule {
+        expected,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_resolution_str(s: &str, path: &str) -> Result<Resolution, ProfileError> {
@@ -277,13 +325,19 @@ fn parse_resolution_str(s: &str, path: &str) -> Result<Resolution, ProfileError>
         .split_once('x')
         .or_else(|| s.split_once('X'))
         .ok_or_else(|| err(path, format!("expected '<width>x<height>', got '{s}'")))?;
-    let w = w.parse::<u64>().map_err(|_| err(path, format!("invalid width '{w}'")))?;
-    let h = h.parse::<u64>().map_err(|_| err(path, format!("invalid height '{h}'")))?;
+    let w = w
+        .parse::<u64>()
+        .map_err(|_| err(path, format!("invalid width '{w}'")))?;
+    let h = h
+        .parse::<u64>()
+        .map_err(|_| err(path, format!("invalid height '{h}'")))?;
     Ok(Resolution(w, h))
 }
 
 fn parse_frame_rate(map: &Mapping) -> Result<Option<FrameRateRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "frame_rate") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "frame_rate") else {
+        return Ok(None);
+    };
     let path = "rules.video.frame_rate";
     let expected = match spec.config {
         Some(m) => required_rational(m, "expected", path)?,
@@ -296,11 +350,17 @@ fn parse_frame_rate(map: &Mapping) -> Result<Option<FrameRateRule>, ProfileError
         Some(m) => optional_f64(m, "tolerance", path)?.unwrap_or(default_frame_rate_tolerance()),
         None => default_frame_rate_tolerance(),
     };
-    Ok(Some(FrameRateRule { expected, tolerance, severity: spec.severity }))
+    Ok(Some(FrameRateRule {
+        expected,
+        tolerance,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_aspect_ratio(map: &Mapping) -> Result<Option<AspectRatioRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "aspect_ratio") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "aspect_ratio") else {
+        return Ok(None);
+    };
     let path = "rules.video.aspect_ratio";
     let expected = match spec.config {
         Some(m) => {
@@ -317,7 +377,11 @@ fn parse_aspect_ratio(map: &Mapping) -> Result<Option<AspectRatioRule>, ProfileE
     };
     let tolerance =
         optional_f64_m(spec.config, "tolerance", path)?.unwrap_or(default_aspect_tolerance());
-    Ok(Some(AspectRatioRule { expected, tolerance, severity: spec.severity }))
+    Ok(Some(AspectRatioRule {
+        expected,
+        tolerance,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_ratio_str(s: &str, path: &str) -> Result<Ratio, ProfileError> {
@@ -325,8 +389,14 @@ fn parse_ratio_str(s: &str, path: &str) -> Result<Ratio, ProfileError> {
         .split_once('/')
         .or_else(|| s.split_once(':'))
         .ok_or_else(|| err(path, format!("expected '<n>/<d>' ratio, got '{s}'")))?;
-    let n = n.trim().parse::<f64>().map_err(|_| err(path, format!("invalid ratio numerator '{n}'")))?;
-    let d = d.trim().parse::<f64>().map_err(|_| err(path, format!("invalid ratio denominator '{d}'")))?;
+    let n = n
+        .trim()
+        .parse::<f64>()
+        .map_err(|_| err(path, format!("invalid ratio numerator '{n}'")))?;
+    let d = d
+        .trim()
+        .parse::<f64>()
+        .map_err(|_| err(path, format!("invalid ratio denominator '{d}'")))?;
     if d == 0.0 {
         return Err(err(path, "ratio denominator must be non-zero"));
     }
@@ -337,37 +407,57 @@ fn parse_duration_threshold(
     map: &Mapping,
     name: &str,
 ) -> Result<Option<DurationThresholdRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, name) else { return Ok(None) };
+    let Some(spec) = rule_spec(map, name) else {
+        return Ok(None);
+    };
     let path = format!("rules.video.{name}");
     let max_duration_ms = match spec.config {
         Some(m) => required_u64(m, "max_duration_ms", &path)?,
         None => return Err(err(&path, "missing 'max_duration_ms'")),
     };
-    Ok(Some(DurationThresholdRule { max_duration_ms, severity: spec.severity }))
+    Ok(Some(DurationThresholdRule {
+        max_duration_ms,
+        severity: spec.severity,
+    }))
 }
 
-fn parse_count_threshold(map: &Mapping, name: &str) -> Result<Option<CountThresholdRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, name) else { return Ok(None) };
+fn parse_count_threshold(
+    map: &Mapping,
+    name: &str,
+) -> Result<Option<CountThresholdRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, name) else {
+        return Ok(None);
+    };
     let path = format!("rules.video.{name}");
     let max_events = match spec.config {
         Some(m) => required_u64(m, "max_events", &path)?,
         None => return Err(err(&path, "missing 'max_events'")),
     };
-    Ok(Some(CountThresholdRule { max_events, severity: spec.severity }))
+    Ok(Some(CountThresholdRule {
+        max_events,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_luma_range(map: &Mapping) -> Result<Option<LumaRangeRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "luma_range") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "luma_range") else {
+        return Ok(None);
+    };
     let path = "rules.video.luma_range";
     let max_out_of_legal = match spec.config {
         Some(m) => optional_f64(m, "max_out_of_legal", path)?.unwrap_or(0.01),
         None => 0.01,
     };
-    Ok(Some(LumaRangeRule { max_out_of_legal, severity: spec.severity }))
+    Ok(Some(LumaRangeRule {
+        max_out_of_legal,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_color_space(map: &Mapping) -> Result<Option<ColorSpaceRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "color_space") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "color_space") else {
+        return Ok(None);
+    };
     let path = "rules.video.color_space";
     let expected = match spec.config {
         Some(m) => required_string(m, "expected", path)?,
@@ -376,7 +466,10 @@ fn parse_color_space(map: &Mapping) -> Result<Option<ColorSpaceRule>, ProfileErr
             None => return Err(err(path, "missing 'expected'")),
         },
     };
-    Ok(Some(ColorSpaceRule { expected, severity: spec.severity }))
+    Ok(Some(ColorSpaceRule {
+        expected,
+        severity: spec.severity,
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -419,7 +512,9 @@ fn parse_audio(map: &Mapping) -> Result<AudioRules, ProfileError> {
 }
 
 fn parse_sample_rate(map: &Mapping) -> Result<Option<SampleRateRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "sample_rate") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "sample_rate") else {
+        return Ok(None);
+    };
     let path = "rules.audio.sample_rate";
     let expected = match spec.config {
         Some(m) => required_u64(m, "expected", path)?,
@@ -428,11 +523,16 @@ fn parse_sample_rate(map: &Mapping) -> Result<Option<SampleRateRule>, ProfileErr
             None => return Err(err(path, "missing 'expected'")),
         },
     };
-    Ok(Some(SampleRateRule { expected, severity: spec.severity }))
+    Ok(Some(SampleRateRule {
+        expected,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_bit_depth(map: &Mapping) -> Result<Option<BitDepthRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "bit_depth") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "bit_depth") else {
+        return Ok(None);
+    };
     let path = "rules.audio.bit_depth";
     let expected = match spec.config {
         Some(m) => required_u64(m, "expected", path)?,
@@ -441,37 +541,52 @@ fn parse_bit_depth(map: &Mapping) -> Result<Option<BitDepthRule>, ProfileError> 
             None => return Err(err(path, "missing 'expected'")),
         },
     };
-    Ok(Some(BitDepthRule { expected, severity: spec.severity }))
+    Ok(Some(BitDepthRule {
+        expected,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_duration_threshold_audio(
     map: &Mapping,
     name: &str,
 ) -> Result<Option<DurationThresholdRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, name) else { return Ok(None) };
+    let Some(spec) = rule_spec(map, name) else {
+        return Ok(None);
+    };
     let path = format!("rules.audio.{name}");
     let max_duration_ms = match spec.config {
         Some(m) => required_u64(m, "max_duration_ms", &path)?,
         None => return Err(err(&path, "missing 'max_duration_ms'")),
     };
-    Ok(Some(DurationThresholdRule { max_duration_ms, severity: spec.severity }))
+    Ok(Some(DurationThresholdRule {
+        max_duration_ms,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_count_threshold_audio(
     map: &Mapping,
     name: &str,
 ) -> Result<Option<CountThresholdRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, name) else { return Ok(None) };
+    let Some(spec) = rule_spec(map, name) else {
+        return Ok(None);
+    };
     let path = format!("rules.audio.{name}");
     let max_events = match spec.config {
         Some(m) => required_u64(m, "max_events", &path)?,
         None => return Err(err(&path, "missing 'max_events'")),
     };
-    Ok(Some(CountThresholdRule { max_events, severity: spec.severity }))
+    Ok(Some(CountThresholdRule {
+        max_events,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_channel_layout(map: &Mapping) -> Result<Option<ChannelLayoutRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "channel_layout") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "channel_layout") else {
+        return Ok(None);
+    };
     let path = "rules.audio.channel_layout";
     let (channels, layout) = match spec.config {
         Some(m) => (
@@ -483,23 +598,37 @@ fn parse_channel_layout(map: &Mapping) -> Result<Option<ChannelLayoutRule>, Prof
             None => return Err(err(path, "missing 'channels'")),
         },
     };
-    Ok(Some(ChannelLayoutRule { channels, layout, severity: spec.severity }))
+    Ok(Some(ChannelLayoutRule {
+        channels,
+        layout,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_db_threshold(map: &Mapping, name: &str) -> Result<Option<DbThresholdRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, name) else { return Ok(None) };
+    let Some(spec) = rule_spec(map, name) else {
+        return Ok(None);
+    };
     let path = format!("rules.audio.{name}");
     let max_db = match spec.config {
         Some(m) => required_f64(m, "max_db", &path)?,
         None => return Err(err(&path, "missing 'max_db'")),
     };
-    Ok(Some(DbThresholdRule { max_db, severity: spec.severity }))
+    Ok(Some(DbThresholdRule {
+        max_db,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_loudness(map: &Mapping) -> Result<Option<LoudnessRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "loudness") else { return Ok(None) };
-let path = "rules.audio.loudness";
-    let mut rule = LoudnessRule { severity: spec.severity, ..Default::default() };
+    let Some(spec) = rule_spec(map, "loudness") else {
+        return Ok(None);
+    };
+    let path = "rules.audio.loudness";
+    let mut rule = LoudnessRule {
+        severity: spec.severity,
+        ..Default::default()
+    };
     if let Some(m) = spec.config {
         if let Some(v) = opt_string(m, "standard", path)? {
             rule.standard = match v.as_str() {
@@ -520,23 +649,33 @@ let path = "rules.audio.loudness";
 }
 
 fn parse_phase(map: &Mapping) -> Result<Option<PhaseRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "phase") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "phase") else {
+        return Ok(None);
+    };
     let path = "rules.audio.phase";
     let min_correlation = match spec.config {
         Some(m) => optional_f64(m, "min_correlation", path)?.unwrap_or(default_min_phase()),
         None => default_min_phase(),
     };
-    Ok(Some(PhaseRule { min_correlation, severity: spec.severity }))
+    Ok(Some(PhaseRule {
+        min_correlation,
+        severity: spec.severity,
+    }))
 }
 
 fn parse_dc_offset(map: &Mapping) -> Result<Option<DcOffsetRule>, ProfileError> {
-    let Some(spec) = rule_spec(map, "dc_offset") else { return Ok(None) };
+    let Some(spec) = rule_spec(map, "dc_offset") else {
+        return Ok(None);
+    };
     let path = "rules.audio.dc_offset";
     let max_offset_percent = match spec.config {
         Some(m) => optional_f64(m, "max_offset_percent", path)?.unwrap_or(5.0),
         None => 5.0,
     };
-    Ok(Some(DcOffsetRule { max_offset_percent, severity: spec.severity }))
+    Ok(Some(DcOffsetRule {
+        max_offset_percent,
+        severity: spec.severity,
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -556,12 +695,18 @@ fn parse_subtitle(map: &Mapping) -> Result<SubtitleRules, ProfileError> {
         None => None,
     };
     let missing_subtitles = parse_severity_rule_sub(map)?;
-    Ok(SubtitleRules { language, missing_subtitles })
+    Ok(SubtitleRules {
+        language,
+        missing_subtitles,
+    })
 }
 
 fn parse_severity_rule_sub(map: &Mapping) -> Result<Option<Severity>, ProfileError> {
     match map.get(Value::String("missing_subtitles".into())) {
-        Some(v) => Ok(Some(severity_from_value(v, "rules.subtitle.missing_subtitles")?)),
+        Some(v) => Ok(Some(severity_from_value(
+            v,
+            "rules.subtitle.missing_subtitles",
+        )?)),
         None => Ok(None),
     }
 }
@@ -598,12 +743,20 @@ fn rule_spec<'v>(map: &'v Mapping, name: &str) -> Option<RuleSpec<'v>> {
                 .get(Value::String("severity".into()))
                 .and_then(|s| severity_from_value(s, name).ok())
                 .unwrap_or_else(rule_default_severity);
-            Some(RuleSpec { severity, config: Some(m), scalar: None })
+            Some(RuleSpec {
+                severity,
+                config: Some(m),
+                scalar: None,
+            })
         }
-other => {
+        other => {
             let severity =
                 severity_from_value(other, name).unwrap_or_else(|_| rule_default_severity());
-            Some(RuleSpec { severity, config: None, scalar: Some(other) })
+            Some(RuleSpec {
+                severity,
+                config: None,
+                scalar: Some(other),
+            })
         }
     }
 }
@@ -631,8 +784,7 @@ fn as_key(k: &Value) -> String {
 
 fn severity_from_value(v: &Value, path: &str) -> Result<Severity, ProfileError> {
     let s = string_from_value(v, path)?;
-    s.parse::<Severity>()
-        .map_err(|e| err(path, e))
+    s.parse::<Severity>().map_err(|e| err(path, e))
 }
 
 fn string_from_value(v: &Value, path: &str) -> Result<String, ProfileError> {
@@ -662,8 +814,9 @@ fn rational_from_value(v: &Value, path: &str) -> Result<Rational, ProfileError> 
                 Err(err(path, "expected an integer or '<num>/<den>' string"))
             }
         }
-        Value::String(s) => Rational::parse(s)
-            .ok_or_else(|| err(path, format!("invalid rational '{s}'"))),
+        Value::String(s) => {
+            Rational::parse(s).ok_or_else(|| err(path, format!("invalid rational '{s}'")))
+        }
         other => Err(err(path, format!("expected a rational, got {}", ty(other)))),
     }
 }
@@ -762,7 +915,7 @@ name: "Minimal"
 version: 1
 "#;
 
-const FULL: &str = r#"
+    const FULL: &str = r#"
 name: "Client Delivery - Example"
 version: 1
 
@@ -823,7 +976,10 @@ rules:
         let video = &p.rules.video;
         assert_eq!(video.resolution.unwrap().expected.label(), "3840x2160");
         assert_eq!(video.resolution.unwrap().severity, Severity::Error);
-        assert_eq!(video.frame_rate.unwrap().expected.value().round() as u64, 25);
+        assert_eq!(
+            video.frame_rate.unwrap().expected.value().round() as u64,
+            25
+        );
         assert_eq!(video.black_frames.unwrap().max_duration_ms, 500);
         assert_eq!(video.black_frames.unwrap().severity, Severity::Warning);
         assert!(video.aspect_ratio.is_none());
@@ -836,7 +992,7 @@ rules:
         assert_eq!(audio.true_peak.unwrap().max_db, -1.0);
     }
 
-#[test]
+    #[test]
     fn rejects_unknown_rule() {
         let r = parse_str(WITH_UNKNOWN_RULE);
         assert!(r.is_err());

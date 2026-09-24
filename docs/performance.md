@@ -27,8 +27,12 @@ measured on representative fixtures, not optimised blindly.
   limits concurrency per cost class (see
   `tpt-app-media-qc-core::cost::SchedulerLimits`).
 - **No repeated decoding.** The pipeline merges one decode inspection into the
-  metadata baseline; rules read shared measurements. A rule-level cache
-  (spec §19) is planned to avoid re-running unchanged rules across runs.
+  metadata baseline; rules read shared measurements. The Kinetix adapter
+  analyses decoded frames immediately and retains only scalar frame history,
+  segment state and luma statistics—not decoded frame sequences.
+- **Foundation bound.** The pinned MP4 demuxer is in-memory; the adapter
+  refuses inputs over 512 MiB until a file-backed foundation demuxer is
+  available.
 
 ## 3. Benchmarking (planned)
 
@@ -43,9 +47,9 @@ measuring:
 - the desktop-UI starvation check (keep a probe frame interactive during full
   QC).
 
-Throughput numbers will be recorded in the repo when fixtures exist and the
-decode stack is integrated — do not infer performance from placeholder
-probes.
+Throughput numbers are recorded in the repository when representative
+fixtures exist. The first encoded H.264 fixture exercises the real Kinetix
+decode path; HD/UHD media benchmarks and peak-RSS measurements follow.
 
 ## 4. Concurrency model
 

@@ -3,8 +3,8 @@
 use chrono::Utc;
 use uuid::Uuid;
 
-use crate::Store;
 use crate::error::Result;
+use crate::Store;
 
 /// A project row grouping assets and jobs.
 #[derive(Clone, Debug)]
@@ -50,9 +50,9 @@ impl Store {
 
     /// List projects.
     pub fn projects(&self) -> Result<Vec<Project>> {
-        let mut stmt = self
-            .conn()
-            .prepare("SELECT id, name, description, created_at FROM projects ORDER BY created_at DESC")?;
+        let mut stmt = self.conn().prepare(
+            "SELECT id, name, description, created_at FROM projects ORDER BY created_at DESC",
+        )?;
         let rows = stmt.query_map([], |row| {
             Ok(Project {
                 id: row.get(0)?,
@@ -86,7 +86,9 @@ mod tests {
     #[test]
     fn project_lifecycle() {
         let store = Store::in_memory().unwrap();
-        let id = store.create_project("Client A", Some("delivery batch")).unwrap();
+        let id = store
+            .create_project("Client A", Some("delivery batch"))
+            .unwrap();
         let p = store.project(&id).unwrap().unwrap();
         assert_eq!(p.name, "Client A");
         assert_eq!(store.projects().unwrap().len(), 1);

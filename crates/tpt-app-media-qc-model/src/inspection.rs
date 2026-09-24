@@ -28,7 +28,6 @@ pub enum ContainerValidity {
     NotScanned,
 }
 
-
 /// Container-level measurements.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ContainerInspection {
@@ -80,6 +79,13 @@ pub struct VideoMeasurements {
     pub stream_idx: u64,
     /// Observed (measured over decoded frames) frame rate.
     pub frame_rate_observed: Option<FrameRate>,
+    /// Number of successfully decoded frames represented by this measurement.
+    ///
+    /// `None` means no decode pass supplied coverage. `Some(0)` means a decode
+    /// pass ran but could not decode any frames. Decode-dependent rules must
+    /// distinguish these states from a complete scan with no detected defects.
+    #[serde(default)]
+    pub decoded_frame_count: Option<u64>,
     /// Number of decode errors attributed to this stream.
     pub decode_errors: u64,
     /// Black-frame segments (subseconds resolution).

@@ -38,7 +38,8 @@ pub fn run_jobs(engine: &QcEngine, jobs: &[Job], limits: &SchedulerLimits) -> Sc
         let handles: Vec<_> = (0..workers)
             .map(|_| {
                 scope.spawn(|| {
-                    let mut local: Vec<(usize, tpt_app_media_qc_core::error::Result<QcRun>)> = Vec::new();
+                    let mut local: Vec<(usize, tpt_app_media_qc_core::error::Result<QcRun>)> =
+                        Vec::new();
                     loop {
                         let i = next.fetch_add(1, Ordering::Relaxed);
                         if i >= jobs.len() {
@@ -52,8 +53,9 @@ pub fn run_jobs(engine: &QcEngine, jobs: &[Job], limits: &SchedulerLimits) -> Sc
             })
             .collect();
 
-        let mut results: Vec<tpt_app_media_qc_core::error::Result<QcRun>> =
-            (0..jobs.len()).map(|_| Err(Error::Job("unreported job result".into()))).collect();
+        let mut results: Vec<tpt_app_media_qc_core::error::Result<QcRun>> = (0..jobs.len())
+            .map(|_| Err(Error::Job("unreported job result".into())))
+            .collect();
         for handle in handles {
             for (i, result) in handle.join().unwrap_or_else(|_| {
                 Vec::new() // a worker panicked: results for those jobs stay "unreported"
@@ -87,7 +89,10 @@ mod tests {
         Asset {
             id: Default::default(),
             path: format!("file{n}.mp4").into(),
-            fingerprint: AssetFingerprint { sha256: format!("{n:064x}"), size_bytes: n },
+            fingerprint: AssetFingerprint {
+                sha256: format!("{n:064x}"),
+                size_bytes: n,
+            },
             size_bytes: n,
             modified_time: None,
             duration: None,
@@ -104,8 +109,9 @@ mod tests {
         });
         let inspector = crate::inspector::arc(NoopInspector);
         let engine = QcEngine::new(profile.clone(), inspector);
-        let jobs: Vec<Job> =
-            (0..12).map(|i| Job::new(format!("job-{i}"), asset(i), profile.clone())).collect();
+        let jobs: Vec<Job> = (0..12)
+            .map(|i| Job::new(format!("job-{i}"), asset(i), profile.clone()))
+            .collect();
 
         let results = run_jobs(&engine, &jobs, &SchedulerLimits::default());
         assert_eq!(results.len(), 12);

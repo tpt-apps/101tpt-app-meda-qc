@@ -19,22 +19,24 @@ pixel format, frame rate, time base, bitrate, duration, language, channel
 layout, channels, sample rate and bit depth, plus container format, duration,
 bitrate and timecode presence.
 
-## 2. Full-decode roadmap
+## 2. Full-decode coverage
 
-Decode-based measurements (black/freeze/duplicate/corrupt frames, luma,
-silence, clipping, peak, true peak, loudness, phase, DC offset) require the TPT
-media foundation stack (spec §5, §31):
+The first full-decode adapter is deliberately narrow and capability-driven:
 
-- **`tpt-kinetix`** — container parsing, demuxing, decoding, frame access,
-  timestamps, media pipeline. "The application should never implement its own
-  parallel media decoder stack."
-- **`tpt-cadence`** — audio packet decoding and PCM extraction.
-- **`tpt-dsp`** — signal-level analysis (RMS, peak, true peak, silence,
-  clipping, phase, loudness processing).
-- **`tpt-visual`** — frame inspection, colour analysis, HDR, image metrics.
+- **Container:** MP4/ISO-BMFF through `tpt-kinetix-demux`.
+- **Video codec:** H.264/AVC through `tpt-kinetix-h264`.
+- **Measurements:** observed frame rate, black-frame ranges, freeze-frame
+  ranges, duplicate-frame ranges, decode-error count and all-sample luma
+  statistics (min/max/mean/legal-range fractions).
+- **Unsupported/incomplete input:** the adapter records no decoded-frame
+  coverage and the rules return `Inconclusive`; it never turns an empty
+  measurement into a pass.
 
-Until those are integrated, decode rules correctly report `Inconclusive`
-(spec §3.4) for any file whose measurements are absent.
+The pinned Kinetix MP4 demuxer is currently in-memory. The adapter therefore
+refuses files over 512 MiB rather than allocating without a bound. This is a
+foundation limitation, not a claim that large-file decoding is complete.
+Audio decode, HEVC/AV1/VP9, MXF, MPEG-TS and other containers remain follow-up
+work through Cadence and the other foundation crates.
 
 ## 3. Intended target coverage (post-integration)
 

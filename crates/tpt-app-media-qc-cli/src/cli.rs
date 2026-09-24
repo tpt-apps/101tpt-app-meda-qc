@@ -136,7 +136,17 @@ mod tests {
     #[test]
     fn parses_check_defaults() {
         let cli = Cli::try_parse_from(["tpt-media-qc", "check", "x.mp4"]).unwrap();
-        let Command::Check { file, profile, quick, json, html, pdf, csv, quiet } = cli.command else {
+        let Command::Check {
+            file,
+            profile,
+            quick,
+            json,
+            html,
+            pdf,
+            csv,
+            quiet,
+        } = cli.command
+        else {
             panic!("expected check");
         };
         assert_eq!(file, PathBuf::from("x.mp4"));
@@ -149,17 +159,34 @@ mod tests {
     #[test]
     fn parses_check_flags() {
         let cli = Cli::try_parse_from([
-            "tpt-media-qc", "check", "x.mov",
+            "tpt-media-qc",
+            "check",
+            "x.mov",
             "--quick",
-            "--profile", "p.yaml",
-            "--json", "r.json",
-            "--html", "r.html",
-            "--pdf", "r.pdf",
-            "--csv", "r.csv",
+            "--profile",
+            "p.yaml",
+            "--json",
+            "r.json",
+            "--html",
+            "r.html",
+            "--pdf",
+            "r.pdf",
+            "--csv",
+            "r.csv",
             "--quiet",
         ])
         .unwrap();
-        let Command::Check { file, profile, quick, json, html, pdf, csv, quiet } = cli.command else {
+        let Command::Check {
+            file,
+            profile,
+            quick,
+            json,
+            html,
+            pdf,
+            csv,
+            quiet,
+        } = cli.command
+        else {
             panic!("expected check");
         };
         assert_eq!(file, PathBuf::from("x.mov"));
@@ -174,17 +201,33 @@ mod tests {
     #[test]
     fn parses_watch_flags() {
         let cli = Cli::try_parse_from([
-            "tpt-media-qc", "watch",
-            "--input", "Incoming",
-            "--profile", "p.yaml",
-            "--pass", "Approved",
-            "--warn", "Review",
-            "--fail", "Rejected",
-            "--report", "Reports",
+            "tpt-media-qc",
+            "watch",
+            "--input",
+            "Incoming",
+            "--profile",
+            "p.yaml",
+            "--pass",
+            "Approved",
+            "--warn",
+            "Review",
+            "--fail",
+            "Rejected",
+            "--report",
+            "Reports",
             "--quick",
         ])
         .unwrap();
-        let Command::Watch { input, profile, pass, warn, fail, report, quick } = cli.command else {
+        let Command::Watch {
+            input,
+            profile,
+            pass,
+            warn,
+            fail,
+            report,
+            quick,
+        } = cli.command
+        else {
             panic!("expected watch");
         };
         assert_eq!(input, PathBuf::from("Incoming"));

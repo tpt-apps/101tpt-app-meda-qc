@@ -64,7 +64,10 @@ impl TimeRange {
     }
 
     pub fn to_finding_time(&self) -> (DurationSeconds, DurationSeconds) {
-        (DurationSeconds::from_millis(self.start_ms), DurationSeconds::from_millis(self.end_ms))
+        (
+            DurationSeconds::from_millis(self.start_ms),
+            DurationSeconds::from_millis(self.end_ms),
+        )
     }
 }
 

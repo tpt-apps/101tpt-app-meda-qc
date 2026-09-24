@@ -4,8 +4,8 @@ use chrono::Utc;
 use tpt_app_media_qc_profile::hash::profile_sha256;
 use tpt_app_media_qc_profile::model::Profile;
 
-use crate::Store;
 use crate::error::Result;
+use crate::Store;
 
 /// A stored profile row (canonical document + identity).
 #[derive(Clone, Debug)]
@@ -112,14 +112,16 @@ mod tests {
     #[test]
     fn profile_roundtrip_by_sha() {
         let store = Store::in_memory().unwrap();
-        let p = parse_str("name: x\nversion: 2\nrules:\n  container:\n    readable: error\n").unwrap();
+        let p =
+            parse_str("name: x\nversion: 2\nrules:\n  container:\n    readable: error\n").unwrap();
         let sha = store.put_profile(&p).unwrap();
         let back = store.profile_by_sha256(&sha).unwrap().unwrap();
         assert_eq!(back.name, "x");
         assert_eq!(back.version, 2);
-        assert_eq!(back.rules.container.readable, Some(
-            tpt_app_media_qc_model::severity::Severity::Error
-        ));
+        assert_eq!(
+            back.rules.container.readable,
+            Some(tpt_app_media_qc_model::severity::Severity::Error)
+        );
     }
 
     #[test]

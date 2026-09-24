@@ -58,8 +58,16 @@ pub fn render_html(path: &Path, report: &Report, options: WriteHtmlOptions) -> R
             .time_range
             .map(|r| format!("{}–{} ms", r.start_ms, r.end_ms))
             .unwrap_or_default();
-        let measured = f.measured.as_ref().map(|v| v.to_string()).unwrap_or_default();
-        let expected = f.expected.as_ref().map(|v| v.to_string()).unwrap_or_default();
+        let measured = f
+            .measured
+            .as_ref()
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let expected = f
+            .expected
+            .as_ref()
+            .map(|v| v.to_string())
+            .unwrap_or_default();
         body.push_str(&format!(
             "<tr><td><code>{}</code></td><td class=\"{}\">{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
             escape(f.rule_id.as_str()),
@@ -97,7 +105,9 @@ fn css_class(status: &str) -> &str {
 }
 
 fn escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 #[cfg(test)]
@@ -115,7 +125,10 @@ mod tests {
         let asset = Asset {
             id: Default::default(),
             path: "x.mp4".into(),
-            fingerprint: AssetFingerprint { sha256: "ab".repeat(32), size_bytes: 1 },
+            fingerprint: AssetFingerprint {
+                sha256: "ab".repeat(32),
+                size_bytes: 1,
+            },
             size_bytes: 1,
             modified_time: None,
             duration: None,

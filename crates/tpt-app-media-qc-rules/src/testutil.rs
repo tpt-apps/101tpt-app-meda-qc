@@ -13,7 +13,10 @@ pub fn bundled_asset<'a>() -> &'a Asset {
     ASSET.get_or_init(|| Asset {
         id: AssetId::default(),
         path: PathBuf::from("tests/fixtures/bundled.mov"),
-        fingerprint: AssetFingerprint { sha256: "ab".repeat(32), size_bytes: 4_294_967 },
+        fingerprint: AssetFingerprint {
+            sha256: "ab".repeat(32),
+            size_bytes: 4_294_967,
+        },
         size_bytes: 4_294_967,
         modified_time: Some(1_700_000_000),
         duration: Some(DurationSeconds::from_millis(120_000)),

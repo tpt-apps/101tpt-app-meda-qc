@@ -11,11 +11,14 @@ use tpt_app_media_qc_model::severity::VerdictDecision;
 use tpt_app_media_qc_pipeline::{arc, InspectionLevel, Inspector, NoopInspector, QcEngine};
 use tpt_app_media_qc_profile::model::Profile;
 use tpt_app_media_qc_profile::{parse_str, profile_sha256};
+use tpt_app_media_qc_report::{
+    build_report, render_html, render_pdf, write_csv, write_json_report, WriteCsvOptions,
+    WriteHtmlOptions, WritePdfOptions,
+};
 use tpt_app_media_qc_rules::known_rule_ids;
-use tpt_app_media_qc_report::{build_report, render_html, render_pdf, write_csv, write_json_report, WriteCsvOptions, WriteHtmlOptions, WritePdfOptions};
 
 use crate::cli::{Cli, Command};
-use crate::probe::FfprobeInspector;
+use crate::probe::{FfprobeInspector, HybridInspector};
 
 use crate::exit::{
     exit_code_for_verdict, EXIT_ERROR, EXIT_FAIL, EXIT_NO_INSPECTOR, EXIT_PATH, EXIT_PROFILE,
@@ -24,21 +27,50 @@ use crate::exit::{
 /// Run the parsed CLI and return the process exit code.
 pub fn run(cli: Cli) -> i32 {
     match cli.command {
-        Command::Check { file, profile, quick, json, html, pdf, csv, quiet } => {
-            run_check(file, profile, quick, json, html, pdf, csv, quiet)
-        }
-        Command::Batch { files, profile, quick, out, fail_fast } => {
-            run_batch(files, profile, quick, out, fail_fast)
-        }
-        Command::Info { file, profile, quick } => run_info(file, profile, quick),
+        Command::Check {
+            file,
+            profile,
+            quick,
+            json,
+            html,
+            pdf,
+            csv,
+            quiet,
+        } => run_check(file, profile, quick, json, html, pdf, csv, quiet),
+        Command::Batch {
+            files,
+            profile,
+            quick,
+            out,
+            fail_fast,
+        } => run_batch(files, profile, quick, out, fail_fast),
+        Command::Info {
+            file,
+            profile,
+            quick,
+        } => run_info(file, profile, quick),
         Command::ListRules { profile } => run_list_rules(profile),
-        Command::Watch { input, profile, pass, warn, fail, report, quick } => {
+        Command::Watch {
+            input,
+            profile,
+            pass,
+            warn,
+            fail,
+            report,
+            quick,
+        } => {
             let profile = match load_profile(profile.as_deref()) {
                 Ok(p) => p,
                 Err(code) => return code,
             };
             crate::watch::run_watch(
-                crate::watch::WatchConfig { input, pass, warn, fail, report },
+                crate::watch::WatchConfig {
+                    input,
+                    pass,
+                    warn,
+                    fail,
+                    report,
+                },
                 profile,
                 quick,
             )
@@ -108,11 +140,14 @@ pub(crate) fn build_asset(path: &Path) -> Result<Asset, i32> {
         path: path.to_path_buf(),
         fingerprint,
         size_bytes: size,
-        modified_time: std::fs::metadata(path).ok().and_then(|m| m.modified().ok()).map(|t| {
-            t.duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0)
-        }),
+        modified_time: std::fs::metadata(path)
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .map(|t| {
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0)
+            }),
         duration: None,
         streams: vec![],
     })
@@ -129,7 +164,7 @@ pub(crate) fn make_inspector(quick: bool) -> Result<Arc<dyn Inspector>, i32> {
         }
     } else {
         if FfprobeInspector::available() {
-            Ok(arc(FfprobeInspector))
+            Ok(arc(HybridInspector::default()))
         } else {
             Err(EXIT_NO_INSPECTOR)
         }
@@ -160,7 +195,10 @@ fn print_summary(asset: &Path, run: &tpt_app_media_qc_pipeline::QcRun) {
 
 fn print_findings(run: &tpt_app_media_qc_pipeline::QcRun) {
     for f in &run.findings {
-        let stream = f.stream_idx.map(|s| format!(" s{}", s.0)).unwrap_or_default();
+        let stream = f
+            .stream_idx
+            .map(|s| format!(" s{}", s.0))
+            .unwrap_or_default();
         let time = f
             .time_range
             .map(|r| format!(" [{}-{}ms]", r.start_ms, r.end_ms))
@@ -187,22 +225,34 @@ pub(crate) fn write_reports(
     let report = build_report(run, AnalysisId::default(), profile);
     if let Some(p) = json {
         if let Err(e) = write_json_report(p, &report) {
-            return Err(err_exit(format!("could not write JSON report: {e}"), EXIT_ERROR));
+            return Err(err_exit(
+                format!("could not write JSON report: {e}"),
+                EXIT_ERROR,
+            ));
         }
     }
     if let Some(p) = html {
         if let Err(e) = render_html(p, &report, WriteHtmlOptions { embed_json: true }) {
-            return Err(err_exit(format!("could not write HTML report: {e}"), EXIT_ERROR));
+            return Err(err_exit(
+                format!("could not write HTML report: {e}"),
+                EXIT_ERROR,
+            ));
         }
     }
     if let Some(p) = pdf {
         if let Err(e) = render_pdf(p, &report, WritePdfOptions {}) {
-            return Err(err_exit(format!("could not write PDF report: {e}"), EXIT_ERROR));
+            return Err(err_exit(
+                format!("could not write PDF report: {e}"),
+                EXIT_ERROR,
+            ));
         }
     }
     if let Some(p) = csv {
         if let Err(e) = write_csv(p, &report, WriteCsvOptions { header: true }) {
-            return Err(err_exit(format!("could not write CSV report: {e}"), EXIT_ERROR));
+            return Err(err_exit(
+                format!("could not write CSV report: {e}"),
+                EXIT_ERROR,
+            ));
         }
     }
     Ok(())
@@ -231,7 +281,11 @@ fn run_check(
         Err(code) => return code,
     };
 
-    let level = if quick { InspectionLevel::MetadataOnly } else { InspectionLevel::Full };
+    let level = if quick {
+        InspectionLevel::MetadataOnly
+    } else {
+        InspectionLevel::Full
+    };
 
     let inspector = match make_inspector(level == InspectionLevel::MetadataOnly) {
         Ok(i) => i,
@@ -246,7 +300,12 @@ fn run_check(
     let engine = QcEngine::new(Arc::new(profile.clone()), inspector);
     let run = match engine.check(&asset, level) {
         Ok(r) => r,
-        Err(e) => return err_exit(format!("probe failed for '{}': {e}", file.display()), EXIT_ERROR),
+        Err(e) => {
+            return err_exit(
+                format!("probe failed for '{}': {e}", file.display()),
+                EXIT_ERROR,
+            )
+        }
     };
 
     if !quiet {
@@ -256,7 +315,14 @@ fn run_check(
         println!("{} {}", file.display(), run.verdict.as_str());
     }
 
-    if let Err(code) = write_reports(&run, &profile, json.as_deref(), html.as_deref(), pdf.as_deref(), csv.as_deref()) {
+    if let Err(code) = write_reports(
+        &run,
+        &profile,
+        json.as_deref(),
+        html.as_deref(),
+        pdf.as_deref(),
+        csv.as_deref(),
+    ) {
         return code;
     }
 
@@ -277,7 +343,10 @@ fn collect_assets(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>, i32> {
         } else if p.is_file() {
             out.push(p);
         } else {
-            return Err(err_exit(format!("path '{}' does not exist", p.display()), EXIT_PATH));
+            return Err(err_exit(
+                format!("path '{}' does not exist", p.display()),
+                EXIT_PATH,
+            ));
         }
     }
     if out.is_empty() {
@@ -289,7 +358,10 @@ fn collect_assets(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>, i32> {
 
 fn collect_dir(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), i32> {
     for entry in std::fs::read_dir(dir).map_err(|e| {
-        err_exit(format!("cannot read directory '{}': {e}", dir.display()), EXIT_ERROR)
+        err_exit(
+            format!("cannot read directory '{}': {e}", dir.display()),
+            EXIT_ERROR,
+        )
     })? {
         let entry = entry.map_err(|_| EXIT_ERROR)?;
         let path = entry.path();
@@ -303,7 +375,10 @@ fn collect_dir(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), i32> {
 }
 
 pub fn is_media_file(path: &Path) -> bool {
-    const EXTS: &[&str] = &["mov", "mp4", "mxf", "m4v", "mkv", "ts", "mts", "m2ts", "wav", "aac", "w64", "ac3", "eac3", "mp3", "flac", "opus", "webm", "avi"];
+    const EXTS: &[&str] = &[
+        "mov", "mp4", "mxf", "m4v", "mkv", "ts", "mts", "m2ts", "wav", "aac", "w64", "ac3", "eac3",
+        "mp3", "flac", "opus", "webm", "avi",
+    ];
     path.extension()
         .and_then(|e| e.to_str())
         .map(|e| EXTS.contains(&e.to_ascii_lowercase().as_str()))
@@ -330,7 +405,10 @@ fn run_batch(
     };
     if let Some(dir) = &out {
         if let Err(e) = std::fs::create_dir_all(dir) {
-            return err_exit(format!("cannot create output directory '{}': {e}", dir.display()), EXIT_ERROR);
+            return err_exit(
+                format!("cannot create output directory '{}': {e}", dir.display()),
+                EXIT_ERROR,
+            );
         }
     }
 
@@ -338,7 +416,11 @@ fn run_batch(
         Ok(i) => i,
         Err(code) => return code,
     };
-    let level = if quick { InspectionLevel::MetadataOnly } else { InspectionLevel::Full };
+    let level = if quick {
+        InspectionLevel::MetadataOnly
+    } else {
+        InspectionLevel::Full
+    };
     let engine = QcEngine::new(Arc::new(profile.clone()), inspector);
 
     let mut exit = exit_code_for_verdict(VerdictDecision::Pass);
@@ -357,7 +439,9 @@ fn run_batch(
                         "{}.json",
                         path.file_stem().and_then(|s| s.to_str()).unwrap_or("asset")
                     );
-                    write_reports(&run, &profile, Some(&dir.join(name)), None, None, None).map_err(|_| ()).ok();
+                    write_reports(&run, &profile, Some(&dir.join(name)), None, None, None)
+                        .map_err(|_| ())
+                        .ok();
                 }
                 if fail_fast && run.verdict == VerdictDecision::Fail {
                     eprintln!("batch: failing fast after '{}'", path.display());
@@ -401,7 +485,12 @@ fn run_info(file: PathBuf, profile_path: Option<PathBuf>, quick: bool) -> i32 {
     let engine = QcEngine::new(Arc::new(profile), inspector);
     let run = match engine.check(&asset, level) {
         Ok(r) => r,
-        Err(e) => return err_exit(format!("probe failed for '{}': {e}", file.display()), EXIT_ERROR),
+        Err(e) => {
+            return err_exit(
+                format!("probe failed for '{}': {e}", file.display()),
+                EXIT_ERROR,
+            )
+        }
     };
 
     println!("TPT Media QC {} · asset inspection", APP_VERSION);
@@ -409,30 +498,53 @@ fn run_info(file: PathBuf, profile_path: Option<PathBuf>, quick: bool) -> i32 {
     println!("size          {} bytes", asset.size_bytes);
     println!("sha256        {}", asset.fingerprint.sha256);
     let c = &run.inspection.container;
-    println!("format        {}", c.format.clone().unwrap_or_else(|| "unknown".into()));
+    println!(
+        "format        {}",
+        c.format.clone().unwrap_or_else(|| "unknown".into())
+    );
     if let Some(d) = c.duration {
         println!("duration      {} ms", d.0);
     }
     if let Some(b) = c.bitrate_bps {
         println!("bitrate       {:.1} Mbps", b as f64 / 1_000_000.0);
     }
-    println!("timecode      {}", c.timecode_present.map(|b| if b { "present" } else { "absent" }).unwrap_or("unknown"));
+    println!(
+        "timecode      {}",
+        c.timecode_present
+            .map(|b| if b { "present" } else { "absent" })
+            .unwrap_or("unknown")
+    );
     for v in &run.inspection.video {
         println!(
             "video s{}   fps {}{}{}",
             v.stream_idx,
-            v.frame_rate_observed.map(|f| f.to_string()).unwrap_or_else(|| "-".into()),
+            v.frame_rate_observed
+                .map(|f| f.to_string())
+                .unwrap_or_else(|| "-".into()),
             v.colorspace
                 .as_deref()
                 .map(|cs| format!(" · colorspace {cs}"))
                 .unwrap_or_default(),
-            if v.decode_errors > 0 { format!(" · {} decode errors", v.decode_errors) } else { String::new() },
+            if v.decode_errors > 0 {
+                format!(" · {} decode errors", v.decode_errors)
+            } else {
+                String::new()
+            },
         );
     }
     for a in &run.inspection.audio {
-        let peak = a.peak_db.map(|p| format!("{p:.1}")).unwrap_or_else(|| "-".into());
-        let tp = a.true_peak_db.map(|p| format!("{p:.1}")).unwrap_or_else(|| "-".into());
-        let lufs = a.loudness_lufs.map(|l| format!("{l:.1}")).unwrap_or_else(|| "-".into());
+        let peak = a
+            .peak_db
+            .map(|p| format!("{p:.1}"))
+            .unwrap_or_else(|| "-".into());
+        let tp = a
+            .true_peak_db
+            .map(|p| format!("{p:.1}"))
+            .unwrap_or_else(|| "-".into());
+        let lufs = a
+            .loudness_lufs
+            .map(|l| format!("{l:.1}"))
+            .unwrap_or_else(|| "-".into());
         let extra = [
             (!a.silence.is_empty()).then(|| format!("{} silence segments", a.silence.len())),
             (a.clipping_events > 0).then(|| format!("{} clips", a.clipping_events)),
@@ -442,7 +554,10 @@ fn run_info(file: PathBuf, profile_path: Option<PathBuf>, quick: bool) -> i32 {
         .flatten()
         .map(|s| format!(" · {s}"))
         .collect::<String>();
-        println!("audio s{}   peak {} dBFS · TP {} dBTP · {lufs} LUFS{extra}", a.stream_idx, peak, tp);
+        println!(
+            "audio s{}   peak {} dBFS · TP {} dBTP · {lufs} LUFS{extra}",
+            a.stream_idx, peak, tp
+        );
     }
     print_summary(&file, &run);
     0
@@ -476,7 +591,12 @@ fn run_list_rules(profile_path: Option<PathBuf>) -> i32 {
                 println!("{id}");
             }
             println!();
-            println!("profile '{}' v{} sha256 {}", profile.name, profile.version, profile_sha256(&profile));
+            println!(
+                "profile '{}' v{} sha256 {}",
+                profile.name,
+                profile.version,
+                profile_sha256(&profile)
+            );
         }
         Err(code) => return code,
     }

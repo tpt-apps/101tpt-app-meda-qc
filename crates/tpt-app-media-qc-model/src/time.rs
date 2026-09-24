@@ -62,7 +62,8 @@ impl serde::Serialize for Rational {
 impl<'de> serde::Deserialize<'de> for Rational {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
-        Rational::parse(&s).ok_or_else(|| serde::de::Error::custom(format!("invalid rational: {s}")))
+        Rational::parse(&s)
+            .ok_or_else(|| serde::de::Error::custom(format!("invalid rational: {s}")))
     }
 }
 
@@ -74,7 +75,10 @@ impl Rational {
             return None;
         }
         let g = gcd(num, den);
-        Some(Self { num: num / g, den: den / g })
+        Some(Self {
+            num: num / g,
+            den: den / g,
+        })
     }
 
     pub const fn from_parts(num: u64, den: u64) -> Self {
@@ -154,7 +158,11 @@ pub struct Timecode {
 
 impl Timecode {
     pub fn new(frames: u64, rate: FrameRate, drop_frame: bool) -> Self {
-        Self { frames, rate, drop_frame }
+        Self {
+            frames,
+            rate,
+            drop_frame,
+        }
     }
 
     /// Seconds represented by this timecode.
@@ -248,7 +256,10 @@ mod tests {
 
     #[test]
     fn rational_parse() {
-        assert_eq!(Rational::parse("30000/1001").unwrap().value().round() as u64, 30);
+        assert_eq!(
+            Rational::parse("30000/1001").unwrap().value().round() as u64,
+            30
+        );
         assert_eq!(Rational::parse("25"), Some(Rational::from_parts(25, 1)));
         assert_eq!(Rational::parse("bogus"), None);
     }

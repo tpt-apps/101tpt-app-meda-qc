@@ -14,13 +14,17 @@ pub struct VerdictPolicy {
 
 impl VerdictPolicy {
     pub fn from_profile(policy: &Policy) -> Self {
-        Self { fail_on: policy.fail_on }
+        Self {
+            fail_on: policy.fail_on,
+        }
     }
 }
 
 impl Default for VerdictPolicy {
     fn default() -> Self {
-        Self { fail_on: Severity::Error }
+        Self {
+            fail_on: Severity::Error,
+        }
     }
 }
 
@@ -71,7 +75,13 @@ pub fn resolve(policy: VerdictPolicy, findings: &[QcFinding]) -> VerdictResoluti
         VerdictDecision::Pass
     };
 
-    VerdictResolution { verdict, fail_on: policy.fail_on, failed, below_threshold, inconclusive }
+    VerdictResolution {
+        verdict,
+        fail_on: policy.fail_on,
+        failed,
+        below_threshold,
+        inconclusive,
+    }
 }
 
 #[cfg(test)]
@@ -80,16 +90,22 @@ mod tests {
     use tpt_app_media_qc_model::finding::RuleId;
 
     fn failing(sev: Severity) -> QcFinding {
-        QcFinding::new(RuleId::new("t")).status(VerdictDecision::Fail).severity(sev)
+        QcFinding::new(RuleId::new("t"))
+            .status(VerdictDecision::Fail)
+            .severity(sev)
     }
 
     fn inconclusive(sev: Severity) -> QcFinding {
-        QcFinding::new(RuleId::new("t")).status(VerdictDecision::Inconclusive).severity(sev)
+        QcFinding::new(RuleId::new("t"))
+            .status(VerdictDecision::Inconclusive)
+            .severity(sev)
     }
 
     #[test]
     fn below_threshold_fail_becomes_warn() {
-        let policy = VerdictPolicy { fail_on: Severity::Error };
+        let policy = VerdictPolicy {
+            fail_on: Severity::Error,
+        };
         let r = resolve(policy, &[failing(Severity::Warning)]);
         assert_eq!(r.verdict, VerdictDecision::Warn);
         assert_eq!(r.below_threshold, 1);
@@ -97,28 +113,68 @@ mod tests {
 
     #[test]
     fn at_or_above_threshold_forces_fail() {
-        let policy = VerdictPolicy { fail_on: Severity::Error };
-        assert_eq!(resolve(policy, &[failing(Severity::Error)]).verdict, VerdictDecision::Fail);
-        assert_eq!(resolve(policy, &[failing(Severity::Critical)]).verdict, VerdictDecision::Fail);
-        assert_eq!(resolve(policy, &[failing(Severity::Warning)]).verdict, VerdictDecision::Warn);
+        let policy = VerdictPolicy {
+            fail_on: Severity::Error,
+        };
+        assert_eq!(
+            resolve(policy, &[failing(Severity::Error)]).verdict,
+            VerdictDecision::Fail
+        );
+        assert_eq!(
+            resolve(policy, &[failing(Severity::Critical)]).verdict,
+            VerdictDecision::Fail
+        );
+        assert_eq!(
+            resolve(policy, &[failing(Severity::Warning)]).verdict,
+            VerdictDecision::Warn
+        );
     }
 
     #[test]
     fn inconclusive_at_threshold_warns() {
-        let policy = VerdictPolicy { fail_on: Severity::Error };
-        assert_eq!(resolve(policy, &[inconclusive(Severity::Error)]).verdict, VerdictDecision::Warn);
-        assert_eq!(resolve(policy, &[inconclusive(Severity::Info)]).verdict, VerdictDecision::Pass);
+        let policy = VerdictPolicy {
+            fail_on: Severity::Error,
+        };
+        assert_eq!(
+            resolve(policy, &[inconclusive(Severity::Error)]).verdict,
+            VerdictDecision::Warn
+        );
+        assert_eq!(
+            resolve(policy, &[inconclusive(Severity::Info)]).verdict,
+            VerdictDecision::Pass
+        );
     }
 
     #[test]
     fn empty_findings_pass() {
-        assert_eq!(resolve(VerdictPolicy::default(), &[]).verdict, VerdictDecision::Pass);
+        assert_eq!(
+            resolve(VerdictPolicy::default(), &[]).verdict,
+            VerdictDecision::Pass
+        );
     }
 
     #[test]
     fn exit_codes_match_spec() {
         assert_eq!(resolve(VerdictPolicy::default(), &[]).exit_code(), 0);
-        assert_eq!(resolve(VerdictPolicy { fail_on: Severity::Error }, &[failing(Severity::Warning)]).exit_code(), 1);
-        assert_eq!(resolve(VerdictPolicy { fail_on: Severity::Error }, &[failing(Severity::Error)]).exit_code(), 2);
+        assert_eq!(
+            resolve(
+                VerdictPolicy {
+                    fail_on: Severity::Error
+                },
+                &[failing(Severity::Warning)]
+            )
+            .exit_code(),
+            1
+        );
+        assert_eq!(
+            resolve(
+                VerdictPolicy {
+                    fail_on: Severity::Error
+                },
+                &[failing(Severity::Error)]
+            )
+            .exit_code(),
+            2
+        );
     }
 }

@@ -5,8 +5,8 @@
 //! whitespace, key order, commented-out rules) hash identically.
 
 use crate::model::Profile;
-use sha2::{Digest, Sha256};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 /// Result of canonical serialisation + hashing.
 pub fn profile_sha256(profile: &Profile) -> String {
@@ -86,10 +86,8 @@ mod tests {
 
     #[test]
     fn equivalent_documents_hash_identically() {
-        let a = parse_str(
-            "name: x\nversion: 1\nrules:\n  container:\n    readable: error\n",
-        )
-        .unwrap();
+        let a =
+            parse_str("name: x\nversion: 1\nrules:\n  container:\n    readable: error\n").unwrap();
         // Different ordering + comments, same semantics.
         let b = parse_str(
             "# a comment\nname: x\nrules:\n  container:\n    readable: error\nversion: 1\n",
@@ -114,14 +112,12 @@ mod tests {
         // A hash is global by construction; the fine-grained per-rule
         // invalidation is handled by the pipeline cache layer keying on the
         // per-rule configuration object (see pipeline crate).
-        let a = parse_str(
-            "name: x\nrules:\n  video:\n    black_frames:\n      max_duration_ms: 500\n",
-        )
-        .unwrap();
-        let b = parse_str(
-            "name: x\nrules:\n  video:\n    black_frames:\n      max_duration_ms: 600\n",
-        )
-        .unwrap();
+        let a =
+            parse_str("name: x\nrules:\n  video:\n    black_frames:\n      max_duration_ms: 500\n")
+                .unwrap();
+        let b =
+            parse_str("name: x\nrules:\n  video:\n    black_frames:\n      max_duration_ms: 600\n")
+                .unwrap();
         assert_ne!(profile_sha256(&a), profile_sha256(&b));
     }
 

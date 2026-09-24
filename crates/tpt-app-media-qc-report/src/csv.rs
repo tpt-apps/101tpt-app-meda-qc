@@ -16,7 +16,10 @@ pub struct WriteCsvOptions {
 pub fn write_csv(path: &Path, report: &Report, options: WriteCsvOptions) -> Result<()> {
     let mut out = csv_writer(path)?;
     if options.header {
-        writeln!(out, "asset,rule,status,severity,stream,start_ms,end_ms,measured,expected,message")?;
+        writeln!(
+            out,
+            "asset,rule,status,severity,stream,start_ms,end_ms,measured,expected,message"
+        )?;
     }
 
     for f in &report.findings {
@@ -45,10 +48,7 @@ fn csv_writer(path: &Path) -> Result<std::io::BufWriter<std::fs::File>> {
     Ok(std::io::BufWriter::new(file))
 }
 
-fn write_csv_row(
-    out: &mut impl Write,
-    row: CsvRow<'_>,
-) -> std::io::Result<()> {
+fn write_csv_row(out: &mut impl Write, row: CsvRow<'_>) -> std::io::Result<()> {
     let stream = row.stream_idx.map(|s| s.to_string()).unwrap_or_default();
     let (start, end) = match row.time_range {
         Some(r) => (r.start_ms.to_string(), r.end_ms.to_string()),
@@ -103,7 +103,10 @@ mod tests {
         let asset = Asset {
             id: Default::default(),
             path: "x.mp4".into(),
-            fingerprint: AssetFingerprint { sha256: "ab".repeat(32), size_bytes: 1 },
+            fingerprint: AssetFingerprint {
+                sha256: "ab".repeat(32),
+                size_bytes: 1,
+            },
             size_bytes: 1,
             modified_time: None,
             duration: None,
@@ -125,7 +128,11 @@ mod tests {
             tpt_app_media_qc_pipeline::arc(tpt_app_media_qc_pipeline::NoopInspector),
         );
         let qc_run = engine.check_metadata_only(&asset).unwrap();
-        let report = build_report(&qc_run, tpt_app_media_qc_model::report::AnalysisId::default(), &profile);
+        let report = build_report(
+            &qc_run,
+            tpt_app_media_qc_model::report::AnalysisId::default(),
+            &profile,
+        );
         (report, "x.mp4".into())
     }
 

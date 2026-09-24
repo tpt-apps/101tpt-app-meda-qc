@@ -21,7 +21,9 @@ pub mod rule;
 
 pub use audio::build as build_audio_rules;
 pub use container::build as build_container_rules;
-pub use rule::{Capabilities, DecodeRequirement, QcRule, RuleContext, RuleDescription, RuleExt, RuleResult};
+pub use rule::{
+    Capabilities, DecodeRequirement, QcRule, RuleContext, RuleDescription, RuleExt, RuleResult,
+};
 pub use video::build as build_video_rules;
 
 /// Build every rule configured by a profile ([spec § 9]).

@@ -303,7 +303,6 @@ pub enum LoudnessStandard {
     Bs1770,
 }
 
-
 impl LoudnessStandard {
     /// The standard's nominal integrated target.
     pub fn default_target_lufs(&self) -> f64 {
@@ -404,7 +403,9 @@ pub struct Policy {
 
 impl Default for Policy {
     fn default() -> Self {
-        Self { fail_on: Severity::Error }
+        Self {
+            fail_on: Severity::Error,
+        }
     }
 }
 

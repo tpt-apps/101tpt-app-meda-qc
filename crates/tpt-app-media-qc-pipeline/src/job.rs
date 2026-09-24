@@ -19,7 +19,12 @@ pub struct Job {
 
 impl Job {
     pub fn new(id: impl Into<String>, asset: Asset, profile: Arc<Profile>) -> Self {
-        Self { id: id.into(), asset, profile, level: InspectionLevel::default() }
+        Self {
+            id: id.into(),
+            asset,
+            profile,
+            level: InspectionLevel::default(),
+        }
     }
 
     pub fn with_level(mut self, level: InspectionLevel) -> Self {

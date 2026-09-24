@@ -53,10 +53,11 @@ application shell.
 | `tpt-app-media-qc-profile` | YAML profile parsing, validation, canonical model, deterministic profile hashing | core, model |
 | `tpt-app-media-qc-rules` | Rule framework (`QcRule` trait) and built-in rule catalogue | core, model, profile |
 | `tpt-app-media-qc-pipeline` | Inspection boundary (`Inspector`), `QcEngine`, aggregation, verdict, batch scheduler | core, model, rules, profile |
-| `tpt-app-media-qc-report` | Immutable `Report` assembly + JSON/HTML/CSV export | core, model, pipeline, profile |
-| `tpt-app-media-qc-cli` | `tpt-media-qc` binary: `check`, `batch`, `info`, `list-rules`, stable exit codes | all of the above |
+| `tpt-app-media-qc-decode` | Kinetix MP4/ISO-BMFF demux + H.264 video measurement adapter | core, model, pipeline, Kinetix |
+| `tpt-app-media-qc-report` | Immutable `Report` assembly + JSON/HTML/CSV/PDF export | core, model, pipeline, profile |
+| `tpt-app-media-qc-cli` | `tpt-media-qc` binary: `check`, `batch`, `info`, `list-rules`, stable exit codes | all application crates |
 | `tpt-app-media-qc-tauri` | Desktop application shell (stub — planned per spec §12) | — |
-| `tpt-app-media-qc-test` | Shared test utilities (stub — planned per spec §24) | — |
+| `tpt-app-media-qc-test` | Shared fixtures, golden manifests and integration-test harness | application model/rules/pipeline/report |
 
 ## 4. Data flow
 
@@ -91,15 +92,18 @@ trait Inspector {
 }
 ```
 
-- `FfprobeInspector` (CLI crate) is the reference metadata front-end. It shells
-  out to `ffprobe`. Its decode pass currently returns the metadata unchanged,
-  so decode-based rules report `Inconclusive` (spec §3.4) until the TPT decode
-  stack lands.
+- `FfprobeInspector` (CLI crate) remains the metadata front-end and shells out
+  to `ffprobe`.
+- `HybridInspector` (CLI crate) composes that metadata front-end with
+  `KinetixVideoInspector` for full scans. The latter uses Kinetix MP4 demuxing
+  and H.264 reconstruction, then streams frames through black/freeze/duplicate,
+  corrupt-frame, luma and frame-rate measurements.
+- The pinned Kinetix MP4 demuxer is in-memory; `KinetixVideoInspector` applies
+  a 512 MiB input bound and records unsupported or incomplete coverage instead
+  of claiming a pass. Audio remains on the metadata-only path until Cadence is
+  integrated.
 - `NoopInspector` produces an empty inspection for tests and for the
   metadata-only path when no probe binary is available.
-- The TPT foundation crates (`tpt-kinetix`, `tpt-cadence`, `tpt-dsp`,
-  `tpt-visual`) are the intended long-term front-ends (spec §5, §31). The
-  workspace reserves those dependency slots in `Cargo.toml`.
 
 ## 5. Rule execution
 
@@ -132,18 +136,16 @@ A [`QcRun`](../crates/tpt-app-media-qc-pipeline/src/lib.rs) is turned into an
 immutable [`Report`](../crates/tpt-app-media-qc-model/src/report.rs) carrying
 the five integrity fields mandatory per spec §14.1 (asset SHA-256, profile
 SHA-256, application version, ruleset version, analysis ID). The report crate
-renders JSON (compact), HTML (with optional embedded JSON) and CSV. PDF export
-is planned (spec §14).
+renders JSON (compact), HTML (with optional embedded JSON), CSV and PDF.
 
-## 8. Persistence & caching (planned)
+## 8. Persistence & caching
 
-- SQLite for local application state: projects, assets, fingerprints, jobs,
-  profiles, results, findings, report metadata and preferences (spec §18).
-  Original media is never stored in the database — only paths and
-  fingerprints.
-- Cache keys must include asset fingerprint, application version, ruleset
-  version, profile hash and analysis-configuration hash so that changing one
-  rule's threshold invalidates only that rule's cached results (spec §19).
+SQLite stores local application state: projects, assets, fingerprints, jobs,
+profiles, results, findings, report metadata and preferences (spec §18).
+Original media is never stored in the database — only paths and fingerprints.
+Derived media is stored separately. Cache keys include the asset fingerprint,
+application version, ruleset version, profile hash and analysis-configuration
+hash; rule-level entries invalidate only the affected rule.
 
 ## 9. Automation interfaces
 

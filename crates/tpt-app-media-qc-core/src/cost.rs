@@ -83,7 +83,10 @@ impl Default for SchedulerLimits {
 
 impl SchedulerLimits {
     pub fn concurrency_for(&self, class: CostClass) -> usize {
-        self.per_class.get(&class).copied().unwrap_or_else(|| class.default_concurrency())
+        self.per_class
+            .get(&class)
+            .copied()
+            .unwrap_or_else(|| class.default_concurrency())
     }
 }
 
@@ -100,6 +103,8 @@ mod tests {
     #[test]
     fn defaults_are_sane() {
         let limits = SchedulerLimits::default();
-        assert!(limits.concurrency_for(CostClass::Metadata) >= limits.concurrency_for(CostClass::Gpu));
+        assert!(
+            limits.concurrency_for(CostClass::Metadata) >= limits.concurrency_for(CostClass::Gpu)
+        );
     }
 }

@@ -1316,6 +1316,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tpt-app-media-qc-core",
+ "tpt-app-media-qc-decode",
  "tpt-app-media-qc-model",
  "tpt-app-media-qc-pipeline",
  "tpt-app-media-qc-profile",
@@ -1342,10 +1343,12 @@ dependencies = [
 name = "tpt-app-media-qc-decode"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
+ "tempfile",
  "tpt-app-media-qc-core",
  "tpt-app-media-qc-model",
  "tpt-app-media-qc-pipeline",
- "tpt-kinetix-core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tpt-kinetix-core",
  "tpt-kinetix-demux",
  "tpt-kinetix-h264",
  "tpt-kinetix-mux",
@@ -1459,16 +1462,6 @@ dependencies = [
 [[package]]
 name = "tpt-kinetix-core"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac9b4ae13fdbad843439c41f838f69a814666f1255143cec60aa6cd8952c99f2"
-dependencies = [
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "tpt-kinetix-core"
-version = "0.1.0"
 source = "git+https://github.com/tpt-solutions/tpt-kinetix?rev=a43959c009a2801efa2a8b998c7848ea9240483e#a43959c009a2801efa2a8b998c7848ea9240483e"
 dependencies = [
  "serde",
@@ -1484,7 +1477,7 @@ dependencies = [
  "byteorder",
  "nom",
  "thiserror",
- "tpt-kinetix-core 0.1.0 (git+https://github.com/tpt-solutions/tpt-kinetix?rev=a43959c009a2801efa2a8b998c7848ea9240483e)",
+ "tpt-kinetix-core",
 ]
 
 [[package]]
@@ -1496,7 +1489,7 @@ dependencies = [
  "nom",
  "rayon",
  "thiserror",
- "tpt-kinetix-core 0.1.0 (git+https://github.com/tpt-solutions/tpt-kinetix?rev=a43959c009a2801efa2a8b998c7848ea9240483e)",
+ "tpt-kinetix-core",
 ]
 
 [[package]]
@@ -1505,7 +1498,7 @@ version = "0.1.0"
 source = "git+https://github.com/tpt-solutions/tpt-kinetix?rev=a43959c009a2801efa2a8b998c7848ea9240483e#a43959c009a2801efa2a8b998c7848ea9240483e"
 dependencies = [
  "thiserror",
- "tpt-kinetix-core 0.1.0 (git+https://github.com/tpt-solutions/tpt-kinetix?rev=a43959c009a2801efa2a8b998c7848ea9240483e)",
+ "tpt-kinetix-core",
 ]
 
 [[package]]

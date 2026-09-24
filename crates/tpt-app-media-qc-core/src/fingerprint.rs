@@ -31,7 +31,6 @@ pub enum FingerprintStrategy {
     BoundedPrefix,
 }
 
-
 /// Configuration for fingerprint computation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FingerprintConfig {
@@ -42,7 +41,10 @@ pub struct FingerprintConfig {
 
 impl Default for FingerprintConfig {
     fn default() -> Self {
-        Self { strategy: FingerprintStrategy::default(), max_bytes: 16 * 1024 * 1024 }
+        Self {
+            strategy: FingerprintStrategy::default(),
+            max_bytes: 16 * 1024 * 1024,
+        }
     }
 }
 
@@ -80,9 +82,7 @@ impl Fingerprint {
         let size = meta.len();
 
         match config.strategy {
-            FingerprintStrategy::FullScan => {
-                Ok(Self::from_reader(BufReader::new(file))?)
-            }
+            FingerprintStrategy::FullScan => Ok(Self::from_reader(BufReader::new(file))?),
             FingerprintStrategy::BoundedPrefix => {
                 let n = size.min(config.max_bytes);
                 let mut hasher = Sha256::new();
@@ -172,7 +172,10 @@ mod tests {
     fn replacement_detected_despite_same_prefix() {
         let a = temp_file(b"00001111");
         let b = temp_file(b"000011112222");
-        let cfg = FingerprintConfig { strategy: FingerprintStrategy::BoundedPrefix, max_bytes: 4 };
+        let cfg = FingerprintConfig {
+            strategy: FingerprintStrategy::BoundedPrefix,
+            max_bytes: 4,
+        };
         let fa = Fingerprint::of_file(&a, cfg).unwrap();
         let fb = Fingerprint::of_file(&b, cfg).unwrap();
         assert_ne!(fa, fb);
@@ -182,7 +185,10 @@ mod tests {
 
     #[test]
     fn missing_file_errors() {
-        let r = Fingerprint::of_file(Path::new("definitely-not-here.bin"), FingerprintConfig::default());
+        let r = Fingerprint::of_file(
+            Path::new("definitely-not-here.bin"),
+            FingerprintConfig::default(),
+        );
         assert!(r.is_err());
     }
 }

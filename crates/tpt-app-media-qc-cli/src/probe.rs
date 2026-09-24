@@ -1,9 +1,9 @@
-//! ffprobe-backed [`Inspector`] implementation ([spec § 10]).
+//! ffprobe-backed metadata plus Kinetix-backed video decode ([spec § 10]).
 //!
-//! This is the reference probe front-end. It shells out to `ffprobe` for the
-//! metadata-only pass. The decode pass currently reuses metadata (decode-based
-//! measurements arrive with the TPT foundation crates / a media analyzer);
-//! decode rules then correctly report `Inconclusive` ([spec § 3.4]).
+//! Metadata is still collected by the system `ffprobe` front-end. Full scans
+//! route its video packets through `tpt-kinetix-demux` and
+//! `tpt-kinetix-h264`; unsupported codecs and incomplete coverage remain
+//! explicit in the inspection model.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -11,6 +11,7 @@ use std::process::Command;
 
 use serde::Deserialize;
 use tpt_app_media_qc_core::error::{Error, Result};
+use tpt_app_media_qc_decode::KinetixVideoInspector;
 use tpt_app_media_qc_model::asset::{Asset, Stream, StreamId, StreamKind};
 use tpt_app_media_qc_model::inspection::{
     AudioMeasurements, ContainerInspection, ContainerValidity, DurationMillis, Inspection,
@@ -96,7 +97,10 @@ impl FfprobeInspector {
 }
 
 fn parse_duration_ms(s: &str) -> Option<u64> {
-    s.trim().parse::<f64>().ok().map(|secs| (secs * 1000.0).round() as u64)
+    s.trim()
+        .parse::<f64>()
+        .ok()
+        .map(|secs| (secs * 1000.0).round() as u64)
 }
 
 fn parse_rational(s: &str) -> Option<Rational> {
@@ -130,12 +134,20 @@ fn inspection_from_output(out: &FfprobeOutput) -> Inspection {
     let mut audio_meas = Vec::new();
 
     for s in &out.streams {
-        let kind = s.codec_type.as_deref().map(stream_kind).unwrap_or(StreamKind::Unknown);
+        let kind = s
+            .codec_type
+            .as_deref()
+            .map(stream_kind)
+            .unwrap_or(StreamKind::Unknown);
         let duration_secs = s
             .duration
             .as_deref()
             .and_then(|d| d.trim().parse::<f64>().ok())
-            .map(|secs| tpt_app_media_qc_model::time::DurationSeconds::from_millis((secs * 1000.0).round() as u64));
+            .map(|secs| {
+                tpt_app_media_qc_model::time::DurationSeconds::from_millis(
+                    (secs * 1000.0).round() as u64
+                )
+            });
 
         let mut metadata: BTreeMap<String, String> = BTreeMap::new();
         for (k, v) in &s.tags {
@@ -158,7 +170,10 @@ fn inspection_from_output(out: &FfprobeOutput) -> Inspection {
             channel_layout: s.channel_layout.clone(),
             channels: s.channels,
             sample_rate: s.sample_rate.as_deref().and_then(|r| r.trim().parse().ok()),
-            bit_depth: s.bits_per_sample.as_deref().and_then(|b| b.trim().parse().ok()),
+            bit_depth: s
+                .bits_per_sample
+                .as_deref()
+                .and_then(|b| b.trim().parse().ok()),
             metadata,
         });
 
@@ -178,17 +193,25 @@ fn inspection_from_output(out: &FfprobeOutput) -> Inspection {
     }
 
     let format = &out.format;
-    let timecode_present =
-        format.tags.iter().any(|(k, _)| {
-            k.eq_ignore_ascii_case("start_timecode")
-                || k.eq_ignore_ascii_case("timecode")
-        });
+    let timecode_present = format.tags.iter().any(|(k, _)| {
+        k.eq_ignore_ascii_case("start_timecode") || k.eq_ignore_ascii_case("timecode")
+    });
 
     let container = ContainerInspection {
         validity: ContainerValidity::Ok,
-        format: format.format_long_name.clone().or_else(|| format.format_name.clone()),
-        bitrate_bps: format.bit_rate.as_deref().and_then(|b| b.trim().parse().ok()),
-        duration: format.duration.as_deref().and_then(parse_duration_ms).map(DurationMillis),
+        format: format
+            .format_long_name
+            .clone()
+            .or_else(|| format.format_name.clone()),
+        bitrate_bps: format
+            .bit_rate
+            .as_deref()
+            .and_then(|b| b.trim().parse().ok()),
+        duration: format
+            .duration
+            .as_deref()
+            .and_then(parse_duration_ms)
+            .map(DurationMillis),
         timecode_present: Some(timecode_present),
         ..Default::default()
     };
@@ -198,6 +221,40 @@ fn inspection_from_output(out: &FfprobeOutput) -> Inspection {
         video: video_meas,
         audio: audio_meas,
         diagnostics: BTreeMap::new(),
+    }
+}
+
+/// Composite inspector used by full CLI scans.
+pub struct HybridInspector {
+    metadata: FfprobeInspector,
+    video: KinetixVideoInspector,
+}
+
+impl Default for HybridInspector {
+    fn default() -> Self {
+        Self {
+            metadata: FfprobeInspector,
+            video: KinetixVideoInspector::new(),
+        }
+    }
+}
+
+impl Inspector for HybridInspector {
+    fn name(&self) -> &str {
+        "ffprobe + tpt-kinetix-h264"
+    }
+
+    fn inspect_metadata(&self, asset: &Asset) -> Result<Inspection> {
+        self.metadata.inspect_metadata(asset)
+    }
+
+    fn inspect_decode(
+        &self,
+        asset: &Asset,
+        metadata: &Inspection,
+        level: InspectionLevel,
+    ) -> Result<Inspection> {
+        self.video.inspect_decode(asset, metadata, level)
     }
 }
 

@@ -46,7 +46,11 @@ mod tests {
                 version: 1,
                 sha256: "1".repeat(64),
             },
-            host: HostInfo { os: "test".into(), arch: "test".into(), cpu_count: 1 },
+            host: HostInfo {
+                os: "test".into(),
+                arch: "test".into(),
+                cpu_count: 1,
+            },
             asset_path: "x.mp4".into(),
             asset_size_bytes: 1,
             asset_duration_ms: None,

@@ -132,7 +132,10 @@ mod tests {
 
     #[test]
     fn to_json_forms() {
-        assert_eq!(Value::DurationMs(500).to_json(), serde_json::json!({"duration_ms": 500}));
+        assert_eq!(
+            Value::DurationMs(500).to_json(),
+            serde_json::json!({"duration_ms": 500})
+        );
         assert_eq!(Value::from("h264").to_json(), serde_json::json!("h264"));
         assert_eq!(Value::from(1920u64).to_json(), serde_json::json!(1920));
     }

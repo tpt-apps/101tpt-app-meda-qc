@@ -87,7 +87,9 @@ impl RuleResult {
     }
 
     pub fn from_finding(finding: QcFinding) -> Self {
-        Self { findings: vec![finding] }
+        Self {
+            findings: vec![finding],
+        }
     }
 
     pub fn findings(findings: Vec<QcFinding>) -> Self {
@@ -134,7 +136,9 @@ pub trait RuleExt {
 
 impl RuleExt for RuleId {
     fn to_finding(&self, severity: tpt_app_media_qc_model::severity::Severity) -> QcFinding {
-        QcFinding::new(self.clone()).severity(severity).on(self.clone())
+        QcFinding::new(self.clone())
+            .severity(severity)
+            .on(self.clone())
     }
 }
 
@@ -156,7 +160,11 @@ mod tests {
             RuleId::new("test.panicky")
         }
         fn description(&self) -> RuleDescription {
-            RuleDescription { name: "panicky", summary: "", version: "0" }
+            RuleDescription {
+                name: "panicky",
+                summary: "",
+                version: "0",
+            }
         }
         fn capabilities(&self) -> Capabilities {
             Capabilities::metadata_only()

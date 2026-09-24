@@ -37,10 +37,10 @@ tempfile = "3"
 lopdf = "0.36"
 notify = "7"
 
-# TPT foundations. tpt-kinetix-core is published on crates.io; the demux,
-# decoder and mux crates are not published yet and are pulled from the
-# tpt-kinetix repository, pinned by revision (spec §10 decode pathway).
-tpt-kinetix-core = "0.1.0"
+# TPT foundations. The demux, decoder and mux crates are pinned to the
+# same Kinetix revision; their shared core must come from that same source
+# (using the registry copy would create incompatible packet/frame types).
+tpt-kinetix-core = { git = "https://github.com/tpt-solutions/tpt-kinetix", rev = "a43959c009a2801efa2a8b998c7848ea9240483e" }
 tpt-kinetix-demux = { git = "https://github.com/tpt-solutions/tpt-kinetix", rev = "a43959c009a2801efa2a8b998c7848ea9240483e" }
 tpt-kinetix-h264 = { git = "https://github.com/tpt-solutions/tpt-kinetix", rev = "a43959c009a2801efa2a8b998c7848ea9240483e" }
 tpt-kinetix-mux = { git = "https://github.com/tpt-solutions/tpt-kinetix", rev = "a43959c009a2801efa2a8b998c7848ea9240483e" }

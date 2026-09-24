@@ -3,8 +3,8 @@
 use chrono::Utc;
 use tpt_app_media_qc_model::asset::{Asset, AssetFingerprint};
 
-use crate::Store;
 use crate::error::Result;
+use crate::Store;
 
 /// A lightweight row projection of a stored asset.
 #[derive(Clone, Debug)]
@@ -70,7 +70,9 @@ impl Store {
 
     /// Number of known assets.
     pub fn asset_count(&self) -> Result<u64> {
-        let n: i64 = self.conn().query_row("SELECT COUNT(*) FROM assets", [], |r| r.get(0))?;
+        let n: i64 = self
+            .conn()
+            .query_row("SELECT COUNT(*) FROM assets", [], |r| r.get(0))?;
         Ok(n as u64)
     }
 
@@ -85,7 +87,12 @@ impl Store {
                 size_bytes = excluded.size_bytes,
                 computed_at = excluded.computed_at
             "#,
-            rusqlite::params![fp.sha256, strategy, fp.size_bytes as i64, Utc::now().timestamp_millis()],
+            rusqlite::params![
+                fp.sha256,
+                strategy,
+                fp.size_bytes as i64,
+                Utc::now().timestamp_millis()
+            ],
         )?;
         Ok(())
     }
@@ -100,7 +107,10 @@ mod tests {
         Asset {
             id: Default::default(),
             path: "x.mp4".into(),
-            fingerprint: AssetFingerprint { sha256: sha.to_string(), size_bytes: 10 },
+            fingerprint: AssetFingerprint {
+                sha256: sha.to_string(),
+                size_bytes: 10,
+            },
             size_bytes: 10,
             modified_time: Some(1),
             duration: None,
@@ -112,10 +122,16 @@ mod tests {
     fn register_and_lookup_asset() {
         let store = Store::in_memory().unwrap();
         store.register_asset(&asset(&"ab".repeat(32))).unwrap();
-        let found = store.asset_by_fingerprint(&"ab".repeat(32)).unwrap().unwrap();
+        let found = store
+            .asset_by_fingerprint(&"ab".repeat(32))
+            .unwrap()
+            .unwrap();
         assert_eq!(found.path, "x.mp4");
         assert_eq!(found.size_bytes, 10);
-        assert!(store.asset_by_fingerprint(&"zz".repeat(32)).unwrap().is_none());
+        assert!(store
+            .asset_by_fingerprint(&"zz".repeat(32))
+            .unwrap()
+            .is_none());
         assert_eq!(store.asset_count().unwrap(), 1);
     }
 
@@ -126,7 +142,10 @@ mod tests {
         let mut moved = asset(&"ab".repeat(32));
         moved.path = "new/location.mp4".into();
         store.register_asset(&moved).unwrap();
-        let found = store.asset_by_fingerprint(&"ab".repeat(32)).unwrap().unwrap();
+        let found = store
+            .asset_by_fingerprint(&"ab".repeat(32))
+            .unwrap()
+            .unwrap();
         assert_eq!(found.path, "new/location.mp4");
         assert_eq!(store.asset_count().unwrap(), 1);
     }
@@ -134,7 +153,10 @@ mod tests {
     #[test]
     fn fingerprint_roundtrip() {
         let store = Store::in_memory().unwrap();
-        let fp = AssetFingerprint { sha256: "cd".repeat(32), size_bytes: 42 };
+        let fp = AssetFingerprint {
+            sha256: "cd".repeat(32),
+            size_bytes: 42,
+        };
         store.register_fingerprint("full_scan", &fp).unwrap();
     }
 }

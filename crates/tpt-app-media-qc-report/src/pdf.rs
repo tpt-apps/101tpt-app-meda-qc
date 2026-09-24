@@ -108,7 +108,11 @@ struct Layout {
 
 impl Layout {
     fn new() -> Self {
-        Layout { lines: Vec::new(), pages: Vec::new(), cursor: MARGIN }
+        Layout {
+            lines: Vec::new(),
+            pages: Vec::new(),
+            cursor: MARGIN,
+        }
     }
 
     fn flush_if_needed(&mut self, lines: usize) {
@@ -131,7 +135,10 @@ impl Layout {
             ops.push(Operation::new("BT", vec![]));
             ops.push(Operation::new(
                 "Tf",
-                vec![Object::Name(font.as_bytes().to_vec()), Object::Real(l.size as f32)],
+                vec![
+                    Object::Name(font.as_bytes().to_vec()),
+                    Object::Real(l.size as f32),
+                ],
             ));
             ops.push(Operation::new(
                 "Tm",
@@ -144,7 +151,10 @@ impl Layout {
                     Object::Real(y as f32),
                 ],
             ));
-            ops.push(Operation::new("Tj", vec![Object::string_literal(l.text.as_str())]));
+            ops.push(Operation::new(
+                "Tj",
+                vec![Object::string_literal(l.text.as_str())],
+            ));
             ops.push(Operation::new("ET", vec![]));
         }
         Content { operations: ops }
@@ -155,7 +165,13 @@ impl Layout {
         self.flush_if_needed(1);
         let y_top = self.cursor + size;
         let text = sanitize(s);
-        self.lines.push(Placed { x, y_top, font, size, text });
+        self.lines.push(Placed {
+            x,
+            y_top,
+            font,
+            size,
+            text,
+        });
         self.cursor += LINE_HEIGHT;
     }
 
@@ -193,12 +209,18 @@ fn build_document(layout: &mut Layout, report: &Report) {
     let counts = report.status_counts();
 
     layout.text(MARGIN, Font::Bold, 15.0, "TPT Media QC — QC Report");
-    layout.text(MARGIN, Font::Regular, BODY_SIZE, &format!("Asset: {}", report.asset_path));
+    layout.text(
+        MARGIN,
+        Font::Regular,
+        BODY_SIZE,
+        &format!("Asset: {}", report.asset_path),
+    );
     layout.text(
         MARGIN,
         Font::Bold,
         11.0,
-        &format!("Verdict: {}   (pass {}, warn {}, fail {}, inconclusive {})",
+        &format!(
+            "Verdict: {}   (pass {}, warn {}, fail {}, inconclusive {})",
             report.verdict.as_str().to_uppercase(),
             counts.pass,
             counts.warn,
@@ -209,18 +231,51 @@ fn build_document(layout: &mut Layout, report: &Report) {
     layout.gap(4.0);
 
     layout.text(MARGIN, Font::Bold, BODY_SIZE, "Integrity");
-    layout.text(MARGIN, Font::Regular, SMALL_SIZE, &format!("Analysis ID:  {}", report.analysis_id.0));
-    layout.text(MARGIN, Font::Regular, SMALL_SIZE, &format!("Asset SHA-256: {}", report.integrity.asset_sha256));
-    layout.text(MARGIN, Font::Regular, SMALL_SIZE, &format!("Profile SHA-256: {}", report.integrity.profile_sha256));
-    layout.text(MARGIN, Font::Regular, SMALL_SIZE, &format!(
-        "App {} {} (ruleset {}) — created {}", report.app.name, report.app.version, report.app.ruleset_version, report.created_at.to_rfc3339()
-    ));
+    layout.text(
+        MARGIN,
+        Font::Regular,
+        SMALL_SIZE,
+        &format!("Analysis ID:  {}", report.analysis_id.0),
+    );
+    layout.text(
+        MARGIN,
+        Font::Regular,
+        SMALL_SIZE,
+        &format!("Asset SHA-256: {}", report.integrity.asset_sha256),
+    );
+    layout.text(
+        MARGIN,
+        Font::Regular,
+        SMALL_SIZE,
+        &format!("Profile SHA-256: {}", report.integrity.profile_sha256),
+    );
+    layout.text(
+        MARGIN,
+        Font::Regular,
+        SMALL_SIZE,
+        &format!(
+            "App {} {} (ruleset {}) — created {}",
+            report.app.name,
+            report.app.version,
+            report.app.ruleset_version,
+            report.created_at.to_rfc3339()
+        ),
+    );
     layout.gap(2.0);
 
-    layout.text(MARGIN, Font::Regular, SMALL_SIZE, &format!(
-        "Profile: {} v{} — host {} ({}) — {} bytes",
-        report.profile.name, report.profile.version, report.host.os, report.host.arch, report.asset_size_bytes
-    ));
+    layout.text(
+        MARGIN,
+        Font::Regular,
+        SMALL_SIZE,
+        &format!(
+            "Profile: {} v{} — host {} ({}) — {} bytes",
+            report.profile.name,
+            report.profile.version,
+            report.host.os,
+            report.host.arch,
+            report.asset_size_bytes
+        ),
+    );
 
     layout.gap(6.0);
     layout.text(MARGIN, Font::Bold, 12.0, "Findings");
@@ -235,9 +290,20 @@ fn build_document(layout: &mut Layout, report: &Report) {
     table_header(layout, &cols);
     for f in &report.findings {
         let stream = f.stream_idx.map(|s| s.to_string()).unwrap_or_default();
-        let time = f.time_range.map(|r| format!("{}–{} ms", r.start_ms, r.end_ms)).unwrap_or_default();
-        let measured = f.measured.as_ref().map(|v| v.to_string()).unwrap_or_default();
-        let expected = f.expected.as_ref().map(|v| v.to_string()).unwrap_or_default();
+        let time = f
+            .time_range
+            .map(|r| format!("{}–{} ms", r.start_ms, r.end_ms))
+            .unwrap_or_default();
+        let measured = f
+            .measured
+            .as_ref()
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let expected = f
+            .expected
+            .as_ref()
+            .map(|v| v.to_string())
+            .unwrap_or_default();
 
         let cells: Vec<Vec<String>> = vec![
             wrapped(f.rule_id.as_str(), &cols[0]),
@@ -265,9 +331,11 @@ fn build_document(layout: &mut Layout, report: &Report) {
 
 fn table_header(layout: &mut Layout, cols: &[Col]) {
     layout.flush_if_needed(1);
-    for (i, header) in ["Rule", "Status", "Sev", "S", "Time", "Measured", "Expected", "Message"]
-        .iter()
-        .enumerate()
+    for (i, header) in [
+        "Rule", "Status", "Sev", "S", "Time", "Measured", "Expected", "Message",
+    ]
+    .iter()
+    .enumerate()
     {
         layout.text(cols[i].x, Font::Bold, BODY_SIZE, header);
     }
@@ -284,7 +352,7 @@ fn columns() -> Vec<Col> {
         70.0,  // Time
         90.0,  // Measured
         90.0,  // Expected
-        // Message takes the remaining width.
+               // Message takes the remaining width.
     ];
     for w in widths {
         cols.push(Col::new(x, w));
@@ -399,7 +467,10 @@ mod tests {
         let asset = Asset {
             id: Default::default(),
             path: "x.mp4".into(),
-            fingerprint: AssetFingerprint { sha256: "ab".repeat(32), size_bytes: 1 },
+            fingerprint: AssetFingerprint {
+                sha256: "ab".repeat(32),
+                size_bytes: 1,
+            },
             size_bytes: 1,
             modified_time: None,
             duration: None,
@@ -416,9 +487,15 @@ mod tests {
         render_pdf(&path, &report, WritePdfOptions {}).unwrap();
         let bytes = fs::read(&path).unwrap();
         assert!(bytes.starts_with(b"%PDF-"), "must start with PDF header");
-        assert!(bytes.windows(5).any(|w| w == b"%%EOF"), "must end with EOF marker");
+        assert!(
+            bytes.windows(5).any(|w| w == b"%%EOF"),
+            "must end with EOF marker"
+        );
 
         let reloaded = Document::load(&path).unwrap();
-        assert!(!reloaded.get_pages().is_empty(), "must contain at least one page");
+        assert!(
+            !reloaded.get_pages().is_empty(),
+            "must contain at least one page"
+        );
     }
 }

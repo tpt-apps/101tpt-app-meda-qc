@@ -15,7 +15,7 @@ pub mod verdict;
 pub use engine::QcEngine;
 pub use inspector::{arc, InspectionLevel, Inspector, NoopInspector};
 pub use job::Job;
-pub use scheduler::{run_jobs, SchedulingResult, Scheduler};
+pub use scheduler::{run_jobs, Scheduler, SchedulingResult};
 pub use verdict::{VerdictPolicy, VerdictResolution};
 
 use tpt_app_media_qc_model::asset::Asset;
@@ -51,7 +51,11 @@ pub struct RuleStatus {
 
 impl RuleStatus {
     pub fn new(rule_id: impl Into<String>, best: VerdictDecision, findings: usize) -> Self {
-        Self { rule_id: rule_id.into(), best, findings }
+        Self {
+            rule_id: rule_id.into(),
+            best,
+            findings,
+        }
     }
 }
 
@@ -92,7 +96,9 @@ pub fn aggregate(
     let mut by_rule: std::collections::BTreeMap<&str, (VerdictDecision, usize)> =
         std::collections::BTreeMap::new();
     for f in findings {
-        let entry = by_rule.entry(f.rule_id.as_str()).or_insert((VerdictDecision::Pass, 0));
+        let entry = by_rule
+            .entry(f.rule_id.as_str())
+            .or_insert((VerdictDecision::Pass, 0));
         if status_rank(f.status) > status_rank(entry.0) {
             entry.0 = f.status;
         }
@@ -106,7 +112,10 @@ pub fn aggregate(
     }
 
     for rule in rules {
-        let (best, n) = by_rule.get(rule.id().as_str()).copied().unwrap_or((VerdictDecision::Pass, 0));
+        let (best, n) = by_rule
+            .get(rule.id().as_str())
+            .copied()
+            .unwrap_or((VerdictDecision::Pass, 0));
         if n == 0 {
             counts.pass += 1;
         }

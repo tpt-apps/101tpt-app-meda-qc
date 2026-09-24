@@ -19,9 +19,7 @@ pub use inspection::{
     AudioMeasurements, ContainerInspection, ContainerValidity, Inspection, LumaStats,
     VideoMeasurements,
 };
-pub use report::{
-    AnalysisId, AppInfo, HostInfo, ProfileRef, Report, ReportIntegrity, Verdict,
-};
+pub use report::{AnalysisId, AppInfo, HostInfo, ProfileRef, Report, ReportIntegrity, Verdict};
 pub use severity::{Severity, VerdictDecision};
 pub use time::{DurationSeconds, FrameRate, Rational, TimeBase, Timecode};
 pub use value::Value;

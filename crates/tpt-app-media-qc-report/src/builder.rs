@@ -67,7 +67,9 @@ pub fn report_host_info() -> HostInfo {
     HostInfo {
         os: std::env::consts::OS.to_string(),
         arch: std::env::consts::ARCH.to_string(),
-        cpu_count: std::thread::available_parallelism().map(|n| n.get() as u64).unwrap_or(1),
+        cpu_count: std::thread::available_parallelism()
+            .map(|n| n.get() as u64)
+            .unwrap_or(1),
     }
 }
 
@@ -85,7 +87,10 @@ mod tests {
         Asset {
             id: Default::default(),
             path: "x.mp4".into(),
-            fingerprint: AssetFingerprint { sha256: "ab".repeat(32), size_bytes: 1 },
+            fingerprint: AssetFingerprint {
+                sha256: "ab".repeat(32),
+                size_bytes: 1,
+            },
             size_bytes: 1,
             modified_time: None,
             duration: None,
@@ -96,7 +101,8 @@ mod tests {
     fn sample_run() -> QcRun {
         let profile = tpt_app_media_qc_profile::model::Profile::default();
         let inspector = tpt_app_media_qc_pipeline::arc(tpt_app_media_qc_pipeline::NoopInspector);
-        let engine = tpt_app_media_qc_pipeline::QcEngine::new(std::sync::Arc::new(profile), inspector);
+        let engine =
+            tpt_app_media_qc_pipeline::QcEngine::new(std::sync::Arc::new(profile), inspector);
         engine.check_metadata_only(&sample_asset()).unwrap()
     }
 

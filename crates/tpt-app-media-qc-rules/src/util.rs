@@ -84,7 +84,8 @@ impl MeasuredSetter for QcFinding {
 /// Check that the container was actually scanned; if not, rule outcomes are
 /// inconclusive rather than guessed.
 pub fn container_scanned(inspection: &Inspection) -> bool {
-    let scanned =
-        matches!(inspection.container.validity, tpt_app_media_qc_model::inspection::ContainerValidity::NotScanned);
-    !scanned
+    !matches!(
+        inspection.container.validity,
+        tpt_app_media_qc_model::inspection::ContainerValidity::NotScanned
+    )
 }

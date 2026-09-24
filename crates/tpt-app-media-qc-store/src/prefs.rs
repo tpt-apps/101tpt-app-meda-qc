@@ -1,10 +1,10 @@
 //! User preferences (spec § 18). JSON values keyed by a string.
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 
-use crate::Store;
 use crate::error::Result;
+use crate::Store;
 
 impl Store {
     /// Set a preference value (any JSON-serializable T).
@@ -39,7 +39,8 @@ impl Store {
 
     /// Remove a preference.
     pub fn delete_pref(&self, key: &str) -> Result<()> {
-        self.conn().execute("DELETE FROM preferences WHERE key = ?1", [key])?;
+        self.conn()
+            .execute("DELETE FROM preferences WHERE key = ?1", [key])?;
         Ok(())
     }
 }
@@ -52,7 +53,10 @@ mod tests {
     fn pref_roundtrip() {
         let store = Store::in_memory().unwrap();
         store.set_pref("theme", &"dark").unwrap();
-        assert_eq!(store.get_pref::<String>("theme").unwrap().as_deref(), Some("dark"));
+        assert_eq!(
+            store.get_pref::<String>("theme").unwrap().as_deref(),
+            Some("dark")
+        );
         assert!(store.get_pref::<String>("nope").unwrap().is_none());
         store.delete_pref("theme").unwrap();
         assert!(store.get_pref::<String>("theme").unwrap().is_none());

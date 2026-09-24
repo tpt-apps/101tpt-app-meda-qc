@@ -49,7 +49,11 @@ pub struct Version {
 
 impl Version {
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     /// Parse a `MAJOR.MINOR.PATCH` string, ignoring pre-release/build metadata.
@@ -57,7 +61,13 @@ impl Version {
         let mut it = s.split('.');
         let major = it.next()?.parse().ok()?;
         let minor = it.next().unwrap_or("0").parse().ok()?;
-        let patch = it.next().unwrap_or("0").split(['-', '+']).next()?.parse().ok()?;
+        let patch = it
+            .next()
+            .unwrap_or("0")
+            .split(['-', '+'])
+            .next()?
+            .parse()
+            .ok()?;
         Some(Self::new(major, minor, patch))
     }
 }

@@ -13,8 +13,8 @@ use tpt_app_media_qc_model::finding::QcFinding;
 use tpt_app_media_qc_profile::hash::per_rule_config_hash;
 use tpt_app_media_qc_profile::model::Profile;
 
-use crate::Store;
 use crate::error::Result;
+use crate::Store;
 
 /// Identity components of a cache entry — the full key per spec § 19.
 #[derive(Clone, Debug)]
@@ -113,9 +113,14 @@ mod tests {
     #[test]
     fn cache_roundtrip_full_key() {
         let store = Store::in_memory().unwrap();
-        let p = profile("name: x\nrules:\n  video:\n    black_frames:\n      max_duration_ms: 500\n");
+        let p =
+            profile("name: x\nrules:\n  video:\n    black_frames:\n      max_duration_ms: 500\n");
         let sha = "ab".repeat(32);
-        let key = CacheKey { asset_sha256: &sha, profile: &p, rule_id: "video.black_frames" };
+        let key = CacheKey {
+            asset_sha256: &sha,
+            profile: &p,
+            rule_id: "video.black_frames",
+        };
 
         assert!(store.cache_get(&key).unwrap().is_none());
 
@@ -123,7 +128,9 @@ mod tests {
             .fail()
             .severity(tpt_app_media_qc_model::severity::Severity::Error)
             .some("black for 900ms");
-        store.cache_put(&key, std::slice::from_ref(&finding)).unwrap();
+        store
+            .cache_put(&key, std::slice::from_ref(&finding))
+            .unwrap();
 
         let got = store.cache_get(&key).unwrap().unwrap();
         assert_eq!(got.len(), 1);
@@ -138,20 +145,40 @@ mod tests {
         let p500 = profile("name: x\nrules:\n  video:\n    black_frames:\n      max_duration_ms: 500\n    freeze_frames:\n      max_duration_ms: 900\n");
         let p600 = profile("name: x\nrules:\n  video:\n    black_frames:\n      max_duration_ms: 600\n    freeze_frames:\n      max_duration_ms: 900\n");
 
-        let key_bf = CacheKey { asset_sha256: &sha, profile: &p500, rule_id: "video.black_frames" };
-        let key_ff = CacheKey { asset_sha256: &sha, profile: &p500, rule_id: "video.freeze_frames" };
-        store.cache_put(&key_bf, &[QcFinding::new("video.black_frames").fail()]).unwrap();
-        store.cache_put(&key_ff, &[QcFinding::new("video.freeze_frames").pass()]).unwrap();
+        let key_bf = CacheKey {
+            asset_sha256: &sha,
+            profile: &p500,
+            rule_id: "video.black_frames",
+        };
+        let key_ff = CacheKey {
+            asset_sha256: &sha,
+            profile: &p500,
+            rule_id: "video.freeze_frames",
+        };
+        store
+            .cache_put(&key_bf, &[QcFinding::new("video.black_frames").fail()])
+            .unwrap();
+        store
+            .cache_put(&key_ff, &[QcFinding::new("video.freeze_frames").pass()])
+            .unwrap();
 
         // Same profile: both cache hits.
         assert!(store.cache_get(&key_bf).unwrap().is_some());
         assert!(store.cache_get(&key_ff).unwrap().is_some());
 
         // Black-frame threshold bumped to 600: its entry misses...
-        let key_bf_new = CacheKey { asset_sha256: &sha, profile: &p600, rule_id: "video.black_frames" };
+        let key_bf_new = CacheKey {
+            asset_sha256: &sha,
+            profile: &p600,
+            rule_id: "video.black_frames",
+        };
         assert!(store.cache_get(&key_bf_new).unwrap().is_none());
         // ...but the untouched freeze-frames rule still hits (spec §19).
-        let key_ff_same = CacheKey { asset_sha256: &sha, profile: &p600, rule_id: "video.freeze_frames" };
+        let key_ff_same = CacheKey {
+            asset_sha256: &sha,
+            profile: &p600,
+            rule_id: "video.freeze_frames",
+        };
         assert!(store.cache_get(&key_ff_same).unwrap().is_some());
     }
 
@@ -160,7 +187,11 @@ mod tests {
         let store = Store::in_memory().unwrap();
         let p = profile("name: x\nrules:\n  container:\n    readable: error\n");
         let sha = "ee".repeat(32);
-        let key = CacheKey { asset_sha256: &sha, profile: &p, rule_id: "video.black_frames" };
+        let key = CacheKey {
+            asset_sha256: &sha,
+            profile: &p,
+            rule_id: "video.black_frames",
+        };
         assert!(store.cache_get(&key).unwrap().is_none());
     }
 }

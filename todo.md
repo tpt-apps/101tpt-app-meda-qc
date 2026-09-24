@@ -45,7 +45,10 @@ offline-first professional media QC application. Dual-licensed MIT / Apache-2.0,
 Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (MVP).
 
 1. [x] Establish Cargo workspace and application shell
-2. [ ] Integrate `tpt-kinetix` and enumerate media capabilities
+2. [x] Integrate `tpt-kinetix` and enumerate media capabilities — pinned Kinetix
+      demux/decode crates are wired through the decode crate; current full-decode
+      coverage is MP4/ISO-BMFF + H.264, with other formats explicitly reported
+      as unsupported/incomplete
 3. [x] Implement asset fingerprinting (content-based, not path-based — spec §6.1)
 4. [x] Implement stream/container inspection (probe boundary + `FfprobeInspector` front-end)
 5. [x] Implement the QC domain model (`Asset`, `Stream`, `QcFinding`, `Evidence` — spec §6)
@@ -53,9 +56,12 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
 7. [x] Implement metadata QC rules (container checks — spec §8.1: readability, validity,
       malformed metadata, stream count/duration consistency, bitrate, timecode, timebase,
       timestamp continuity, unexpected/missing streams)
-8. [ ] Implement video decode pipeline (via Kinetix)
-9. [x] Implement basic video QC rules (metadata/measurement-driven; decode detection stubs
-    report Inconclusive until §8 lands):
+8. [x] Implement video decode pipeline (via Kinetix) — MP4/ISO-BMFF H.264
+      packets are decoded and reduced to streaming black/freeze/duplicate,
+      corrupt-frame, luma and frame-rate measurements; other codecs remain
+      capability-gated
+9. [x] Implement basic video QC rules (metadata/measurement-driven; decode coverage
+    is explicit and unsupported measurements report Inconclusive):
    - [x] corrupt/dropped frame detection (detection pathway defined)
    - [x] black frames
    - [x] freeze frames
@@ -92,15 +98,16 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
 18. [x] Implement JSON/HTML/CSV reporting (spec §14, report integrity fields §14.1)
 19. [x] Implement PDF reporting
 20. [x] Implement CLI (`check`, `batch`, `info`, `list-rules` commands; stable exit-code
-      contract — spec §16; `check`/`batch` rely on `ffprobe` until §2/§8 land)
+      contract — spec §16; full scans compose `ffprobe` metadata with the
+      Kinetix MP4/H.264 decode adapter)
 21. [x] Implement watch folders (spec §13: pass/warn/fail routing, fully local; CLI
       `watch` command)
 22. [x] Add golden-media test suite covering every MVP rule (spec §24.2) — deterministic
       *measurement* fixtures (`tests/fixtures/*.json`: `Asset` + canned `Inspection`) run
-      through the real engine via a fixture `Inspector`; golden manifests in `tests/golden`
-      pin verdict + per-rule status for every built-in rule (coverage is asserted);
-      `MEDIA_QC_UPDATE_GOLDEN=1` regenerates. Encoded-media fixtures arrive with the
-      decode stack (§2/§8/§10); the runner accepts any `Inspector`
+      through the real engine via a fixture `Inspector`; one encoded H.264/MP4
+      fixture also exercises the Kinetix decode adapter. Golden manifests in
+      `tests/golden` pin verdict + per-rule status for every built-in rule;
+      `MEDIA_QC_UPDATE_GOLDEN=1` regenerates.
 23. [x] Add fuzzing for parsers, profile parser, result parser, CLI args, report
       generation, media boundary handling (spec §24.4) — `fuzz/` targets: `ffprobe_json`,
       `profile_parse`, `clap_args`, `report_generation`, `media_boundary`, `result_parser`

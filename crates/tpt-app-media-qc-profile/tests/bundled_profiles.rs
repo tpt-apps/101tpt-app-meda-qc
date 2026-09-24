@@ -6,8 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
-use tpt_app_media_qc_profile::{parse_str, profile_sha256};
 use tpt_app_media_qc_profile::model::Profile;
+use tpt_app_media_qc_profile::{parse_str, profile_sha256};
 
 /// Workspace `profiles/` directory relative to this crate's manifest dir.
 fn profiles_root() -> PathBuf {
@@ -39,17 +39,30 @@ fn every_bundled_profile_parses_and_hashes() {
     let mut files = Vec::new();
     collect_yaml(&root, &mut files);
     files.sort();
-    assert!(!files.is_empty(), "no profile YAML found under {}", root.display());
+    assert!(
+        !files.is_empty(),
+        "no profile YAML found under {}",
+        root.display()
+    );
 
     for path in &files {
         let source = std::fs::read_to_string(path)
             .unwrap_or_else(|e| panic!("read {}: {e}", path.display()));
-        let profile: Profile = parse_str(&source)
-            .unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
+        let profile: Profile =
+            parse_str(&source).unwrap_or_else(|e| panic!("parse {}: {e}", path.display()));
 
-        assert!(!profile.name.is_empty(), "{} has empty name", path.display());
+        assert!(
+            !profile.name.is_empty(),
+            "{} has empty name",
+            path.display()
+        );
         // Required name/version round-trip sanity.
-        assert_eq!(profile_sha256(&profile).len(), 64, "{} sha must be 64 hex", path.display());
+        assert_eq!(
+            profile_sha256(&profile).len(),
+            64,
+            "{} sha must be 64 hex",
+            path.display()
+        );
 
         // Determinism: hashing twice yields the same digest.
         assert_eq!(

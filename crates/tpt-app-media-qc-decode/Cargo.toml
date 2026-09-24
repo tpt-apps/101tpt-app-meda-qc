@@ -12,6 +12,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+serde_json.workspace = true
 tpt-app-media-qc-core = { path = "../tpt-app-media-qc-core" }
 tpt-app-media-qc-model = { path = "../tpt-app-media-qc-model" }
 tpt-app-media-qc-pipeline = { path = "../tpt-app-media-qc-pipeline" }
@@ -20,4 +21,5 @@ tpt-kinetix-demux.workspace = true
 tpt-kinetix-h264.workspace = true
 
 [dev-dependencies]
+tempfile.workspace = true
 tpt-kinetix-mux.workspace = true

@@ -5,8 +5,8 @@ use tpt_app_media_qc_model::finding::QcFinding;
 use tpt_app_media_qc_model::report::Report;
 use tpt_app_media_qc_pipeline::QcRun;
 
-use crate::Store;
 use crate::error::Result;
+use crate::Store;
 
 /// Lifecycle status of a persisted QC job.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -119,25 +119,18 @@ impl Store {
                 error = NULL
             WHERE id = ?4
             "#,
-            rusqlite::params![
-                finished,
-                run.verdict.as_str(),
-                report_json,
-                id
-            ],
+            rusqlite::params![finished, run.verdict.as_str(), report_json, id],
         )?;
 
-        let mut insert = self
-            .conn()
-            .prepare(
-                r#"
+        let mut insert = self.conn().prepare(
+            r#"
                 INSERT INTO findings
                     (job_id, rule_id, status, severity, message, measured_json, expected_json,
                      stream_index, time_start_ms, time_end_ms, frame_start, frame_end,
                      evidence_json, confidence)
                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
                 "#,
-            )?;
+        )?;
         for f in &run.findings {
             let time = f.time_range;
             let frames = f.frame_range;
@@ -242,7 +235,10 @@ impl Store {
 
         let mut stmt = self.conn().prepare(sql)?;
         let rows = match status {
-            Some(s) => stmt.query_map(rusqlite::params![s.as_str(), limit as i64], JobRecord::map_status)?,
+            Some(s) => stmt.query_map(
+                rusqlite::params![s.as_str(), limit as i64],
+                JobRecord::map_status,
+            )?,
             None => stmt.query_map([limit as i64], JobRecord::map_status)?,
         };
         let mut out = Vec::new();
@@ -280,14 +276,19 @@ impl Store {
                     .map(serde_json::from_str)
                     .transpose()
                     .unwrap_or(None),
-                stream_idx: row.get::<_, Option<u64>>(6)?.map(tpt_app_media_qc_model::asset::StreamId::new),
+                stream_idx: row
+                    .get::<_, Option<u64>>(6)?
+                    .map(tpt_app_media_qc_model::asset::StreamId::new),
                 time_range: match (row.get::<_, Option<u64>>(7)?, row.get::<_, Option<u64>>(8)?) {
-                    (Some(start_ms), Some(end_ms)) => {
-                        Some(tpt_app_media_qc_model::finding::TimeRange::new(start_ms, end_ms))
-                    }
+                    (Some(start_ms), Some(end_ms)) => Some(
+                        tpt_app_media_qc_model::finding::TimeRange::new(start_ms, end_ms),
+                    ),
                     _ => None,
                 },
-                frame_range: match (row.get::<_, Option<u64>>(9)?, row.get::<_, Option<u64>>(10)?) {
+                frame_range: match (
+                    row.get::<_, Option<u64>>(9)?,
+                    row.get::<_, Option<u64>>(10)?,
+                ) {
                     (Some(start), Some(end)) => {
                         Some(tpt_app_media_qc_model::finding::FrameRange::new(start, end))
                     }
@@ -307,7 +308,9 @@ impl Store {
         for r in rows {
             out.push(r);
         }
-        out.into_iter().collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+        out.into_iter()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 }
 
@@ -321,7 +324,8 @@ fn parse_verdict(s: &str) -> tpt_app_media_qc_model::severity::VerdictDecision {
 }
 
 fn parse_severity(s: &str) -> tpt_app_media_qc_model::severity::Severity {
-    s.parse().unwrap_or(tpt_app_media_qc_model::severity::Severity::Info)
+    s.parse()
+        .unwrap_or(tpt_app_media_qc_model::severity::Severity::Info)
 }
 
 #[cfg(test)]
@@ -332,11 +336,15 @@ mod tests {
     fn sample_run() -> QcRun {
         let profile = tpt_app_media_qc_profile::model::Profile::default();
         let inspector = tpt_app_media_qc_pipeline::arc(tpt_app_media_qc_pipeline::NoopInspector);
-        let engine = tpt_app_media_qc_pipeline::QcEngine::new(std::sync::Arc::new(profile), inspector);
+        let engine =
+            tpt_app_media_qc_pipeline::QcEngine::new(std::sync::Arc::new(profile), inspector);
         let asset = Asset {
             id: Default::default(),
             path: "x.mp4".into(),
-            fingerprint: AssetFingerprint { sha256: "ab".repeat(32), size_bytes: 1 },
+            fingerprint: AssetFingerprint {
+                sha256: "ab".repeat(32),
+                size_bytes: 1,
+            },
             size_bytes: 1,
             modified_time: None,
             duration: None,
@@ -348,7 +356,15 @@ mod tests {
     #[test]
     fn job_lifecycle() {
         let store = Store::in_memory().unwrap();
-        store.create_job("j1", None, "ab".repeat(32).as_str(), "cd".repeat(32).as_str(), "metadata").unwrap();
+        store
+            .create_job(
+                "j1",
+                None,
+                "ab".repeat(32).as_str(),
+                "cd".repeat(32).as_str(),
+                "metadata",
+            )
+            .unwrap();
         assert_eq!(store.job("j1").unwrap().unwrap().status, JobStatus::Queued);
 
         store.start_job("j1").unwrap();
@@ -368,7 +384,15 @@ mod tests {
     #[test]
     fn failed_job_keeps_isolation() {
         let store = Store::in_memory().unwrap();
-        store.create_job("j1", None, "aa".repeat(32).as_str(), "bb".repeat(32).as_str(), "metadata").unwrap();
+        store
+            .create_job(
+                "j1",
+                None,
+                "aa".repeat(32).as_str(),
+                "bb".repeat(32).as_str(),
+                "metadata",
+            )
+            .unwrap();
         store.fail_job("j1", "probe failed").unwrap();
         let rec = store.job("j1").unwrap().unwrap();
         assert_eq!(rec.status, JobStatus::Failed);
@@ -384,7 +408,11 @@ mod tests {
         Report {
             analysis_id: AnalysisId::default(),
             created_at: chrono::Utc::now(),
-            app: AppInfo { name: "TPT Media QC".into(), version: APP_VERSION.into(), ruleset_version: RULESET_VERSION.into() },
+            app: AppInfo {
+                name: "TPT Media QC".into(),
+                version: APP_VERSION.into(),
+                ruleset_version: RULESET_VERSION.into(),
+            },
             integrity: tpt_app_media_qc_model::report::ReportIntegrity {
                 asset_sha256: run.asset.fingerprint.sha256.clone(),
                 profile_sha256: profile_sha.clone(),
@@ -397,7 +425,11 @@ mod tests {
                 version: run.profile_version,
                 sha256: profile_sha,
             },
-            host: tpt_app_media_qc_model::report::HostInfo { os: "test".into(), arch: "test".into(), cpu_count: 1 },
+            host: tpt_app_media_qc_model::report::HostInfo {
+                os: "test".into(),
+                arch: "test".into(),
+                cpu_count: 1,
+            },
             asset_path: run.asset.path.display().to_string(),
             asset_size_bytes: run.asset.size_bytes,
             asset_duration_ms: None,

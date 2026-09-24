@@ -24,14 +24,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   resolution, aspect ratio, luma range and colour-space/HDR metadata.
 - Basic audio QC rules via the decode measurement pathway: sample rate, bit
   depth, channel layout, silence, clipping, peak/true peak, loudness
-  (EBU R128 / ATSC A/85 / BS.1770) and phase. Decode rules report
-  `Inconclusive` until the TPT decode stack is integrated (spec §8 cites the
-  decode pathway).
+  (EBU R128 / ATSC A/85 / BS.1770) and phase. Audio decode rules report
+  `Inconclusive` until the Cadence audio decode stack is integrated.
 - Result aggregation: finding normalization, per-rule status, status counts and
   QC verdict resolution.
 - Job scheduler with cost-class concurrency (metadata vs. decode-based
   inspection).
-- JSON, HTML and CSV report generation with the spec §14.1 integrity fields.
+- JSON, HTML, CSV and PDF report generation with the spec §14.1 integrity fields.
 - PDF report generation (lopdf, base-14 fonts) with integrity header, findings
   table and automatic pagination; `check --pdf` writes it.
 - SQLite persistence crate (`tpt-app-media-qc-store`): assets, projects, jobs,
@@ -58,7 +57,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `result_parser`.
 - `qc-bench` micro-benchmark harness and committed baseline
   (`tests/performance/baseline.md`) covering fingerprinting, profile parsing,
-  rule building/execution, engine checks and report rendering (spec §20).
+  rule building/execution, engine checks, fixture deserialization and
+  report rendering (spec §20). Representative HD/UHD *media* benchmarks follow.
+- Kinetix integration through the pinned `tpt-kinetix-demux` and
+  `tpt-kinetix-h264` revisions: MP4/ISO-BMFF H.264 video is demuxed and decoded
+  into streaming black/freeze/duplicate/luma/frame-rate measurements. The
+  adapter enforces a 512 MiB input bound while the foundation demuxer is
+  in-memory, and reports unsupported/incomplete coverage explicitly.
 - Dual MIT / Apache-2.0 licensing, packaging and repository documentation.
 
 ### Changed

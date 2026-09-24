@@ -25,10 +25,11 @@ errors, black/freeze segment rules report `Inconclusive` even when no segment
 exceeds the limit (segment detection may be incomplete) — that is why
 `boundary-thresholds` carries `decode_errors: 0` while `video-defects` does not.
 
-Encoded-media fixtures (real `.mov`/`.mxf` files) will be added when the TPT
-decode stack lands (todo §2/§8/§10); the golden runner accepts any
-`Inspector`, so they plug in without runner changes. The originally planned
-directory scheme (`valid/`, `corrupt/`, `loudness/`, …) then applies to those.
+Encoded-media coverage now includes `encoded/kinetix-mbaff-ip-cabac.h264`,
+which is muxed into a temporary MP4 by the decode test and run through the
+pinned Kinetix demuxer/decoder. Additional encoded fixtures (including HD/UHD
+performance media) can be added as the foundation coverage grows; the runner
+continues to accept measurement fixtures for rule-level golden tests.
 
 Provenance: only add media assets you have the right to include (own content
 or permissive licence); record it in `ATTRIBUTION.md`. Keep fixtures small —

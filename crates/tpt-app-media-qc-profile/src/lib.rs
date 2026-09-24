@@ -14,7 +14,7 @@ pub use model::{
     AudioRules, ChannelLayoutRule, ContainerRules, CountThresholdRule, DbThresholdRule,
     DurationThresholdRule, ExpectValueRule, FrameRateRule, LoudnessRule, LoudnessStandard,
     MinBitrateRule, Policy, Profile, Resolution, ResolutionRule, RuleSetConfig, SubtitleRules,
-    TimestampContinuityRule, ToleranceRule, VoiceRules, VideoRules,
+    TimestampContinuityRule, ToleranceRule, VideoRules, VoiceRules,
 };
 pub use parse::{parse_str, ProfileError};
 
