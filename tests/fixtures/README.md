@@ -25,10 +25,12 @@ errors, black/freeze segment rules report `Inconclusive` even when no segment
 exceeds the limit (segment detection may be incomplete) — that is why
 `boundary-thresholds` carries `decode_errors: 0` while `video-defects` does not.
 
-Encoded-media coverage now includes `encoded/kinetix-mbaff-ip-cabac.h264`,
-which is muxed into a temporary MP4 by the decode test and run through the
-pinned Kinetix demuxer/decoder. Additional encoded fixtures (including HD/UHD
-performance media) can be added as the foundation coverage grows; the runner
+Encoded-media coverage includes `encoded/kinetix-mbaff-ip-cabac.h264`, which
+is muxed into a temporary MP4 by the decode test and run through the pinned
+Kinetix demuxer/decoder. Generated mono and stereo WAV fixtures also exercise
+the Cadence streaming decode adapter, including silence, sample peak, phase,
+DC offset and coverage reporting. Additional encoded fixtures (including HD/UHD
+performance media) can be added as foundation coverage grows; the runner
 continues to accept measurement fixtures for rule-level golden tests.
 
 Provenance: only add media assets you have the right to include (own content

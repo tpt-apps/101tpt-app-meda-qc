@@ -1,6 +1,6 @@
 [package]
 name = "tpt-app-media-qc-decode"
-description = "Kinetix-backed decode inspector: real container/video-decode measurements for TPT Media QC (spec §10, §8.2–§8.3)."
+description = "Kinetix-backed video and Cadence-backed audio decode inspection for TPT Media QC (spec §10, §8.2–§8.3)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -16,6 +16,10 @@ serde_json.workspace = true
 tpt-app-media-qc-core = { path = "../tpt-app-media-qc-core" }
 tpt-app-media-qc-model = { path = "../tpt-app-media-qc-model" }
 tpt-app-media-qc-pipeline = { path = "../tpt-app-media-qc-pipeline" }
+tpt-av-cadence-core.workspace = true
+tpt-av-cadence-wav.workspace = true
+tpt-av-cadence-aiff.workspace = true
+tpt-av-cadence-flac.workspace = true
 tpt-kinetix-core.workspace = true
 tpt-kinetix-demux.workspace = true
 tpt-kinetix-h264.workspace = true

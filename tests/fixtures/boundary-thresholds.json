@@ -56,6 +56,7 @@
     "audio": [
       {
         "stream_idx": 1,
+        "decoded_frame_count": 5760000,
         "decode_errors": 0,
         "silence": [{ "start_ms": 5000, "end_ms": 9000 }],
         "clipping_events": 10,

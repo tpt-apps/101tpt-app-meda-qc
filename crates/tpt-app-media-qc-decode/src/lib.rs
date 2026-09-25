@@ -5,6 +5,10 @@
 //! The pinned MP4 demuxer is in-memory, so large inputs are refused rather
 //! than loaded without a bound. Decoded frames are analysed one at a time.
 
+mod audio;
+
+pub use audio::{AudioAnalyzerConfig, CadenceAudioInspector};
+
 use tpt_app_media_qc_core::error::{Error, Result};
 use tpt_app_media_qc_model::asset::Asset;
 use tpt_app_media_qc_model::inspection::{Inspection, LumaStats, VideoMeasurements};

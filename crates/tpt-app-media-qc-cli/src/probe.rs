@@ -1,17 +1,17 @@
-//! ffprobe-backed metadata plus Kinetix-backed video decode ([spec § 10]).
+//! ffprobe-backed metadata plus Kinetix/Cadence-backed decode ([spec § 10]).
 //!
 //! Metadata is still collected by the system `ffprobe` front-end. Full scans
-//! route its video packets through `tpt-kinetix-demux` and
-//! `tpt-kinetix-h264`; unsupported codecs and incomplete coverage remain
-//! explicit in the inspection model.
+//! route video through `tpt-kinetix-demux` and `tpt-kinetix-h264`, and
+//! standalone audio through the Cadence readers; unsupported codecs and
+//! incomplete coverage remain explicit in the inspection model.
 
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
 
-use serde::Deserialize;
+use serde::{de::Error as _, Deserialize, Deserializer};
 use tpt_app_media_qc_core::error::{Error, Result};
-use tpt_app_media_qc_decode::KinetixVideoInspector;
+use tpt_app_media_qc_decode::{CadenceAudioInspector, KinetixVideoInspector};
 use tpt_app_media_qc_model::asset::{Asset, Stream, StreamId, StreamKind};
 use tpt_app_media_qc_model::inspection::{
     AudioMeasurements, ContainerInspection, ContainerValidity, DurationMillis, Inspection,
@@ -32,7 +32,9 @@ pub(crate) struct FfprobeOutput {
 pub(crate) struct FfFormat {
     format_name: Option<String>,
     format_long_name: Option<String>,
+    #[serde(default, deserialize_with = "optional_string_or_number")]
     duration: Option<String>,
+    #[serde(default, deserialize_with = "optional_string_or_number")]
     bit_rate: Option<String>,
     #[serde(default)]
     tags: BTreeMap<String, String>,
@@ -47,13 +49,19 @@ pub(crate) struct FfStream {
     width: Option<u64>,
     height: Option<u64>,
     pix_fmt: Option<String>,
+    #[serde(default, deserialize_with = "optional_string_or_number")]
     r_frame_rate: Option<String>,
+    #[serde(default, deserialize_with = "optional_string_or_number")]
     time_base: Option<String>,
+    #[serde(default, deserialize_with = "optional_string_or_number")]
     duration: Option<String>,
+    #[serde(default, deserialize_with = "optional_string_or_number")]
     bit_rate: Option<String>,
+    #[serde(default, deserialize_with = "optional_string_or_number")]
     sample_rate: Option<String>,
     channels: Option<u64>,
     channel_layout: Option<String>,
+    #[serde(default, deserialize_with = "optional_string_or_number")]
     bits_per_sample: Option<String>,
     #[serde(default)]
     tags: BTreeMap<String, String>,
@@ -93,6 +101,22 @@ impl FfprobeInspector {
         }
         serde_json::from_slice(&output.stdout)
             .map_err(|e| Error::Probe(format!("ffprobe output was not valid JSON: {e}")))
+    }
+}
+
+fn optional_string_or_number<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<serde_json::Value>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(serde_json::Value::String(value)) => Ok(Some(value)),
+        Some(serde_json::Value::Number(value)) => Ok(Some(value.to_string())),
+        Some(other) => Err(D::Error::custom(format!(
+            "expected a string or number, got {other}"
+        ))),
     }
 }
 
@@ -228,6 +252,7 @@ fn inspection_from_output(out: &FfprobeOutput) -> Inspection {
 pub struct HybridInspector {
     metadata: FfprobeInspector,
     video: KinetixVideoInspector,
+    audio: CadenceAudioInspector,
 }
 
 impl Default for HybridInspector {
@@ -235,13 +260,14 @@ impl Default for HybridInspector {
         Self {
             metadata: FfprobeInspector,
             video: KinetixVideoInspector::new(),
+            audio: CadenceAudioInspector::new(),
         }
     }
 }
 
 impl Inspector for HybridInspector {
     fn name(&self) -> &str {
-        "ffprobe + tpt-kinetix-h264"
+        "ffprobe + tpt-kinetix-h264 + tpt-cadence"
     }
 
     fn inspect_metadata(&self, asset: &Asset) -> Result<Inspection> {
@@ -254,7 +280,8 @@ impl Inspector for HybridInspector {
         metadata: &Inspection,
         level: InspectionLevel,
     ) -> Result<Inspection> {
-        self.video.inspect_decode(asset, metadata, level)
+        let video = self.video.inspect_decode(asset, metadata, level)?;
+        self.audio.inspect_decode(asset, &video, level)
     }
 }
 
@@ -274,8 +301,8 @@ impl Inspector for FfprobeInspector {
         metadata: &Inspection,
         _level: InspectionLevel,
     ) -> Result<Inspection> {
-        // The decode pass ships with the analyzer integrations. Keeping the
-        // metadata inspection here means decode rules report Inconclusive.
+        // Metadata-only inspection intentionally has no decode coverage; the
+        // hybrid inspector supplies video/audio decode measurements in a full scan.
         Ok(metadata.clone())
     }
 }
@@ -303,5 +330,36 @@ mod tests {
         assert_eq!(stream_kind("audio"), StreamKind::Audio);
         assert_eq!(stream_kind("attached_pic"), StreamKind::Attachment);
         assert_eq!(stream_kind("nope"), StreamKind::Unknown);
+    }
+
+    #[test]
+    fn parses_numeric_ffprobe_metadata_fields() {
+        let json = br#"
+        {
+          "streams": [
+            {
+              "index": 0,
+              "codec_type": "audio",
+              "sample_rate": "48000",
+              "channels": 2,
+              "bits_per_sample": 16,
+              "bit_rate": 1536000,
+              "duration": "1.0"
+            }
+          ],
+          "format": {
+            "format_name": "wav",
+            "duration": "1.0",
+            "bit_rate": 1536624
+          }
+        }
+        "#;
+
+        let inspection = parse_ffprobe_json(json).unwrap();
+        assert_eq!(inspection.container.bitrate_bps, Some(1_536_624));
+        assert_eq!(inspection.container.duration, Some(DurationMillis(1_000)));
+        assert_eq!(inspection.audio.len(), 1);
+        assert_eq!(inspection.audio[0].stream_idx, 0);
+        assert!(inspection.video.is_empty());
     }
 }

@@ -21,22 +21,28 @@ bitrate and timecode presence.
 
 ## 2. Full-decode coverage
 
-The first full-decode adapter is deliberately narrow and capability-driven:
+Full-decode adapters are deliberately narrow and capability-driven:
 
-- **Container:** MP4/ISO-BMFF through `tpt-kinetix-demux`.
+- **Video container:** MP4/ISO-BMFF through `tpt-kinetix-demux`.
 - **Video codec:** H.264/AVC through `tpt-kinetix-h264`.
-- **Measurements:** observed frame rate, black-frame ranges, freeze-frame
+- **Video measurements:** observed frame rate, black-frame ranges, freeze-frame
   ranges, duplicate-frame ranges, decode-error count and all-sample luma
   statistics (min/max/mean/legal-range fractions).
-- **Unsupported/incomplete input:** the adapter records no decoded-frame
-  coverage and the rules return `Inconclusive`; it never turns an empty
-  measurement into a pass.
+- **Standalone audio containers:** WAV, AIFF/AIFC and FLAC through the pinned
+  Cadence readers.
+- **Audio measurements:** decoded-frame coverage, silence ranges, clipping
+  events, sample peak, stereo phase correlation and DC offset. Silence ranges
+  are bounded; if their retention limit is reached, the silence rule returns
+  `Inconclusive`. True peak and BS.1770 loudness are deliberately unmeasured,
+  not represented as compliant values.
+- **Unsupported/incomplete input:** adapters record no decoded coverage or an
+  explicit incomplete state and the affected rules return `Inconclusive`; they
+  never turn an empty measurement into a pass.
 
-The pinned Kinetix MP4 demuxer is currently in-memory. The adapter therefore
-refuses files over 512 MiB rather than allocating without a bound. This is a
-foundation limitation, not a claim that large-file decoding is complete.
-Audio decode, HEVC/AV1/VP9, MXF, MPEG-TS and other containers remain follow-up
-work through Cadence and the other foundation crates.
+The pinned Kinetix MP4 demuxer is currently in-memory. The video adapter
+therefore refuses files over 512 MiB rather than allocating without a bound.
+Embedded MP4 audio, HEVC/AV1/VP9, MXF, MPEG-TS and other containers remain
+follow-up work through the Kinetix/Cadence bridge and other foundation crates.
 
 ## 3. Intended target coverage (post-integration)
 

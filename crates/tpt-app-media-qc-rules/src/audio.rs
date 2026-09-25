@@ -68,6 +68,7 @@ fn audio_measurement<'a>(
     ctx.primary_stream(StreamKind::Audio)
         .map(|s| s.index.0)
         .and_then(|idx| ctx.inspection.audio_for(idx))
+        .filter(|measurement| measurement.decoded_frame_count.unwrap_or_default() > 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -306,14 +307,28 @@ impl QcRule for SilenceRule {
                 )
             })
             .collect();
-        if offending.is_empty() {
-            return RuleResult::pass();
+        if !offending.is_empty() {
+            return RuleResult::findings(segment_failures(
+                &self.id(),
+                self.cfg.severity,
+                offending.into_iter(),
+            ));
         }
-        RuleResult::findings(segment_failures(
-            &self.id(),
-            self.cfg.severity,
-            offending.into_iter(),
-        ))
+        if measurement.silence_truncated {
+            return RuleResult::from_finding(inconclusive(
+                &self.id(),
+                self.cfg.severity,
+                "silence range limit reached, so silence detection is incomplete",
+            ));
+        }
+        if measurement.decode_errors > 0 {
+            return RuleResult::from_finding(inconclusive(
+                &self.id(),
+                self.cfg.severity,
+                "audio decode had errors, so silence detection may be incomplete",
+            ));
+        }
+        RuleResult::pass()
     }
 }
 
@@ -365,6 +380,13 @@ impl QcRule for ClippingRule {
                 Some(Value::UInt(self.cfg.max_events)),
             ));
         }
+        if measurement.decode_errors > 0 {
+            return RuleResult::from_finding(inconclusive(
+                &self.id(),
+                self.cfg.severity,
+                "audio decode had errors, so clipping detection may be incomplete",
+            ));
+        }
         RuleResult::pass()
     }
 }
@@ -380,6 +402,7 @@ fn db_rule(
     severity: Severity,
     max_db: f64,
     measured: Option<f64>,
+    decode_errors: u64,
 ) -> RuleResult {
     let Some(measured) = measured else {
         return RuleResult::from_finding(inconclusive(
@@ -395,6 +418,13 @@ fn db_rule(
             format!("{name} is {measured:.2} {unit}, exceeding the {max_db:.2} {unit} limit"),
             Some(Value::Ratio(measured)),
             Some(Value::Ratio(max_db)),
+        ));
+    }
+    if decode_errors > 0 {
+        return RuleResult::from_finding(inconclusive(
+            id,
+            severity,
+            format!("{name} may be inaccurate because audio decode had errors"),
         ));
     }
     RuleResult::from_finding(info(
@@ -430,13 +460,16 @@ impl QcRule for PeakRule {
         }
     }
     fn run(&self, ctx: &RuleContext<'_>) -> RuleResult {
+        let (measured, decode_errors) =
+            audio_measurement(ctx).map_or((None, 0_u64), |m| (m.peak_db, m.decode_errors));
         db_rule(
             &self.id(),
             "peak level",
             "dBFS",
             self.cfg.severity,
             self.cfg.max_db,
-            audio_measurement(ctx).and_then(|m| m.peak_db),
+            measured,
+            decode_errors,
         )
     }
 }
@@ -466,13 +499,16 @@ impl QcRule for TruePeakRule {
         }
     }
     fn run(&self, ctx: &RuleContext<'_>) -> RuleResult {
+        let (measured, decode_errors) =
+            audio_measurement(ctx).map_or((None, 0_u64), |m| (m.true_peak_db, m.decode_errors));
         db_rule(
             &self.id(),
             "true-peak",
             "dBTP",
             self.cfg.severity,
             self.cfg.max_db,
-            audio_measurement(ctx).and_then(|m| m.true_peak_db),
+            measured,
+            decode_errors,
         )
     }
 }
@@ -532,6 +568,13 @@ impl QcRule for LoudnessRuleImpl {
                 ),
                 Some(Value::Ratio(lufs)),
                 Some(Value::Ratio(self.cfg.target_lufs)),
+            ));
+        }
+        if measurement.decode_errors > 0 {
+            return RuleResult::from_finding(inconclusive(
+                &self.id(),
+                self.cfg.severity,
+                "audio decode had errors, so loudness may be inaccurate",
             ));
         }
         RuleResult::from_finding(info(
@@ -594,6 +637,13 @@ impl QcRule for PhaseRuleImpl {
                 Some(Value::Ratio(self.cfg.min_correlation)),
             ));
         }
+        if measurement.decode_errors > 0 {
+            return RuleResult::from_finding(inconclusive(
+                &self.id(),
+                self.cfg.severity,
+                "audio decode had errors, so phase may be inaccurate",
+            ));
+        }
         RuleResult::pass()
     }
 }
@@ -653,6 +703,13 @@ impl QcRule for DcOffsetRuleImpl {
                 Some(Value::Ratio(self.cfg.max_offset_percent)),
             ));
         }
+        if measurement.decode_errors > 0 {
+            return RuleResult::from_finding(inconclusive(
+                &self.id(),
+                self.cfg.severity,
+                "audio decode had errors, so DC offset may be inaccurate",
+            ));
+        }
         RuleResult::pass()
     }
 }
@@ -676,6 +733,7 @@ mod tests {
     fn measurement() -> AudioMeasurements {
         AudioMeasurements {
             stream_idx: 1,
+            decoded_frame_count: Some(480),
             ..Default::default()
         }
     }
@@ -732,6 +790,20 @@ mod tests {
     }
 
     #[test]
+    fn silence_rule_is_inconclusive_when_range_collection_was_truncated() {
+        let rule = SilenceRule {
+            cfg: DurationThresholdRule {
+                max_duration_ms: 1_000,
+                severity: Severity::Warning,
+            },
+        };
+        let mut m = measurement();
+        m.silence_truncated = true;
+        let r = rule.execute(&ctx_with(vec![m]));
+        assert_eq!(r.findings[0].status, Status::Inconclusive);
+    }
+
+    #[test]
     fn peak_above_limit_fails() {
         let rule = PeakRule {
             cfg: DbThresholdRule {
@@ -771,6 +843,89 @@ mod tests {
         };
         let mut m = measurement();
         m.dc_offset_percent = Some(3.2);
+        let r = rule.execute(&ctx_with(vec![m]));
+        assert_eq!(r.findings[0].status, Status::Fail);
+    }
+
+    #[test]
+    fn decode_errors_make_clean_audio_results_inconclusive() {
+        let mut m = measurement();
+        m.decode_errors = 1;
+        m.peak_db = Some(-3.0);
+        m.loudness_lufs = Some(-23.0);
+        m.phase_correlation = Some(0.9);
+        m.dc_offset_percent = Some(0.0);
+
+        let peak = PeakRule {
+            cfg: DbThresholdRule {
+                max_db: 0.0,
+                severity: Severity::Error,
+            },
+        };
+        assert_eq!(
+            peak.execute(&ctx_with(vec![m.clone()])).findings[0].status,
+            Status::Inconclusive
+        );
+
+        let clipping = ClippingRule {
+            cfg: CountThresholdRule {
+                max_events: 0,
+                severity: Severity::Error,
+            },
+        };
+        assert_eq!(
+            clipping.execute(&ctx_with(vec![m.clone()])).findings[0].status,
+            Status::Inconclusive
+        );
+
+        let loudness = LoudnessRuleImpl {
+            cfg: LoudnessRule {
+                standard: tpt_app_media_qc_profile::model::LoudnessStandard::EbuR128,
+                target_lufs: -23.0,
+                tolerance_lu: 1.0,
+                severity: Severity::Error,
+            },
+        };
+        assert_eq!(
+            loudness.execute(&ctx_with(vec![m.clone()])).findings[0].status,
+            Status::Inconclusive
+        );
+
+        let phase = PhaseRuleImpl {
+            cfg: PhaseRule {
+                min_correlation: -0.5,
+                severity: Severity::Error,
+            },
+        };
+        assert_eq!(
+            phase.execute(&ctx_with(vec![m.clone()])).findings[0].status,
+            Status::Inconclusive
+        );
+
+        let dc_offset = DcOffsetRuleImpl {
+            cfg: DcOffsetRule {
+                max_offset_percent: 1.0,
+                severity: Severity::Warning,
+            },
+        };
+        assert_eq!(
+            dc_offset.execute(&ctx_with(vec![m])).findings[0].status,
+            Status::Inconclusive
+        );
+    }
+
+    #[test]
+    fn known_silence_failure_survives_range_truncation() {
+        use tpt_app_media_qc_model::finding::TimeRange;
+        let rule = SilenceRule {
+            cfg: DurationThresholdRule {
+                max_duration_ms: 1_000,
+                severity: Severity::Warning,
+            },
+        };
+        let mut m = measurement();
+        m.silence = vec![TimeRange::new(0, 2_000)];
+        m.silence_truncated = true;
         let r = rule.execute(&ctx_with(vec![m]));
         assert_eq!(r.findings[0].status, Status::Fail);
     }

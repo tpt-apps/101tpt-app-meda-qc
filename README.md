@@ -16,9 +16,11 @@ no mandatory network access are required.
 - **Content-based asset fingerprinting** — identity is SHA-256 of content, not
   path, so moved/replaced files are detected ([spec §6.1]).
 - **Stream/container inspection** — ffprobe-backed metadata plus a
-  Kinetix-backed H.264/MP4 decode pass. The first decode integration measures
-  frame rate, black/freeze/duplicate segments, corrupt-frame errors and luma
-  statistics.
+  Kinetix-backed H.264/MP4 decode pass and a Cadence-backed standalone audio
+  decode pass for WAV, AIFF/AIFC and FLAC. The video pass measures frame rate,
+  black/freeze/duplicate segments, corrupt-frame errors and luma statistics;
+  the audio pass measures silence, clipping, sample peak, stereo phase and DC
+  offset.
 - **Rule-based QC profiles** — human-readable, versioned, deterministic YAML profiles ([spec §9]).
 - **Container, video and audio rules** — readability, validity, duration/bitrate
   consistency, timecode/timebase/timestamp continuity, resolution, frame rate,
@@ -53,10 +55,12 @@ Exit codes are stable per spec §16: `0` = PASS, `1` = WARN, `2` = FAIL,
 `3` = INCONCLUSIVE, `4` = CONFIGURATION_ERROR, `5` = INPUT_ERROR, `6` =
 INTERNAL_ERROR.
 
-Full scans use `ffprobe` for the metadata pass and the pinned TPT Kinetix
-H.264 decoder for MP4/ISO-BMFF video. The current Kinetix demuxer is
-in-memory, so the adapter refuses inputs over 512 MiB; audio decode through
-`tpt-cadence` and non-H.264 video codecs remain future work.
+Full scans use `ffprobe` for the metadata pass, the pinned TPT Kinetix H.264
+decoder for MP4/ISO-BMFF video, and pinned TPT Cadence readers for standalone
+WAV, AIFF/AIFC and FLAC audio. The current Kinetix demuxer is in-memory, so
+that video adapter refuses inputs over 512 MiB. Embedded MP4 audio, true-peak,
+BS.1770 loudness and non-H.264 video codecs remain explicitly unsupported or
+`Inconclusive` until their complete decode/measurement paths are integrated.
 
 ## Repository layout
 
@@ -70,7 +74,7 @@ crates/
   tpt-app-media-qc-pipeline  Inspection boundary, engine, scheduler, verdict
   tpt-app-media-qc-profile   YAML profile parsing and deterministic hashing
   tpt-app-media-qc-report    JSON / HTML / CSV / PDF report generation
-  tpt-app-media-qc-decode    Kinetix MP4/H.264 video measurement adapter
+  tpt-app-media-qc-decode    Kinetix video and Cadence audio measurement adapters
   tpt-app-media-qc-cli       Command-line application
   tpt-app-media-qc-tauri     Desktop application shell (stub)
   tpt-app-media-qc-test      Shared test utilities and golden-test harness

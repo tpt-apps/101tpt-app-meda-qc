@@ -24,8 +24,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   resolution, aspect ratio, luma range and colour-space/HDR metadata.
 - Basic audio QC rules via the decode measurement pathway: sample rate, bit
   depth, channel layout, silence, clipping, peak/true peak, loudness
-  (EBU R128 / ATSC A/85 / BS.1770) and phase. Audio decode rules report
-  `Inconclusive` until the Cadence audio decode stack is integrated.
+  (EBU R128 / ATSC A/85 / BS.1770), phase and DC offset. The pinned Cadence
+  adapter decodes standalone WAV, AIFF/AIFC and FLAC into streaming PCM and
+  measures silence, clipping, sample peak, stereo phase and DC offset. True
+  peak, BS.1770 loudness and embedded audio remain `Inconclusive` until their
+  measurement/decode paths are integrated.
 - Result aggregation: finding normalization, per-rule status, status counts and
   QC verdict resolution.
 - Job scheduler with cost-class concurrency (metadata vs. decode-based
@@ -64,6 +67,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   into streaming black/freeze/duplicate/luma/frame-rate measurements. The
   adapter enforces a 512 MiB input bound while the foundation demuxer is
   in-memory, and reports unsupported/incomplete coverage explicitly.
+- Cadence integration through the pinned `tpt-av-cadence-wav`,
+  `tpt-av-cadence-aiff` and `tpt-av-cadence-flac` revisions: standalone audio
+  files decode in bounded blocks into silence, clipping, sample-peak,
+  stereo-phase and DC-offset measurements. Standards-accurate true peak and
+  BS.1770 loudness remain explicitly unmeasured.
 - Dual MIT / Apache-2.0 licensing, packaging and repository documentation.
 
 ### Changed
@@ -80,7 +88,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- None yet.
+- Restored the container-problems golden fixture's decoded-video coverage
+  marker so empty decode results are not mistaken for a completed scan.
 
 ### Security
 

@@ -44,9 +44,14 @@ tpt-kinetix-core = { git = "https://github.com/tpt-solutions/tpt-kinetix", rev =
 tpt-kinetix-demux = { git = "https://github.com/tpt-solutions/tpt-kinetix", rev = "a43959c009a2801efa2a8b998c7848ea9240483e" }
 tpt-kinetix-h264 = { git = "https://github.com/tpt-solutions/tpt-kinetix", rev = "a43959c009a2801efa2a8b998c7848ea9240483e" }
 tpt-kinetix-mux = { git = "https://github.com/tpt-solutions/tpt-kinetix", rev = "a43959c009a2801efa2a8b998c7848ea9240483e" }
+# Pinned Cadence revision: stable standalone WAV, AIFF/AIFC and FLAC readers.
+# Their shared core must come from the same source (using another revision can
+# create incompatible Decoder/StreamInfo types).
+tpt-av-cadence-core = { git = "https://github.com/tpt-solutions/tpt-cadence", rev = "52a64617e7cc4dc89a5c4d514dea93ef7b0a913f" }
+tpt-av-cadence-wav = { git = "https://github.com/tpt-solutions/tpt-cadence", rev = "52a64617e7cc4dc89a5c4d514dea93ef7b0a913f" }
+tpt-av-cadence-aiff = { git = "https://github.com/tpt-solutions/tpt-cadence", rev = "52a64617e7cc4dc89a5c4d514dea93ef7b0a913f" }
+tpt-av-cadence-flac = { git = "https://github.com/tpt-solutions/tpt-cadence", rev = "52a64617e7cc4dc89a5c4d514dea93ef7b0a913f" }
 # Further integration points once available/published (spec §8.4–§8.8):
-# tpt-cadence (audio decode, github.com/tpt-solutions/tpt-cadence, crates
-# tpt-av-cadence-*; WAV/AIFF/FLAC/PCM stable) — item 10.
 # tpt-dsp = { path = "../../dsp" }
 # tpt-visual = { path = "../../visual" }
 # tpt-voice = { path = "../../voice" }

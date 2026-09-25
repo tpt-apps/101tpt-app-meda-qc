@@ -71,9 +71,12 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
    - [x] aspect ratio
    - [x] luma range
    - [x] colour-space / HDR metadata
-10. [ ] Implement audio decode through `tpt-cadence`
-11. [x] Implement DSP-based audio QC rules (decode measurement pathway defined; rules
-    report Inconclusive until §10 lands):
+10. [x] Implement audio decode through `tpt-cadence` — pinned WAV, AIFF/AIFC and
+      FLAC readers stream PCM into explicit silence, clipping, sample-peak,
+      stereo-phase and DC-offset measurements; embedded MP4 audio and
+      standards-accurate true-peak/loudness remain capability-gated
+11. [x] Implement DSP-based audio QC rules (decode coverage is explicit;
+    unsupported or unmeasured values report Inconclusive):
     - [x] sample rate
     - [x] bit depth
     - [x] channel layout
@@ -99,7 +102,7 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
 19. [x] Implement PDF reporting
 20. [x] Implement CLI (`check`, `batch`, `info`, `list-rules` commands; stable exit-code
       contract — spec §16; full scans compose `ffprobe` metadata with the
-      Kinetix MP4/H.264 decode adapter)
+      Kinetix MP4/H.264 video adapter and Cadence standalone-audio adapter)
 21. [x] Implement watch folders (spec §13: pass/warn/fail routing, fully local; CLI
       `watch` command)
 22. [x] Add golden-media test suite covering every MVP rule (spec §24.2) — deterministic

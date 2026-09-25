@@ -44,7 +44,6 @@ report_render_pdf                  750.5 us     670.3 us       1333 ops/s
   "~1 second per file" budget (spec §20) is dominated by `ffprobe`, not QC.
 - **Report rendering** (PDF ≈ 0.75 ms, HTML ≈ 1 ms per report) is negligible
   per asset; watch-folder/batch routing will not be report-bound.
-- These are engine-side numbers only. Decode-path performance (black/freeze/
-  loudness analysis on real HD/UHD media) is measurable once the TPT decode
-  stack lands (todo §2/§8/§10); the harness gains benches there without
-  changes to the methodology.
+- These are engine-side numbers only. The pinned Kinetix and Cadence decode
+  adapters are now integrated; representative media benchmarks for black/freeze/
+  loudness analysis and peak-RSS measurements remain follow-up work.

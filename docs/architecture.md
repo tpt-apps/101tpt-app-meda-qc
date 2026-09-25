@@ -53,7 +53,7 @@ application shell.
 | `tpt-app-media-qc-profile` | YAML profile parsing, validation, canonical model, deterministic profile hashing | core, model |
 | `tpt-app-media-qc-rules` | Rule framework (`QcRule` trait) and built-in rule catalogue | core, model, profile |
 | `tpt-app-media-qc-pipeline` | Inspection boundary (`Inspector`), `QcEngine`, aggregation, verdict, batch scheduler | core, model, rules, profile |
-| `tpt-app-media-qc-decode` | Kinetix MP4/ISO-BMFF demux + H.264 video measurement adapter | core, model, pipeline, Kinetix |
+| `tpt-app-media-qc-decode` | Kinetix MP4/ISO-BMFF demux + H.264 video and Cadence standalone-audio measurement adapters | core, model, pipeline, Kinetix, Cadence |
 | `tpt-app-media-qc-report` | Immutable `Report` assembly + JSON/HTML/CSV/PDF export | core, model, pipeline, profile |
 | `tpt-app-media-qc-cli` | `tpt-media-qc` binary: `check`, `batch`, `info`, `list-rules`, stable exit codes | all application crates |
 | `tpt-app-media-qc-tauri` | Desktop application shell (stub — planned per spec §12) | — |
@@ -95,13 +95,15 @@ trait Inspector {
 - `FfprobeInspector` (CLI crate) remains the metadata front-end and shells out
   to `ffprobe`.
 - `HybridInspector` (CLI crate) composes that metadata front-end with
-  `KinetixVideoInspector` for full scans. The latter uses Kinetix MP4 demuxing
-  and H.264 reconstruction, then streams frames through black/freeze/duplicate,
-  corrupt-frame, luma and frame-rate measurements.
+  `KinetixVideoInspector` and `CadenceAudioInspector` for full scans. Kinetix
+  uses MP4 demuxing and H.264 reconstruction, then streams frames through
+  black/freeze/duplicate, corrupt-frame, luma and frame-rate measurements.
+  Cadence streams standalone WAV, AIFF/AIFC and FLAC PCM through silence,
+  clipping, sample-peak, stereo-phase and DC-offset measurements.
 - The pinned Kinetix MP4 demuxer is in-memory; `KinetixVideoInspector` applies
-  a 512 MiB input bound and records unsupported or incomplete coverage instead
-  of claiming a pass. Audio remains on the metadata-only path until Cadence is
-  integrated.
+  a 512 MiB input bound. Both adapters record unsupported or incomplete
+  coverage instead of claiming a pass; embedded MP4 audio, true peak and
+  BS.1770 loudness are not yet measured.
 - `NoopInspector` produces an empty inspection for tests and for the
   metadata-only path when no probe binary is available.
 

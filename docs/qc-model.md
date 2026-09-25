@@ -41,9 +41,10 @@ Rules consume **measurements**, not raw media bytes (spec §3.5). The
   presence, timestamp continuity/gaps, malformed metadata, decode errors.
 - `VideoMeasurements` — observed frame rate, decode errors, black/freeze/
   duplicate-frame segments, luma statistics, colour-space tag.
-- `AudioMeasurements` — decode errors, silence segments, clipping events,
-  peak (dBFS), true peak (dBTP), integrated loudness (LUFS), loudness range,
-  phase correlation, DC offset.
+- `AudioMeasurements` — decoded sample-frame coverage, decode errors, bounded
+  silence segments and truncation state, clipping events, peak (dBFS), true peak
+  (dBTP), integrated loudness (LUFS), loudness range, phase correlation and DC
+  offset.
 
 Missing measurements (`None`/empty) are expected on the metadata-only path;
 rules must report `Inconclusive` or pass accordingly (spec §3.4).

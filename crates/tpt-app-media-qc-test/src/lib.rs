@@ -7,10 +7,10 @@
 //!   ([`MediaFixture`] JSON documents: an [`Asset`] plus the [`Inspection`]
 //!   a probe would have produced for it). Rules consume measurements, not raw
 //!   media bytes ([spec § 3.5]), so pinning the measurement set directly
-//!   exercises the full rule engine without requiring encoded media. When the
-//!   TPT decode stack lands (todo §2/§8/§10), encoded-media fixtures produced
-//!   by real probes will be added alongside; the golden runner is agnostic —
-//!   any [`Inspector`] can feed it.
+//!   exercises the full rule engine without requiring encoded media. The suite
+//!   also includes encoded H.264 and streaming WAV decode coverage; additional
+//!   encoded fixtures can be added as foundation coverage grows. The golden
+//!   runner is agnostic — any [`Inspector`] can feed it.
 //! - `tests/golden/` — expected-result manifests ([spec § 24.2],
 //!   [`GoldenManifest`]) verified by the golden runner.
 //! - `tests/performance/` — benchmark baselines produced by the `qc-bench`

@@ -118,10 +118,23 @@ pub struct LumaStats {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AudioMeasurements {
     pub stream_idx: u64,
+    /// Number of successfully decoded audio sample frames represented by this
+    /// measurement (one frame contains one sample per channel).
+    ///
+    /// `None` means no decode pass supplied coverage. `Some(0)` means a decode
+    /// pass ran but could not decode any frames. Decode-dependent rules must
+    /// distinguish these states from a complete scan with no detected defects.
+    #[serde(default)]
+    pub decoded_frame_count: Option<u64>,
     /// Decode errors for this stream.
     pub decode_errors: u64,
     /// Detected silence segments (below configured threshold).
     pub silence: Vec<TimeRange>,
+    /// Whether the analyzer stopped retaining silence ranges after reaching
+    /// its bounded range limit. The silence rule must then report
+    /// `Inconclusive`, because absence of a retained range is not a pass.
+    #[serde(default)]
+    pub silence_truncated: bool,
     /// Number of clipping events (samples at/beyond saturation).
     pub clipping_events: u64,
     /// Peak level in dBFS (-inf..0).
@@ -132,7 +145,7 @@ pub struct AudioMeasurements {
     pub loudness_lufs: Option<f64>,
     /// Loudness range (LRA) in LU when the standard defines it.
     pub loudness_range_lu: Option<f64>,
-    /// Worst-case phase correlation across the stream (negative = out of phase).
+    /// Stereo phase correlation across the stream (negative = out of phase).
     pub phase_correlation: Option<f64>,
     /// DC offset estimate in % (-100..100).
     pub dc_offset_percent: Option<f64>,

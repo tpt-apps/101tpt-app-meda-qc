@@ -29,16 +29,20 @@ measured on representative fixtures, not optimised blindly.
 - **No repeated decoding.** The pipeline merges one decode inspection into the
   metadata baseline; rules read shared measurements. The Kinetix adapter
   analyses decoded frames immediately and retains only scalar frame history,
-  segment state and luma statistics—not decoded frame sequences.
+  segment state and luma statistics—not decoded frame sequences. The Cadence
+  adapter likewise reduces fixed-size PCM blocks to scalar measurements and
+  bounded silence ranges; it never retains a whole audio file. If the silence
+  range limit is reached, the rule reports `Inconclusive` rather than treating
+  omitted ranges as clear.
 - **Foundation bound.** The pinned MP4 demuxer is in-memory; the adapter
   refuses inputs over 512 MiB until a file-backed foundation demuxer is
   available.
 
-## 3. Benchmarking (planned)
+## 3. Benchmarking
 
-A benchmark suite against representative HD (1920×1080) and UHD (3840×2160)
-fixtures will be added under [`tests/performance/`](../tests/performance/),
-measuring:
+The current benchmark harness lives under [`tests/performance/`](../tests/performance/)
+and is extended with representative HD (1920×1080) and UHD (3840×2160)
+fixtures. It measures:
 
 - metadata-only scan throughput (files/sec),
 - full-QC throughput vs. real-time (e.g. a 10-minute file QC'd in N seconds),
@@ -48,8 +52,9 @@ measuring:
   QC).
 
 Throughput numbers are recorded in the repository when representative
-fixtures exist. The first encoded H.264 fixture exercises the real Kinetix
-decode path; HD/UHD media benchmarks and peak-RSS measurements follow.
+fixtures exist. The pinned Kinetix and Cadence adapters are integrated and
+covered by encoded/generated media tests; HD/UHD media benchmarks and
+peak-RSS measurements remain follow-up work.
 
 ## 4. Concurrency model
 

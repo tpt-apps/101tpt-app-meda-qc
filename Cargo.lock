@@ -1348,6 +1348,10 @@ dependencies = [
  "tpt-app-media-qc-core",
  "tpt-app-media-qc-model",
  "tpt-app-media-qc-pipeline",
+ "tpt-av-cadence-aiff",
+ "tpt-av-cadence-core",
+ "tpt-av-cadence-flac",
+ "tpt-av-cadence-wav",
  "tpt-kinetix-core",
  "tpt-kinetix-demux",
  "tpt-kinetix-h264",
@@ -1457,6 +1461,44 @@ dependencies = [
  "tpt-app-media-qc-profile",
  "tpt-app-media-qc-report",
  "tpt-app-media-qc-rules",
+]
+
+[[package]]
+name = "tpt-av-cadence-aiff"
+version = "0.1.0"
+source = "git+https://github.com/tpt-solutions/tpt-cadence?rev=52a64617e7cc4dc89a5c4d514dea93ef7b0a913f#52a64617e7cc4dc89a5c4d514dea93ef7b0a913f"
+dependencies = [
+ "log",
+ "tpt-av-cadence-core",
+]
+
+[[package]]
+name = "tpt-av-cadence-core"
+version = "0.1.0"
+source = "git+https://github.com/tpt-solutions/tpt-cadence?rev=52a64617e7cc4dc89a5c4d514dea93ef7b0a913f#52a64617e7cc4dc89a5c4d514dea93ef7b0a913f"
+dependencies = [
+ "byteorder",
+ "log",
+ "thiserror",
+]
+
+[[package]]
+name = "tpt-av-cadence-flac"
+version = "0.1.0"
+source = "git+https://github.com/tpt-solutions/tpt-cadence?rev=52a64617e7cc4dc89a5c4d514dea93ef7b0a913f#52a64617e7cc4dc89a5c4d514dea93ef7b0a913f"
+dependencies = [
+ "log",
+ "tpt-av-cadence-core",
+]
+
+[[package]]
+name = "tpt-av-cadence-wav"
+version = "0.1.0"
+source = "git+https://github.com/tpt-solutions/tpt-cadence?rev=52a64617e7cc4dc89a5c4d514dea93ef7b0a913f#52a64617e7cc4dc89a5c4d514dea93ef7b0a913f"
+dependencies = [
+ "byteorder",
+ "log",
+ "tpt-av-cadence-core",
 ]
 
 [[package]]
