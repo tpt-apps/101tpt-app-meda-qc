@@ -36,6 +36,10 @@ clap = { version = "4", features = ["derive"] }
 tempfile = "3"
 lopdf = "0.36"
 notify = "7"
+tauri = "2.11.5"
+tauri-build = "2.6.3"
+tauri-plugin-dialog = "2.3.0"
+tauri-plugin-opener = "2.5.5"
 
 # TPT foundations. The demux, decoder and mux crates are pinned to the
 # same Kinetix revision; their shared core must come from that same source

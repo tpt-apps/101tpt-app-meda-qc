@@ -37,8 +37,8 @@ sample rate, bit depth, stream index and a metadata map.
 Rules consume **measurements**, not raw media bytes (spec §3.5). The
 `Inspection` type is the stable exchange format:
 
-- `ContainerInspection` — validity, format, bitrate, duration, timecode
-  presence, timestamp continuity/gaps, malformed metadata, decode errors.
+- `Inspection` — stream metadata plus container, video and audio measurements;
+  the stream table is supplied by the metadata front-end and consumed by rules.
 - `VideoMeasurements` — observed frame rate, decode errors, black/freeze/
   duplicate-frame segments, luma statistics, colour-space tag.
 - `AudioMeasurements` — decoded sample-frame coverage, decode errors, bounded

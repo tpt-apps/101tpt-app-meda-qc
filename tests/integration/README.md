@@ -10,12 +10,12 @@ engine-level suites are implemented and run with `cargo test --workspace` from
   JSON/HTML/CSV/PDF exports, including the JSON round-trip and the five
   integrity fields (spec §14.1); verdict expectations for every fixture;
   the `Inconclusive`-not-guessed guarantee for unscanned assets (spec §3.4).
+- `crates/tpt-app-media-qc-cli/tests/real_media.rs` — when `ffmpeg` and
+  `ffprobe` are available, generate a deterministic WAV and exercise the real
+  `info` and full `check` binary, including the Cadence audio decode path.
 
 Still to add at this level:
 
-- CLI `check` / `batch` / `info` / `list-rules` against real files with
-  `ffprobe` present (skipped when `ffprobe` is unavailable — the metadata
-  probe is an environment dependency, not a test dependency).
 - Batch failure isolation through the scheduler (spec §21) with real processes.
 - Watch-folder routing end-to-end (spec §13).
 

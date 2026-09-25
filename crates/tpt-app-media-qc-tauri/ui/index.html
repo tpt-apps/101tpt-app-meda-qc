@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>TPT Media QC</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">QC</div>
+          <div><strong>TPT Media QC</strong><span>Technical validation</span></div>
+        </div>
+        <nav aria-label="Primary">
+          <button class="nav-item active" data-view="dashboard"><span>01</span>Dashboard</button>
+          <button class="nav-item" data-view="queue"><span>02</span>Job queue</button>
+          <button class="nav-item" data-view="inspector"><span>03</span>Asset inspector</button>
+        </nav>
+        <div class="sidebar-foot">
+          <div class="local-badge"><i></i> Local processing</div>
+          <p>Media never leaves this machine.</p>
+          <small>Desktop shell 0.1.0</small>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="viewEyebrow">OVERVIEW</p>
+            <h1 id="viewTitle">QC dashboard</h1>
+          </div>
+          <div class="top-actions">
+            <label class="profile-control">
+              <span>Active profile</span>
+              <select id="profileSelect" aria-label="Active QC profile"></select>
+            </label>
+            <button class="button ghost" id="loadProfileButton">Load profile…</button>
+            <label class="toggle" title="Metadata-only scan">
+              <input id="quickToggle" type="checkbox" />
+              <span></span>Quick scan
+            </label>
+            <button class="button primary" id="importButton">Import media</button>
+          </div>
+        </header>
+
+        <div class="view-stack">
+          <section class="view active" id="dashboardView" data-panel="dashboard">
+            <div class="drop-card" id="dropCard">
+              <div class="drop-icon">↓</div>
+              <div>
+                <p class="eyebrow">NEW ANALYSIS</p>
+                <h2>Drop media or folders here</h2>
+                <p>Files are fingerprinted, queued, and inspected with the selected profile.</p>
+              </div>
+              <div class="drop-actions">
+                <button class="button secondary" data-pick="files">Choose files</button>
+                <button class="button ghost" data-pick="folder">Choose folder</button>
+                <label class="check"><input id="recursiveToggle" type="checkbox" checked /> Include subfolders</label>
+              </div>
+            </div>
+
+            <div class="metric-grid">
+              <article class="metric"><span>Pass</span><strong id="metricPass">0</strong><small>completed assets</small></article>
+              <article class="metric warn"><span>Warn / inconclusive</span><strong id="metricWarn">0</strong><small>needs review</small></article>
+              <article class="metric fail"><span>Fail</span><strong id="metricFail">0</strong><small>failed assets</small></article>
+              <article class="metric"><span>Queue</span><strong id="metricQueued">0</strong><small id="metricRunning">0 processing</small></article>
+            </div>
+
+            <div class="dashboard-grid">
+              <article class="panel span-two">
+                <header class="panel-head"><div><p class="eyebrow">ACTIVITY</p><h3>Recent jobs</h3></div><button class="text-button" data-go="queue">View queue →</button></header>
+                <div class="table-wrap"><table><thead><tr><th>Asset</th><th>Profile</th><th>Status</th><th>Duration</th></tr></thead><tbody id="recentJobs"></tbody></table></div>
+              </article>
+              <article class="panel">
+                <header class="panel-head"><div><p class="eyebrow">ATTENTION</p><h3>Failed assets</h3></div></header>
+                <div id="failedAssets" class="failed-list"></div>
+              </article>
+              <article class="panel">
+                <header class="panel-head"><div><p class="eyebrow">PERFORMANCE</p><h3>Processing throughput</h3></div></header>
+                <div class="throughput"><strong id="throughputValue">0.0</strong><span>assets / hour</span><div class="meter"><i id="throughputMeter"></i></div><small id="throughputDetail">No completed jobs yet</small></div>
+              </article>
+            </div>
+          </section>
+          <section class="view" data-panel="queue">
+            <article class="panel queue-panel">
+              <header class="panel-head queue-head">
+                <div><p class="eyebrow">PIPELINE</p><h3>Job queue</h3><p id="queueSummary">0 queued · 0 processing</p></div>
+                <div class="button-row">
+                  <button class="button secondary" id="pauseQueue">Pause</button>
+                  <button class="button secondary" id="resumeQueue">Resume</button>
+                  <button class="button ghost" id="cancelQueued">Cancel queued</button>
+                  <button class="button ghost" id="clearCompleted">Clear completed</button>
+                </div>
+              </header>
+              <div class="table-wrap queue-table"><table><thead><tr><th>Filename</th><th>Profile</th><th>Progress</th><th>Throughput</th><th>Status</th><th>Failures</th><th>Duration</th><th>Actions</th></tr></thead><tbody id="queueRows"></tbody></table></div>
+            </article>
+          </section>
+
+          <section class="view" data-panel="inspector">
+            <div id="inspectorEmpty" class="empty-state"><div>◎</div><h2>Select a completed asset</h2><p>Technical metadata, measurements, findings, and evidence appear here.</p></div>
+            <div id="inspectorContent" class="inspector-content"></div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div class="drop-overlay" id="dropOverlay"><div><strong>Release to import</strong><span>Files and folders are added to the local queue.</span></div></div>
+    <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -9,7 +9,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Cargo workspace with the crates `core`, `model`, `rules`, `pipeline`,
-  `profile`, `report`, `cli`, `tauri` (stub) and `test` (stub).
+  `profile`, `report`, `cli`, `tauri` and `test`.
 - Content-based asset fingerprinting (SHA-256), independent of file path.
 - Container/stream inspection back-end (`ffprobe` probe boundary).
 - QC domain model: `Asset`, `Stream`, `QcFinding`, `Evidence`, timecode,
@@ -72,6 +72,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   files decode in bounded blocks into silence, clipping, sample-peak,
   stereo-phase and DC-offset measurements. Standards-accurate true peak and
   BS.1770 loudness remain explicitly unmeasured.
+- Native Tauri 2 desktop application: dashboard, local media/folder import,
+  drag-and-drop, bounded job queue controls, asset inspector, finding evidence,
+  timeline markers, and JSON/HTML/CSV/PDF report export.
 - Dual MIT / Apache-2.0 licensing, packaging and repository documentation.
 
 ### Changed
@@ -88,6 +91,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The ffprobe parser accepts numeric and string values emitted by current
+  FFmpeg releases, and preserves discovered stream metadata for container,
+  video and audio rules.
+- The Kinetix MP4 adapter bounds reads to the selected video track's declared
+  sample count so multi-track inputs cannot repeat the first video sample after
+  track exhaustion.
 - Restored the container-problems golden fixture's decoded-video coverage
   marker so empty decode results are not mistaken for a completed scan.
 

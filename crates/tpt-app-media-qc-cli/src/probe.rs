@@ -241,6 +241,7 @@ fn inspection_from_output(out: &FfprobeOutput) -> Inspection {
     };
 
     Inspection {
+        streams,
         container,
         video: video_meas,
         audio: audio_meas,
@@ -360,6 +361,9 @@ mod tests {
         assert_eq!(inspection.container.duration, Some(DurationMillis(1_000)));
         assert_eq!(inspection.audio.len(), 1);
         assert_eq!(inspection.audio[0].stream_idx, 0);
+        assert_eq!(inspection.streams.len(), 1);
+        assert_eq!(inspection.streams[0].channels, Some(2));
+        assert_eq!(inspection.streams[0].bit_depth, Some(16));
         assert!(inspection.video.is_empty());
     }
 }

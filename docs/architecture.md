@@ -56,7 +56,7 @@ application shell.
 | `tpt-app-media-qc-decode` | Kinetix MP4/ISO-BMFF demux + H.264 video and Cadence standalone-audio measurement adapters | core, model, pipeline, Kinetix, Cadence |
 | `tpt-app-media-qc-report` | Immutable `Report` assembly + JSON/HTML/CSV/PDF export | core, model, pipeline, profile |
 | `tpt-app-media-qc-cli` | `tpt-media-qc` binary: `check`, `batch`, `info`, `list-rules`, stable exit codes | all application crates |
-| `tpt-app-media-qc-tauri` | Desktop application shell (stub — planned per spec §12) | — |
+| `tpt-app-media-qc-tauri` | Native Tauri 2 desktop shell: dashboard, local import/queue controls, asset/finding/evidence/timeline views and report export | model, profile, pipeline, report, CLI, Tauri plugins |
 | `tpt-app-media-qc-test` | Shared fixtures, golden manifests and integration-test harness | application model/rules/pipeline/report |
 
 ## 4. Data flow
@@ -149,8 +149,15 @@ Derived media is stored separately. Cache keys include the asset fingerprint,
 application version, ruleset version, profile hash and analysis-configuration
 hash; rule-level entries invalidate only the affected rule.
 
-## 9. Automation interfaces
+## 9. Automation and desktop interfaces
 
+- **Desktop** (Tauri 2, spec §12) provides a local dashboard, file/folder and
+  drag-and-drop import, bounded concurrent queue controls, asset inspection,
+  finding/evidence/timeline review, and JSON/HTML/CSV/PDF export. The frontend
+  invokes the same `run_qc` entry point and engine as the CLI; analysis is not
+  duplicated in JavaScript. Native commands are restricted by the checked-in
+  Tauri capability to the main window, dialogs, event listening and report-path
+  opening.
 - **CLI** is first-class with a stable exit-code contract (spec §16):
   `0` PASS, `1` WARN, `2` FAIL, `3` INCONCLUSIVE, `4` CONFIGURATION_ERROR,
   `5` INPUT_ERROR, `6` INTERNAL_ERROR.

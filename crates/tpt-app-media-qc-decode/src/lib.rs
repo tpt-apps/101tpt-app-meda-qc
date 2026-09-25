@@ -106,7 +106,14 @@ impl KinetixVideoInspector {
             .and_then(|video| video.frame_rate_observed)
             .or(self.config.nominal_frame_rate);
         let mut analyzer = VideoFrameAnalyzer::new(stream_idx, nominal_frame_rate, &self.config);
+        let expected_video_packets = demuxer.tracks()[track_index].sample_count();
+        if expected_video_packets == 0 {
+            return Err(DecodeFailure::Failed(Error::Probe(
+                "Kinetix MP4 video track contains no samples".into(),
+            )));
+        }
         let mut sent_parameter_sets = false;
+        let mut video_packets_seen = 0usize;
 
         loop {
             let packet = demuxer.read_packet().map_err(|error| {
@@ -116,6 +123,7 @@ impl KinetixVideoInspector {
             if packet.stream_index != track_index as u32 {
                 continue;
             }
+            video_packets_seen += 1;
 
             let mut data = if sent_parameter_sets {
                 Vec::new()
@@ -141,6 +149,14 @@ impl KinetixVideoInspector {
             if let Some(frame) = frame {
                 analyzer.push(frame).map_err(DecodeFailure::Failed)?;
             }
+            if video_packets_seen >= expected_video_packets {
+                break;
+            }
+        }
+        if video_packets_seen < expected_video_packets {
+            return Err(DecodeFailure::Failed(Error::Probe(format!(
+                "Kinetix MP4 demux ended after {video_packets_seen} of {expected_video_packets} video samples"
+            ))));
         }
 
         let flushed = decoder.flush().map_err(|error| {

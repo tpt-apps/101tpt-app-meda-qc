@@ -7,6 +7,7 @@
 //! the metadata-only path and rules must report `Inconclusive` or pass
 //! accordingly ([spec § 3.4]).
 
+use crate::asset::Stream;
 use crate::finding::TimeRange;
 use crate::time::FrameRate;
 use serde::{Deserialize, Serialize};
@@ -154,6 +155,11 @@ pub struct AudioMeasurements {
 /// The complete inspection of a single asset under one run.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Inspection {
+    /// Stream metadata discovered by the metadata front-end. This is kept in
+    /// the inspection so the engine can expose it to rules even when the
+    /// caller supplied an otherwise metadata-only `Asset`.
+    #[serde(default)]
+    pub streams: Vec<Stream>,
     pub container: ContainerInspection,
     pub video: Vec<VideoMeasurements>,
     pub audio: Vec<AudioMeasurements>,

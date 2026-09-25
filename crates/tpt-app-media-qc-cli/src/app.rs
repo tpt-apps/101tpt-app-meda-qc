@@ -171,6 +171,36 @@ pub(crate) fn make_inspector(quick: bool) -> Result<Arc<dyn Inspector>, i32> {
     }
 }
 
+/// Execute one media QC operation for both the CLI and desktop shell.
+///
+/// The desktop application calls this shared entry point so GUI and CLI
+/// results use the same fingerprinting, inspection, rules and verdict logic.
+pub fn run_qc(
+    path: &Path,
+    profile: Profile,
+    quick: bool,
+) -> std::result::Result<tpt_app_media_qc_pipeline::QcRun, String> {
+    if !path.is_file() {
+        return Err(format!(
+            "asset '{}' does not exist or is not a file",
+            path.display()
+        ));
+    }
+    let asset =
+        build_asset(path).map_err(|code| format!("could not prepare asset (exit code {code})"))?;
+    let inspector =
+        make_inspector(quick).map_err(|code| format!("no usable inspector (exit code {code})"))?;
+    let level = if quick {
+        InspectionLevel::MetadataOnly
+    } else {
+        InspectionLevel::Full
+    };
+    let engine = QcEngine::new(Arc::new(profile), inspector);
+    engine
+        .check(&asset, level)
+        .map_err(|error| format!("QC execution failed: {error}"))
+}
+
 fn level_for(profile: &Profile) -> InspectionLevel {
     if profile_has_decode_rules(profile) {
         InspectionLevel::Full

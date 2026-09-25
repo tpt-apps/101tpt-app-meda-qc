@@ -16,7 +16,7 @@ offline-first professional media QC application. Dual-licensed MIT / Apache-2.0,
   - [x] `tpt-app-media-qc-report`
   - [x] `tpt-app-media-qc-store`
   - [x] `tpt-app-media-qc-cli`
-  - [x] `tpt-app-media-qc-tauri` (stub — still empty `lib.rs`, UI work tracked in Phase 1 item 15)
+  - [x] `tpt-app-media-qc-tauri`
   - [x] `tpt-app-media-qc-test` (stub)
 - [x] Create `README.md`
 - [x] Create `CHANGELOG.md`
@@ -92,12 +92,14 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
 14. [x] Implement job scheduler (cost classes, concurrency, bounded memory, backpressure,
       cancellation, priority, resumability — spec §11; cost-class concurrency done,
       cancellation/persistence pending with §13)
-15. [ ] Implement desktop queue UI (Tauri):
-    - [ ] Dashboard (spec §12.1)
-    - [ ] Import — drag-and-drop, file picker, folder/recursive import (spec §12.2)
-    - [ ] Job Queue — columns, pause/resume/cancel/retry/open report (spec §12.3)
-16. [ ] Implement timeline / evidence viewer and finding inspector (spec §12.5–12.6)
-17. [ ] Implement Asset Inspector screen (spec §12.4)
+15. [x] Implement desktop queue UI (Tauri) — native Tauri 2 shell with dashboard,
+       local import/queue, and report actions; native build launches with
+       installed FFmpeg available on `PATH`:
+   - [x] Dashboard (spec §12.1)
+   - [x] Import — drag-and-drop, file picker, folder/recursive import (spec §12.2)
+   - [x] Job Queue — columns, pause/resume/cancel/retry/open report (spec §12.3)
+16. [x] Implement timeline / evidence viewer and finding inspector (spec §12.5–12.6)
+17. [x] Implement Asset Inspector screen (spec §12.4)
 18. [x] Implement JSON/HTML/CSV reporting (spec §14, report integrity fields §14.1)
 19. [x] Implement PDF reporting
 20. [x] Implement CLI (`check`, `batch`, `info`, `list-rules` commands; stable exit-code
@@ -123,7 +125,10 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
       the decode stack
 25. [x] Harden error handling — isolated per-job failure state, corrupt asset must not
       terminate batch (spec §21; batch continues past per-asset errors)
-26. [ ] Package Windows release
+26. [ ] Package Windows release — CI now builds/tests on push across
+      Linux/Windows/macOS (`.github/workflows/ci.yml`); signed installer
+      build, release-on-tag workflow, and the rest of the launch checklist
+      are tracked in `GUMROAD.md`
 27. [ ] Run a private beta with real professional media
 28. [ ] Verify against Definition of Done checklist (spec §30) before declaring MVP complete
 
@@ -134,20 +139,23 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
 Applies continuously across all phases, not a one-time gate.
 
 - [ ] **Testing (spec §24)**
-  - [ ] Unit tests per QC rule: valid input, invalid input, boundary case, malformed input, expected result
+  - [x] Unit tests per QC rule: valid input, invalid input, boundary case, malformed input, expected result
+  - [x] Real-media CLI integration coverage (`crates/tpt-app-media-qc-cli/tests/real_media.rs`
+        generates fixtures with `ffmpeg` and exercises `info`/`check` through the real
+        `ffprobe` + decode path; skips itself when the tools aren't on `PATH`)
   - [ ] Property tests: timecode conversion, frame indexing, duration calculations, threshold logic, profile parsing, result aggregation
   - [ ] Regression fixture added for every production bug (spec §24.5)
 - [ ] **Security & privacy (spec §22)**
-  - [ ] No mandatory network access for core operation
-  - [ ] No cloud upload, no external telemetry by default
+  - [x] No mandatory network access for core operation
+  - [x] No cloud upload, no external telemetry by default
   - [ ] Sandboxed optional AI integrations
-  - [ ] Safe handling of malformed media; no execution of embedded media content
+  - [x] Safe handling of malformed media; no execution of embedded media content
   - [ ] Strict path validation; safe temporary-file handling
-  - [ ] Media parsers fuzz tested
+  - [ ] Media parsers fuzz tested (six targets compile; fuzz campaigns remain)
 - [ ] **Standards architecture (spec §25)**
   - [ ] Implement standards (EBU R128, ATSC A/85, BT.1702, etc.) as profiles/rules, not hard-coded UI logic
-  - [ ] Distinguish measurement algorithm vs. standard vs. profile vs. customer tolerance
-  - [ ] Do not claim formal standards compliance until validated against reference material/test suites
+  - [x] Distinguish measurement algorithm vs. standard vs. profile vs. customer tolerance
+  - [x] Do not claim formal standards compliance until validated against reference material/test suites
 - [ ] **Determinism & caching (spec §19)**
   - [x] Cache keys include: asset fingerprint, application version, ruleset version, profile hash, analysis configuration hash
   - [x] Changing one rule's configuration invalidates only that rule's cached results, not the whole analysis
@@ -196,3 +204,7 @@ Applies continuously across all phases, not a one-time gate.
 - [ ] Validate pricing hypothesis (spec §2.1): Professional $499, Studio $999, Facility $1,999+
 - [ ] Implement edition feature gating (spec §29): Professional / Studio / Facility
 - [ ] Defer Facility-tier features (LAN workers, central profile distribution) until customer demand is evidenced (spec §29, §32)
+- [ ] Gumroad launch checklist tracked in `GUMROAD.md` (blocking items: licensing
+      model decision for the public-license/paid-product tension, and bundling
+      or documenting the `ffprobe` dependency; the "Tauri app not implemented"
+      blocker there is now stale — see Phase 1 item 15)

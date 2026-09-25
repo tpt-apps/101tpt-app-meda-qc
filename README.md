@@ -31,9 +31,35 @@ no mandatory network access are required.
 - **Deterministic, auditable reports** — JSON, HTML, CSV and PDF export with the
   five integrity fields: asset SHA-256, profile SHA-256, application version,
   ruleset version and analysis ID ([spec §14.1]).
+- Native Tauri 2 desktop application with dashboard, file/folder/drag-and-drop
+  import, local job queue controls, asset inspection, finding/timeline views and
+  JSON/HTML/CSV/PDF report export.
 - **First-class CLI** with a stable exit-code contract ([spec §16]) and an
   isolated per-asset failure model so one corrupt file never aborts a batch
   ([spec §21]).
+
+## TPT Media QC Desktop
+
+The Windows desktop application lives in
+[`crates/tpt-app-media-qc-tauri`](./crates/tpt-app-media-qc-tauri). It provides
+the dashboard, file/folder and drag-and-drop import, bounded local queue,
+pause/resume/cancel/retry/report actions, asset inspection, finding evidence and
+timeline markers, and report export. It reuses the CLI's inspection and QC
+engine; no analysis is duplicated in the frontend.
+
+Development and bundling:
+
+```sh
+# Run the native shell
+cargo run --manifest-path crates/tpt-app-media-qc-tauri/Cargo.toml --bin tpt-media-qc-desktop
+
+# Build the Windows release bundle
+tauri build --config crates/tpt-app-media-qc-tauri/tauri.conf.json
+```
+
+`ffprobe` must be on `PATH` for full and metadata scans. The current release is
+unsigned until a signing certificate and Windows release configuration are
+approved.
 
 ## Quick start
 
@@ -76,7 +102,7 @@ crates/
   tpt-app-media-qc-report    JSON / HTML / CSV / PDF report generation
   tpt-app-media-qc-decode    Kinetix video and Cadence audio measurement adapters
   tpt-app-media-qc-cli       Command-line application
-  tpt-app-media-qc-tauri     Desktop application shell (stub)
+  tpt-app-media-qc-tauri     Native Tauri desktop application
   tpt-app-media-qc-test      Shared test utilities and golden-test harness
 profiles/             Bundled and example QC profiles
 tests/                Fixtures, integration, golden and performance suites

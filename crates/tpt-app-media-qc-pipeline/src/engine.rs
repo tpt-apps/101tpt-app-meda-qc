@@ -38,6 +38,9 @@ fn merge_inspections(metadata: Inspection, decoded: Inspection) -> Inspection {
 
     let mut merged = metadata;
     merged.container = decoded.container;
+    if !decoded.streams.is_empty() {
+        merged.streams = decoded.streams;
+    }
     merged.video = merge_by_stream(merged.video, decoded.video, |video| video.stream_idx);
     merged.audio = merge_by_stream(merged.audio, decoded.audio, |audio| audio.stream_idx);
     merged.diagnostics.extend(decoded.diagnostics);
@@ -77,13 +80,17 @@ impl QcEngine {
             }
         };
 
-        let findings = run_rules(&self.rules, asset, &inspection);
+        let mut effective_asset = asset.clone();
+        if !inspection.streams.is_empty() {
+            effective_asset.streams = inspection.streams.clone();
+        }
+        let findings = run_rules(&self.rules, &effective_asset, &inspection);
         let (per_rule, counts) = aggregate(&self.rules, &findings);
         let policy = VerdictPolicy::from_profile(&self.profile.policy);
         let resolution = resolve(policy, &findings);
 
         Ok(QcRun {
-            asset: asset.clone(),
+            asset: effective_asset,
             profile_name: self.profile.name.clone(),
             profile_version: self.profile.version,
             inspection,
@@ -99,9 +106,53 @@ impl QcEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tpt_app_media_qc_model::asset::Stream;
     use tpt_app_media_qc_model::inspection::{
         AudioMeasurements, ContainerInspection, ContainerValidity, VideoMeasurements,
     };
+
+    struct StreamMetadataInspector {
+        inspection: Inspection,
+    }
+
+    impl Inspector for StreamMetadataInspector {
+        fn name(&self) -> &str {
+            "stream-metadata-test"
+        }
+
+        fn inspect_metadata(&self, _asset: &Asset) -> Result<Inspection> {
+            Ok(self.inspection.clone())
+        }
+    }
+
+    #[test]
+    fn stream_metadata_from_inspection_reaches_effective_asset() {
+        let inspection = Inspection {
+            streams: vec![Stream::primary_video(0)],
+            ..Default::default()
+        };
+        let inspector = StreamMetadataInspector {
+            inspection: inspection.clone(),
+        };
+        let engine = QcEngine::new(Arc::new(Profile::default()), crate::arc(inspector));
+        let asset = Asset {
+            id: Default::default(),
+            path: "metadata-only.mp4".into(),
+            fingerprint: tpt_app_media_qc_model::asset::AssetFingerprint {
+                sha256: "0".repeat(64),
+                size_bytes: 1,
+            },
+            size_bytes: 1,
+            modified_time: None,
+            duration: None,
+            streams: Vec::new(),
+        };
+
+        let run = engine.check_metadata_only(&asset).unwrap();
+        assert_eq!(run.inspection.streams.len(), 1);
+        assert_eq!(run.asset.streams.len(), 1);
+        assert_eq!(run.asset.streams[0].index.0, 0);
+    }
 
     #[test]
     fn decoded_measurements_replace_metadata_for_the_same_stream() {

@@ -1,6 +1,6 @@
 [package]
 name = "tpt-app-media-qc-tauri"
-description = "Tauri desktop application shell for TPT Media QC (spec §12). Slated for real integration after the QC engine stabilises."
+description = "TPT Media QC desktop application: dashboard, import, queue, asset inspection and evidence timeline (spec §12)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,10 +8,31 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[lib]
+name = "tpt_app_media_qc_tauri"
+crate-type = ["lib"]
+
+[[bin]]
+name = "tpt-media-qc-desktop"
+path = "src/main.rs"
+
 [lints]
 workspace = true
 
+[build-dependencies]
+tauri-build.workspace = true
+
 [dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+tauri-plugin-dialog.workspace = true
+tauri-plugin-opener.workspace = true
+tpt-app-media-qc-model = { path = "../tpt-app-media-qc-model" }
+tpt-app-media-qc-profile = { path = "../tpt-app-media-qc-profile" }
+tpt-app-media-qc-pipeline = { path = "../tpt-app-media-qc-pipeline" }
+tpt-app-media-qc-report = { path = "../tpt-app-media-qc-report" }
+tpt-app-media-qc-cli = { path = "../tpt-app-media-qc-cli" }
 
 [dev-dependencies]
 tempfile.workspace = true
