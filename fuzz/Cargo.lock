@@ -79,6 +79,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anyhow"
+version = "1.0.104"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+
+[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -131,6 +137,12 @@ name = "bytecount"
 version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "175812e0be2bccb6abe50bb8d566126198344f707e304f45c648fd8f2cc0365e"
+
+[[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "cbc"
@@ -1252,6 +1264,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tpt-app-media-qc-core",
+ "tpt-app-media-qc-decode",
  "tpt-app-media-qc-model",
  "tpt-app-media-qc-pipeline",
  "tpt-app-media-qc-profile",
@@ -1271,6 +1284,23 @@ dependencies = [
  "sha2",
  "thiserror",
  "uuid",
+]
+
+[[package]]
+name = "tpt-app-media-qc-decode"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tpt-app-media-qc-core",
+ "tpt-app-media-qc-model",
+ "tpt-app-media-qc-pipeline",
+ "tpt-av-cadence-aiff",
+ "tpt-av-cadence-core",
+ "tpt-av-cadence-flac",
+ "tpt-av-cadence-wav",
+ "tpt-kinetix-core",
+ "tpt-kinetix-demux",
+ "tpt-kinetix-h264",
 ]
 
 [[package]]
@@ -1337,6 +1367,7 @@ dependencies = [
  "lopdf",
  "serde",
  "serde_json",
+ "tempfile",
  "tpt-app-media-qc-core",
  "tpt-app-media-qc-model",
  "tpt-app-media-qc-pipeline",
@@ -1354,6 +1385,77 @@ dependencies = [
  "tpt-app-media-qc-core",
  "tpt-app-media-qc-model",
  "tpt-app-media-qc-profile",
+]
+
+[[package]]
+name = "tpt-av-cadence-aiff"
+version = "0.1.0"
+source = "git+https://github.com/tpt-solutions/tpt-cadence?rev=52a64617e7cc4dc89a5c4d514dea93ef7b0a913f#52a64617e7cc4dc89a5c4d514dea93ef7b0a913f"
+dependencies = [
+ "log",
+ "tpt-av-cadence-core",
+]
+
+[[package]]
+name = "tpt-av-cadence-core"
+version = "0.1.0"
+source = "git+https://github.com/tpt-solutions/tpt-cadence?rev=52a64617e7cc4dc89a5c4d514dea93ef7b0a913f#52a64617e7cc4dc89a5c4d514dea93ef7b0a913f"
+dependencies = [
+ "byteorder",
+ "log",
+ "thiserror",
+]
+
+[[package]]
+name = "tpt-av-cadence-flac"
+version = "0.1.0"
+source = "git+https://github.com/tpt-solutions/tpt-cadence?rev=52a64617e7cc4dc89a5c4d514dea93ef7b0a913f#52a64617e7cc4dc89a5c4d514dea93ef7b0a913f"
+dependencies = [
+ "log",
+ "tpt-av-cadence-core",
+]
+
+[[package]]
+name = "tpt-av-cadence-wav"
+version = "0.1.0"
+source = "git+https://github.com/tpt-solutions/tpt-cadence?rev=52a64617e7cc4dc89a5c4d514dea93ef7b0a913f#52a64617e7cc4dc89a5c4d514dea93ef7b0a913f"
+dependencies = [
+ "byteorder",
+ "log",
+ "tpt-av-cadence-core",
+]
+
+[[package]]
+name = "tpt-kinetix-core"
+version = "0.1.0"
+source = "git+https://github.com/tpt-solutions/tpt-kinetix?rev=a43959c009a2801efa2a8b998c7848ea9240483e#a43959c009a2801efa2a8b998c7848ea9240483e"
+dependencies = [
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "tpt-kinetix-demux"
+version = "0.1.0"
+source = "git+https://github.com/tpt-solutions/tpt-kinetix?rev=a43959c009a2801efa2a8b998c7848ea9240483e#a43959c009a2801efa2a8b998c7848ea9240483e"
+dependencies = [
+ "anyhow",
+ "byteorder",
+ "nom",
+ "thiserror",
+ "tpt-kinetix-core",
+]
+
+[[package]]
+name = "tpt-kinetix-h264"
+version = "0.1.0"
+source = "git+https://github.com/tpt-solutions/tpt-kinetix?rev=a43959c009a2801efa2a8b998c7848ea9240483e#a43959c009a2801efa2a8b998c7848ea9240483e"
+dependencies = [
+ "anyhow",
+ "nom",
+ "rayon",
+ "thiserror",
+ "tpt-kinetix-core",
 ]
 
 [[package]]

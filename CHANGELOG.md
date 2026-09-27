@@ -88,6 +88,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and result aggregation.
 - Standards configuration evidence: loudness findings now record the selected
   standard, target and tolerance as structured evidence alongside the profile hash.
+- Interlace/field-order measurement: probe front-ends record the video stream's
+  scanning order and the new `video.scan_format` profile rule validates it
+  (scan: progressive/interlaced, field order: top/bottom-field-first). An
+  unsignalled field order is `Inconclusive` against a progressive expectation
+  and a failure against interlaced/pinned-order deliveries.
+- Bounded fuzz campaigns (60 s per target) for all six fuzz targets on every
+  push/PR in CI, running on Linux where libFuzzer is supported.
+- Definition of Done status audit (`docs/definition-of-done.md`) mapping each
+  spec §30 item to its implementation evidence and remaining external actions.
+- BT.1700/BT.1702-flavoured SDTV delivery profile (`profiles/broadcast/bt-1702.yaml`,
+  576i25 interlaced top-field-first with EBU R128 audio), also bundled in the
+  desktop app profile list.
 - Dual MIT / Apache-2.0 licensing, packaging and repository documentation.
 
 ### Changed

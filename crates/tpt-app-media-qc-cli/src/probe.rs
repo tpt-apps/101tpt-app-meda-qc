@@ -12,7 +12,7 @@ use std::process::Command;
 use serde::{de::Error as _, Deserialize, Deserializer};
 use tpt_app_media_qc_core::error::{Error, Result};
 use tpt_app_media_qc_decode::{CadenceAudioInspector, KinetixVideoInspector};
-use tpt_app_media_qc_model::asset::{Asset, Stream, StreamId, StreamKind};
+use tpt_app_media_qc_model::asset::{Asset, FieldOrder, Stream, StreamId, StreamKind};
 use tpt_app_media_qc_model::inspection::{
     AudioMeasurements, ContainerInspection, ContainerValidity, DurationMillis, Inspection,
     VideoMeasurements,
@@ -49,6 +49,7 @@ pub(crate) struct FfStream {
     width: Option<u64>,
     height: Option<u64>,
     pix_fmt: Option<String>,
+    field_order: Option<String>,
     #[serde(default, deserialize_with = "optional_string_or_number")]
     r_frame_rate: Option<String>,
     #[serde(default, deserialize_with = "optional_string_or_number")]
@@ -186,6 +187,7 @@ fn inspection_from_output(out: &FfprobeOutput) -> Inspection {
             width: s.width,
             height: s.height,
             pixel_format: s.pix_fmt.clone(),
+            field_order: s.field_order.as_deref().and_then(FieldOrder::parse_probe),
             frame_rate: s.r_frame_rate.as_deref().and_then(parse_rational),
             time_base: s.time_base.as_deref().and_then(parse_rational),
             bitrate: s.bit_rate.as_deref().and_then(|b| b.trim().parse().ok()),
@@ -206,6 +208,7 @@ fn inspection_from_output(out: &FfprobeOutput) -> Inspection {
                 stream_idx: s.index,
                 frame_rate_observed: s.r_frame_rate.as_deref().and_then(parse_rational),
                 colorspace: s.tags.get("color_space").cloned(),
+                field_order: s.field_order.as_deref().and_then(FieldOrder::parse_probe),
                 ..Default::default()
             }),
             StreamKind::Audio => audio_meas.push(AudioMeasurements {

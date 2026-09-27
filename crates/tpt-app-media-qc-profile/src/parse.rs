@@ -10,10 +10,10 @@ use crate::model::{
     default_aspect_tolerance, default_frame_rate_tolerance, default_max_streams, default_min_phase,
     AspectRatioRule, AudioRules, BitDepthRule, ChannelLayoutRule, ColorSpaceRule, ContainerRules,
     CountThresholdRule, DbThresholdRule, DcOffsetRule, DurationThresholdRule, ExpectValueRule,
-    FrameRateRule, LoudnessRule, LoudnessStandard, LumaRangeRule, MinBitrateRule, PhaseRule,
-    Policy, Profile, Ratio, Resolution, ResolutionRule, RuleSetConfig, SampleRateRule,
-    StreamPresenceRule, SubtitleRules, TimestampContinuityRule, ToleranceRule, VideoRules,
-    VoiceRules,
+    FieldOrderExpectation, FrameRateRule, LoudnessRule, LoudnessStandard, LumaRangeRule,
+    MinBitrateRule, PhaseRule, Policy, Profile, Ratio, Resolution, ResolutionRule, RuleSetConfig,
+    SampleRateRule, ScanExpectation, ScanFormatRule, StreamPresenceRule, SubtitleRules,
+    TimestampContinuityRule, ToleranceRule, VideoRules, VoiceRules,
 };
 use serde_yaml::{Mapping, Value};
 use tpt_app_media_qc_model::severity::Severity;
@@ -279,6 +279,7 @@ fn parse_video(map: &Mapping) -> Result<VideoRules, ProfileError> {
             "corrupt_frames",
             "luma_range",
             "color_space",
+            "scan_format",
         ]
         .contains(&k.as_str())
         {
@@ -296,6 +297,7 @@ fn parse_video(map: &Mapping) -> Result<VideoRules, ProfileError> {
         corrupt_frames: parse_count_threshold(map, "corrupt_frames")?,
         luma_range: parse_luma_range(map)?,
         color_space: parse_color_space(map)?,
+        scan_format: parse_scan_format(map)?,
     })
 }
 
@@ -470,6 +472,59 @@ fn parse_color_space(map: &Mapping) -> Result<Option<ColorSpaceRule>, ProfileErr
         expected,
         severity: spec.severity,
     }))
+}
+
+fn parse_scan_format(map: &Mapping) -> Result<Option<ScanFormatRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "scan_format") else {
+        return Ok(None);
+    };
+    let path = "rules.video.scan_format";
+    let mut rule = ScanFormatRule {
+        severity: spec.severity,
+        ..ScanFormatRule::default()
+    };
+    if let Some(m) = spec.config {
+        if let Some(v) = optional_string(m, "scan", path)? {
+            rule.scan = parse_scan_expectation(&v, path)?;
+        }
+        if let Some(v) = optional_string(m, "field_order", path)? {
+            rule.field_order = parse_field_order_expectation(&v, path)?;
+        }
+    } else if let Some(scalar) = spec.scalar {
+        // Scalar shorthand: `scan_format: progressive` / `scan_format: interlaced`.
+        rule.scan = parse_scan_expectation(&string_from_value(scalar, path)?, path)?;
+    }
+    if rule.scan == ScanExpectation::Any && rule.field_order == FieldOrderExpectation::Any {
+        return Err(err(
+            path,
+            "scan_format rule requires 'scan' or 'field_order' expectation",
+        ));
+    }
+    Ok(Some(rule))
+}
+
+fn parse_scan_expectation(s: &str, path: &str) -> Result<ScanExpectation, ProfileError> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "progressive" => Ok(ScanExpectation::Progressive),
+        "interlaced" => Ok(ScanExpectation::Interlaced),
+        "any" => Ok(ScanExpectation::Any),
+        other => Err(err(path, format!("unknown scan expectation '{other}'"))),
+    }
+}
+
+fn parse_field_order_expectation(
+    s: &str,
+    path: &str,
+) -> Result<FieldOrderExpectation, ProfileError> {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "top_field_first" | "tff" => Ok(FieldOrderExpectation::TopFieldFirst),
+        "bottom_field_first" | "bff" => Ok(FieldOrderExpectation::BottomFieldFirst),
+        "any" => Ok(FieldOrderExpectation::Any),
+        other => Err(err(
+            path,
+            format!("unknown field-order expectation '{other}'"),
+        )),
+    }
 }
 
 // ---------------------------------------------------------------------------

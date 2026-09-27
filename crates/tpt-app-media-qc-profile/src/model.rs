@@ -136,6 +136,7 @@ pub struct VideoRules {
     pub corrupt_frames: Option<CountThresholdRule>,
     pub luma_range: Option<LumaRangeRule>,
     pub color_space: Option<ColorSpaceRule>,
+    pub scan_format: Option<ScanFormatRule>,
 }
 
 /// Exact expected resolution.
@@ -214,6 +215,41 @@ pub struct LumaRangeRule {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ColorSpaceRule {
     pub expected: String,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+/// Expected scanning format (interlacement).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScanExpectation {
+    /// The video must be progressive.
+    Progressive,
+    /// The video must be interlaced (any field order).
+    Interlaced,
+    /// No scan-format requirement; only a field-order constraint applies.
+    #[default]
+    Any,
+}
+
+/// Expected field display order for interlaced material.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FieldOrderExpectation {
+    TopFieldFirst,
+    BottomFieldFirst,
+    #[default]
+    Any,
+}
+
+/// Expected scanning format and field order (e.g. for interlaced broadcast
+/// deliveries such as BT.1700/BT.1702-flavoured SD profiles).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ScanFormatRule {
+    #[serde(default)]
+    pub scan: ScanExpectation,
+    #[serde(default)]
+    pub field_order: FieldOrderExpectation,
     #[serde(default)]
     pub severity: Severity,
 }

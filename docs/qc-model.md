@@ -40,7 +40,8 @@ Rules consume **measurements**, not raw media bytes (spec §3.5). The
 - `Inspection` — stream metadata plus container, video and audio measurements;
   the stream table is supplied by the metadata front-end and consumed by rules.
 - `VideoMeasurements` — observed frame rate, decode errors, black/freeze/
-  duplicate-frame segments, luma statistics, colour-space tag.
+  duplicate-frame segments, luma statistics, colour-space tag, scanning order
+  (field order).
 - `AudioMeasurements` — decoded sample-frame coverage, decode errors, bounded
   silence segments and truncation state, clipping events, peak (dBFS), true peak
   (dBTP), integrated loudness (LUFS), loudness range, phase correlation and DC

@@ -14,7 +14,7 @@ encoded media, no `ffprobe` install. The harness lives in
 |-----------------------|--------------------------------------------------------------------------------------------------------------------------------|----------------|
 | `clean-master`        | fully in-spec master (H.264 1080p25 + 48 kHz/24-bit stereo)                                                                     | pass           |
 | `container-problems`  | corrupt container, malformed metadata, duration/bitrate/timecode/timebase/timestamp violations, unexpected `data` stream, no audio | fail           |
-| `video-defects`       | wrong resolution/frame rate/aspect/colour, black/freeze/duplicate/corrupt events, out-of-legal luma                             | fail           |
+| `video-defects`       | wrong resolution/frame rate/aspect/colour, signalled top-field-first against a progressive expectation, black/freeze/duplicate/corrupt events, out-of-legal luma | fail           |
 | `audio-defects`       | wrong sample rate/bit depth/layout, silence, clipping, over-limit peak/true-peak, off-target loudness, out-of-phase, DC offset  | fail           |
 | `boundary-thresholds` | every threshold value **exactly at its limit** (thresholds compare strictly `>`, so these pass)                                  | pass           |
 | `unscanned`           | streams present but no probe/decode measurements — rules report `Inconclusive`, never guess (spec §3.4)                          | warn           |

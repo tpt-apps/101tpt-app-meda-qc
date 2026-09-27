@@ -79,6 +79,7 @@ Severities are `info`, `warning`, `error`, `critical`.
 | `corrupt_frames` | mapping | `max_events` |
 | `luma_range` | mapping | `max_out_of_legal` (fraction outside [16,235], default 0.01) |
 | `color_space` | mapping / scalar | `expected` colour-space tag (e.g. `bt709`, `bt2020nc`) |
+| `scan_format` | mapping / scalar | `scan`: `progressive`/`interlaced`/`any` (scalar shorthand allowed); `field_order`: `top_field_first`/`bottom_field_first`/`any`. At least one non-`any` expectation required. Unsignalled field order is `Inconclusive` against `progressive` and a failure against `interlaced`/pinned orders |
 
 ## 5. Audio rules (spec §8.5, §8.6)
 

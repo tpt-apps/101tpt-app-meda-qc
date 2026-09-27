@@ -37,23 +37,36 @@ every loudness finding; the report also embeds the exact profile SHA-256. This
 records how the configured threshold was applied without claiming that the
 measurement algorithm has been validated for formal compliance (spec §8.6).
 
-## 2. Current and planned standard profiles
+## 2. Video standards and scanning format
+
+Interlace/field-order measurements are implemented as metadata-driven
+`field_order` observations on video streams, and the delivery side as the
+`video.scan_format` profile rule (`scan`: progressive/interlaced/any;
+`field_order`: top_field_first/bottom_field_first/any). The rule attaches
+measured and expected values to every finding and reports `Inconclusive`
+when the field order is not signalled, rather than guessing.
+
+A BT.1700/BT.1702-flavoured SDTV delivery profile
+([`profiles/broadcast/bt-1702.yaml`](../profiles/broadcast/bt-1702.yaml))
+uses these checks for a 576i25 interlaced, top-field-first delivery with
+EBU R128 audio. Additional video standards can now be layered on the same
+rule as profile configuration.
+
+## 3. Current and planned standard profiles
 
 The currently supported standards configuration lives in
-[`profiles/`](../profiles/): EBU R128, ATSC A/85 and a BS.1770-derived
-streaming profile. BT.1702 and other video standards remain roadmap items:
-they require interlace/field-order measurements and corresponding delivery
-rules before they can be represented honestly.
+[`profiles/`](../profiles/): EBU R128, ATSC A/85, a BS.1770-derived
+streaming profile and the BT.1700/BT.1702-flavoured SD profile.
 
 ```
 profiles/
 ├── generic/        # general-purpose default
-├── broadcast/      # EBU R128 and ATSC A/85 delivery profiles
+├── broadcast/      # EBU R128, ATSC A/85 and BT.1702-style SD delivery profiles
 ├── streaming/      # OTT-oriented checks (VOD/CEG R128, targets below -23)
 └── examples/       # starter templates for new customers
 ```
 
-## 3. Compliance policy
+## 4. Compliance policy
 
 We **do not claim formal compliance** with any industry standard until the
 implementation has been validated against appropriate reference material / test
@@ -68,7 +81,7 @@ Measurement implementation notes:
 - Phase and DC-offset thresholds are heuristic defaults (profile-configurable)
   rather than normative requirements.
 
-## 4. Where the code lives
+## 5. Where the code lives
 
 - Standard constants and enums: `tpt-app-media-qc-profile::model`
   (`LoudnessStandard`, `LoudnessRule`).

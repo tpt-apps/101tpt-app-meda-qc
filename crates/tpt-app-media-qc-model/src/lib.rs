@@ -12,7 +12,7 @@ pub mod severity;
 pub mod time;
 pub mod value;
 
-pub use asset::{Asset, AssetFingerprint, AssetId, Stream, StreamId, StreamKind};
+pub use asset::{Asset, AssetFingerprint, AssetId, FieldOrder, Stream, StreamId, StreamKind};
 pub use evidence::{Evidence, EvidenceKind, EvidencePayload};
 pub use finding::{FrameRange, QcFinding, RuleId, TimeRange};
 pub use inspection::{

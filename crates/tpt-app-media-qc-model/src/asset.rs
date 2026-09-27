@@ -73,6 +73,64 @@ impl StreamKind {
 #[serde(transparent)]
 pub struct StreamId(pub u64);
 
+/// Scanning order (interlacement) reported for a video stream.
+///
+/// Values mirror what container/probe front-ends expose (ffprobe's
+/// `field_order`). Mixed coded/display orders (`tb`/`bt`) carry no reliable
+/// display order and are reported as [`FieldOrder::Unknown`] rather than
+/// guessed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FieldOrder {
+    /// Progressive scan — no field structure.
+    Progressive,
+    /// Interlaced, top field displayed first.
+    TopFieldFirst,
+    /// Interlaced, bottom field displayed first.
+    BottomFieldFirst,
+    /// Field order unknown or not signaled by the container/codec. The
+    /// picture may be progressive or interlaced; the scan structure simply
+    /// was not reported.
+    Unknown,
+}
+
+impl FieldOrder {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FieldOrder::Progressive => "progressive",
+            FieldOrder::TopFieldFirst => "top_field_first",
+            FieldOrder::BottomFieldFirst => "bottom_field_first",
+            FieldOrder::Unknown => "unknown",
+        }
+    }
+
+    /// Whether the stream is *known* to carry an interlaced (field-based)
+    /// picture. `Unknown` is not evidence of interlacement.
+    pub fn is_interlaced(self) -> bool {
+        matches!(
+            self,
+            FieldOrder::TopFieldFirst | FieldOrder::BottomFieldFirst
+        )
+    }
+
+    /// Parse a probe-reported field-order tag (e.g. ffprobe `field_order`).
+    /// Recognised values are matched case-insensitively; unknown tags yield
+    /// `None` so callers can distinguish "not reported" from "unrecognised".
+    pub fn parse_probe(raw: &str) -> Option<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "progressive" => Some(FieldOrder::Progressive),
+            "tt" | "tff" | "top_field_first" | "topfieldfirst" => Some(FieldOrder::TopFieldFirst),
+            "bb" | "bff" | "bottom_field_first" | "bottomfieldfirst" => {
+                Some(FieldOrder::BottomFieldFirst)
+            }
+            // `tb`/`bt` (coded vs display order differs), `unknown` and empty
+            // values mean interlaced-but-unspecified or simply unspecified.
+            "tb" | "bt" | "unknown" | "unspecified" | "" => Some(FieldOrder::Unknown),
+            _ => None,
+        }
+    }
+}
+
 impl StreamId {
     pub fn new(index: u64) -> Self {
         Self(index)
@@ -99,6 +157,9 @@ pub struct Stream {
     pub width: Option<u64>,
     pub height: Option<u64>,
     pub pixel_format: Option<String>,
+    /// Scanning order reported by the container/probe front-end.
+    #[serde(default)]
+    pub field_order: Option<FieldOrder>,
     /// Real (non-display) frame rate.
     pub frame_rate: Option<FrameRate>,
     pub time_base: Option<TimeBase>,
@@ -136,6 +197,7 @@ impl Stream {
             width: Some(1920),
             height: Some(1080),
             pixel_format: Some("yuv420p".into()),
+            field_order: Some(FieldOrder::Progressive),
             frame_rate: Some(FrameRate::from_parts(25, 1)),
             time_base: Some(TimeBase::from_parts(1, 12800)),
             bitrate: Some(8_000_000),
@@ -158,6 +220,7 @@ impl Stream {
             width: None,
             height: None,
             pixel_format: None,
+            field_order: None,
             frame_rate: None,
             time_base: Some(TimeBase::from_parts(1, 48000)),
             bitrate: Some(320_000),

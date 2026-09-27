@@ -99,6 +99,10 @@ pub struct VideoMeasurements {
     pub luma: Option<LumaStats>,
     /// Colour-space/colorimetry tag observed (e.g. `bt709`, `bt2020nc`).
     pub colorspace: Option<String>,
+    /// Scanning order (interlacement) observed for this stream. `None` when
+    /// the probe front-end did not report a field order.
+    #[serde(default)]
+    pub field_order: Option<crate::asset::FieldOrder>,
 }
 
 /// Luma statistics over sampled frames ([spec § 8.3] brightness/luma range).

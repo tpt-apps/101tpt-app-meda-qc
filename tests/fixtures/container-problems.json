@@ -10,6 +10,7 @@
       {
         "index": 0, "kind": "video", "codec": "h264", "codec_profile": "High",
         "width": 1920, "height": 1080, "pixel_format": "yuv420p",
+        "field_order": "progressive",
         "frame_rate": "25/1", "time_base": "1/90000",
         "bitrate": 4000000, "duration": 120,
         "language": null, "channel_layout": null, "channels": null,

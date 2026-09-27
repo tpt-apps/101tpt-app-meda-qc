@@ -63,6 +63,9 @@ rules:
     luma_range:
       max_out_of_legal: 0.02
       severity: error
+    scan_format:
+      scan: progressive
+      severity: error
 
   audio:
     sample_rate:

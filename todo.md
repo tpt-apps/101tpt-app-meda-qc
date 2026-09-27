@@ -71,6 +71,7 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
    - [x] aspect ratio
    - [x] luma range
    - [x] colour-space / HDR metadata
+   - [x] scanning order / field order (`video.scan_format`)
 10. [x] Implement audio decode through `tpt-cadence` — pinned WAV, AIFF/AIFC and
       FLAC readers stream PCM into explicit silence, clipping, sample-peak,
       stereo-phase and DC-offset measurements; embedded MP4 audio and
@@ -131,7 +132,11 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
       `.github/workflows/release.yml`. Signing, notarization, Gumroad upload
       and clean-machine validation remain in `GUMROAD.md`.
 27. [ ] Run a private beta with real professional media
-28. [ ] Verify against Definition of Done checklist (spec §30) before declaring MVP complete
+28. [ ] Verify against Definition of Done checklist (spec §30) before declaring
+      MVP complete — code-level audit tracked in `docs/definition-of-done.md`
+      (item-by-item status + evidence); remaining gaps are external actions
+      (signing, clean-machine validation, private beta) and representative
+      HD/UHD media benchmarks
 
 ---
 
@@ -157,13 +162,18 @@ Applies continuously across all phases, not a one-time gate.
   - [x] Strict path validation and safe temporary-file handling (canonical media
         inputs; validated export paths; RAII temporary files and staged report
         replacement)
-  - [ ] Media parsers fuzz tested (six targets compile; fuzz campaigns remain)
+  - [x] Media parsers fuzz tested (six targets; bounded campaigns run on every
+        push/PR in CI on Linux — libFuzzer does not link on Windows/MSVC;
+        long-running scheduled campaigns remain optional)
 - [ ] **Standards architecture (spec §25)**
   - [x] Implement supported loudness standards (EBU R128, ATSC A/85 and
         BS.1770-derived measurement selection) as profile/rule configuration;
         every loudness finding records the selected standard and tolerances
-  - [ ] Add remaining video standards (for example BT.1702) after the required
-        interlace/field-order measurements and delivery rules are implemented
+  - [x] Add video standards on the shared delivery-rule layer: interlace/
+        field-order measurements and the `video.scan_format` rule are
+        implemented; a BT.1700/BT.1702-flavoured SDTV delivery profile
+        (`profiles/broadcast/bt-1702.yaml`) encodes 576i25 interlaced
+        top-field-first with EBU R128 audio (compliance not claimed — spec §25)
   - [x] Distinguish measurement algorithm vs. standard vs. profile vs. customer tolerance
   - [x] Do not claim formal standards compliance until validated against reference material/test suites
 - [x] **Determinism & caching (spec §19)**

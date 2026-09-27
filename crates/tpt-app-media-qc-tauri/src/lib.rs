@@ -43,6 +43,10 @@ const BUNDLED_PROFILES: &[(&str, &str)] = &[
         include_str!("../../../profiles/broadcast/atsc-a85.yaml"),
     ),
     (
+        "broadcast-sd-576i",
+        include_str!("../../../profiles/broadcast/bt-1702.yaml"),
+    ),
+    (
         "streaming-vod",
         include_str!("../../../profiles/streaming/vod.yaml"),
     ),

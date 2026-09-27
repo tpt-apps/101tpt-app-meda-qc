@@ -31,7 +31,8 @@
     "video.frame_rate": "fail",
     "video.freeze_frames": "fail",
     "video.luma_range": "fail",
-    "video.resolution": "fail"
+    "video.resolution": "fail",
+    "video.scan_format": "fail"
   },
   "allow_critical_empty": false
 }

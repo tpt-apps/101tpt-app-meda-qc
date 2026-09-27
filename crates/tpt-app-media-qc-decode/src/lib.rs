@@ -509,6 +509,7 @@ impl VideoFrameAnalyzer {
             duplicate_frames: self.duplicate_ranges,
             luma: self.luma.finish(),
             colorspace: None,
+            field_order: None,
         }
     }
 }

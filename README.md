@@ -24,7 +24,8 @@ no mandatory network access are required.
 - **Rule-based QC profiles** — human-readable, versioned, deterministic YAML profiles ([spec §9]).
 - **Container, video and audio rules** — readability, validity, duration/bitrate
   consistency, timecode/timebase/timestamp continuity, resolution, frame rate,
-  aspect ratio, luma range, colour-space metadata, sample rate, bit depth,
+  aspect ratio, luma range, colour-space metadata, scan format/field order,
+  sample rate, bit depth,
   channel layout, silence, clipping, true peak, loudness (EBU R128 / ATSC A/85 /
   BS.1770) and phase. Decode coverage is explicit: unsupported or incomplete
   measurements produce `Inconclusive` findings rather than guessed passes.
@@ -136,6 +137,7 @@ tests/                Fixtures, integration, golden and performance suites
 - [Supported formats](./docs/supported-formats.md)
 - [Standards architecture](./docs/standards.md)
 - [Performance](./docs/performance.md)
+- [Definition of Done status](./docs/definition-of-done.md)
 
 ## Licensing and copyright
 

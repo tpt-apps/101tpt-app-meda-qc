@@ -38,7 +38,7 @@ pub mod config {
     /// The ruleset version participates in cache keys and report integrity
     /// fields ([spec § 14.1], [spec § 19]). It must be bumped whenever the
     /// built-in rule catalogue or its measurement semantics change.
-    pub const RULESET_VERSION: &str = "0.1.0";
+    pub const RULESET_VERSION: &str = "0.2.0";
 }
 
 /// Lightweight semver-style triple used by tooling.

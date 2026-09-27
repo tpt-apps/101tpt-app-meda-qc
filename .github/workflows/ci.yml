@@ -57,3 +57,26 @@ jobs:
 
       - run: cargo build --workspace --all-targets
       - run: cargo test --workspace
+
+  fuzz:
+    name: Fuzz parsers (bounded campaigns)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            fuzz
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - name: Run bounded fuzz campaigns (60s per target)
+        run: |
+          for target in profile_parse ffprobe_json result_parser report_generation clap_args media_boundary; do
+            echo "::group::fuzz $target"
+            cargo fuzz run "$target" -- -max_total_time=60 -rss_limit_mb=4096
+            echo "::endgroup::"
+          done

@@ -6,13 +6,14 @@ use crate::rule::{
 };
 use crate::util::{fail, inconclusive, info, segment_failures};
 use tpt_app_media_qc_core::cost::CostClass;
-use tpt_app_media_qc_model::asset::StreamKind;
+use tpt_app_media_qc_model::asset::{FieldOrder, StreamKind};
 use tpt_app_media_qc_model::finding::RuleId;
 use tpt_app_media_qc_model::severity::Severity;
 use tpt_app_media_qc_model::value::Value;
 use tpt_app_media_qc_profile::model::{
-    AspectRatioRule, ColorSpaceRule, CountThresholdRule, DurationThresholdRule, FrameRateRule,
-    LumaRangeRule, Resolution, ResolutionRule, VideoRules,
+    AspectRatioRule, ColorSpaceRule, CountThresholdRule, DurationThresholdRule,
+    FieldOrderExpectation, FrameRateRule, LumaRangeRule, Resolution, ResolutionRule,
+    ScanExpectation, ScanFormatRule, VideoRules,
 };
 
 pub const RULE_IDS: &[&str] = &[
@@ -25,6 +26,7 @@ pub const RULE_IDS: &[&str] = &[
     "video.duplicate_frames",
     "video.corrupt_frames",
     "video.luma_range",
+    "video.scan_format",
 ];
 
 pub fn build(profile: &tpt_app_media_qc_profile::model::Profile, out: &mut Vec<Box<dyn QcRule>>) {
@@ -55,6 +57,9 @@ pub fn build(profile: &tpt_app_media_qc_profile::model::Profile, out: &mut Vec<B
     }
     if let Some(cfg) = v.luma_range {
         out.push(Box::new(LumaRangeRuleImpl { cfg }));
+    }
+    if let Some(cfg) = v.scan_format {
+        out.push(Box::new(ScanFormatRuleImpl { cfg }));
     }
 }
 
@@ -296,6 +301,143 @@ impl QcRule for ColorSpaceRuleImpl {
             ));
         }
         RuleResult::pass()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// scan_format (interlacement / field order)
+// ---------------------------------------------------------------------------
+
+struct ScanFormatRuleImpl {
+    cfg: ScanFormatRule,
+}
+
+impl QcRule for ScanFormatRuleImpl {
+    fn id(&self) -> RuleId {
+        RuleId::new("video.scan_format")
+    }
+    fn description(&self) -> RuleDescription {
+        RuleDescription {
+            name: "Scan format",
+            summary: "Scanning order (progressive/interlaced) and field order match the delivery expectation.",
+            version: "0.1",
+        }
+    }
+    fn capabilities(&self) -> Capabilities {
+        metadata_capabilities()
+    }
+    fn run(&self, ctx: &RuleContext<'_>) -> RuleResult {
+        let Some(stream) = ctx.primary_stream(StreamKind::Video) else {
+            return RuleResult::from_finding(inconclusive(
+                &self.id(),
+                self.cfg.severity,
+                "no video stream present to measure scanning format",
+            ));
+        };
+        let observed = video_measurement(ctx)
+            .and_then(|m| m.field_order)
+            .or(stream.field_order);
+        let Some(measured) = observed else {
+            return RuleResult::from_finding(inconclusive(
+                &self.id(),
+                self.cfg.severity,
+                "video stream did not report a scanning order",
+            ));
+        };
+
+        // Scan-structure expectation first. An unsignalled field order is
+        // common on progressive web deliverables and carries no evidence of
+        // interlacement, so it cannot disprove a `progressive` expectation —
+        // it is reported Inconclusive instead (spec §3.4). For an `interlaced`
+        // delivery the signal must be present, so `unknown` is a defect.
+        match self.cfg.scan {
+            ScanExpectation::Progressive => {
+                if measured.is_interlaced() {
+                    return RuleResult::from_finding(fail(
+                        &self.id(),
+                        self.cfg.severity,
+                        format!(
+                            "scanning order is {}, expected progressive",
+                            measured.as_str()
+                        ),
+                        Some(Value::Text(measured.as_str().into())),
+                        Some(Value::Text("progressive".into())),
+                    ));
+                }
+                if measured == FieldOrder::Unknown {
+                    return RuleResult::from_finding(inconclusive(
+                        &self.id(),
+                        self.cfg.severity,
+                        "field order not signalled; cannot confirm progressive scan",
+                    ));
+                }
+            }
+            ScanExpectation::Interlaced => {
+                if measured == FieldOrder::Progressive {
+                    return RuleResult::from_finding(fail(
+                        &self.id(),
+                        self.cfg.severity,
+                        "video is progressive, expected interlaced",
+                        Some(Value::Text("progressive".into())),
+                        Some(Value::Text("interlaced".into())),
+                    ));
+                }
+                if measured == FieldOrder::Unknown {
+                    return RuleResult::from_finding(fail(
+                        &self.id(),
+                        self.cfg.severity,
+                        "field order not signalled; interlaced delivery requires a signalled field order",
+                        Some(Value::Text("unknown".into())),
+                        Some(Value::Text("interlaced".into())),
+                    ));
+                }
+            }
+            ScanExpectation::Any => {}
+        }
+
+        // Field-order expectation. Only interlaced material has fields, so a
+        // pinned order on progressive video is a configuration conflict, and
+        // an unsignalled order cannot satisfy the pin.
+        if let FieldOrderExpectation::TopFieldFirst | FieldOrderExpectation::BottomFieldFirst =
+            self.cfg.field_order
+        {
+            let expected = match self.cfg.field_order {
+                FieldOrderExpectation::TopFieldFirst => FieldOrder::TopFieldFirst,
+                _ => FieldOrder::BottomFieldFirst,
+            };
+            if measured == FieldOrder::Progressive {
+                return RuleResult::from_finding(fail(
+                    &self.id(),
+                    self.cfg.severity,
+                    format!(
+                        "video is progressive; field-order expectation {} requires interlaced video",
+                        expected.as_str()
+                    ),
+                    Some(Value::Text("progressive".into())),
+                    Some(Value::Text(expected.as_str().into())),
+                ));
+            }
+            if measured != expected {
+                return RuleResult::from_finding(fail(
+                    &self.id(),
+                    self.cfg.severity,
+                    format!(
+                        "field display order is {}, expected {}",
+                        measured.as_str(),
+                        expected.as_str()
+                    ),
+                    Some(Value::Text(measured.as_str().into())),
+                    Some(Value::Text(expected.as_str().into())),
+                ));
+            }
+        }
+
+        RuleResult::from_finding(info(
+            &self.id(),
+            Severity::Info,
+            format!("scanning order is {}", measured.as_str()),
+            Some(Value::Text(measured.as_str().into())),
+        ))
     }
 }
 
@@ -760,5 +902,111 @@ mod tests {
             r.findings[0].status,
             tpt_app_media_qc_model::severity::VerdictDecision::Fail
         );
+    }
+
+    // -- scan_format --------------------------------------------------------
+
+    use tpt_app_media_qc_profile::model::FieldOrderExpectation;
+
+    fn scan_rule(scan: ScanExpectation, field_order: FieldOrderExpectation) -> ScanFormatRuleImpl {
+        ScanFormatRuleImpl {
+            cfg: ScanFormatRule {
+                scan,
+                field_order,
+                severity: Severity::Error,
+            },
+        }
+    }
+
+    fn ctx_with_order(order: Option<FieldOrder>) -> RuleContext<'static> {
+        let mut asset = bundled_asset().clone();
+        if let Some(stream) = asset
+            .streams
+            .iter_mut()
+            .find(|s| s.kind == StreamKind::Video)
+        {
+            stream.field_order = order;
+        }
+        let asset: &'static _ = Box::leak(Box::new(asset));
+        let inspection: &'static Inspection = Box::leak(Box::new(Inspection::default()));
+        RuleContext { asset, inspection }
+    }
+
+    #[test]
+    fn scan_format_progressive_passes_on_progressive_stream() {
+        let rule = scan_rule(ScanExpectation::Progressive, FieldOrderExpectation::Any);
+        assert!(rule
+            .execute(&ctx_with_order(Some(FieldOrder::Progressive)))
+            .is_pass());
+    }
+
+    #[test]
+    fn scan_format_progressive_fails_on_signalled_interlaced() {
+        let rule = scan_rule(ScanExpectation::Progressive, FieldOrderExpectation::Any);
+        let mut m = measurement();
+        m.field_order = Some(FieldOrder::TopFieldFirst);
+        let r = rule.execute(&ctx_with(vec![m]));
+        assert_eq!(
+            r.findings[0].status,
+            tpt_app_media_qc_model::severity::VerdictDecision::Fail
+        );
+    }
+
+    #[test]
+    fn scan_format_unsignalled_is_inconclusive_for_progressive_expectation() {
+        let rule = scan_rule(ScanExpectation::Progressive, FieldOrderExpectation::Any);
+        let r = rule.execute(&ctx_with_order(Some(FieldOrder::Unknown)));
+        assert!(r.findings.iter().any(|f| {
+            f.status == tpt_app_media_qc_model::severity::VerdictDecision::Inconclusive
+        }));
+    }
+
+    #[test]
+    fn scan_format_interlaced_fails_on_unsignalled_and_passes_on_signalled() {
+        let rule = scan_rule(ScanExpectation::Interlaced, FieldOrderExpectation::Any);
+        let r = rule.execute(&ctx_with_order(Some(FieldOrder::Unknown)));
+        assert_eq!(
+            r.findings[0].status,
+            tpt_app_media_qc_model::severity::VerdictDecision::Fail
+        );
+
+        let mut m = measurement();
+        m.field_order = Some(FieldOrder::BottomFieldFirst);
+        let r = rule.execute(&ctx_with(vec![m]));
+        assert!(r.is_pass());
+    }
+
+    #[test]
+    fn scan_format_field_order_pin() {
+        let rule = scan_rule(ScanExpectation::Any, FieldOrderExpectation::TopFieldFirst);
+        let mut m = measurement();
+        m.field_order = Some(FieldOrder::TopFieldFirst);
+        assert!(rule.execute(&ctx_with(vec![m])).is_pass());
+
+        let mut m = measurement();
+        m.field_order = Some(FieldOrder::BottomFieldFirst);
+        let r = rule.execute(&ctx_with(vec![m]));
+        assert_eq!(
+            r.findings[0].status,
+            tpt_app_media_qc_model::severity::VerdictDecision::Fail
+        );
+
+        // A pinned field order cannot be satisfied by progressive video.
+        let mut m = measurement();
+        m.field_order = Some(FieldOrder::Progressive);
+        let r = rule.execute(&ctx_with(vec![m]));
+        assert_eq!(
+            r.findings[0].status,
+            tpt_app_media_qc_model::severity::VerdictDecision::Fail
+        );
+    }
+
+    #[test]
+    fn scan_format_missing_report_is_inconclusive() {
+        let rule = scan_rule(ScanExpectation::Progressive, FieldOrderExpectation::Any);
+        let r = rule.execute(&ctx_with_order(None));
+        assert!(r.findings.iter().any(|f| {
+            f.status == tpt_app_media_qc_model::severity::VerdictDecision::Inconclusive
+        }));
     }
 }
