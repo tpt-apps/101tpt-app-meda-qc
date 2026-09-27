@@ -103,7 +103,7 @@ is a free-text field on the `Report` model, editable at review time.
 
 ```sh
 tpt-media-qc check --profile client-a.yaml --json r.json --html r.html --csv r.csv episode-01.mov
-tpt-media-qc batch --profile client-a.yaml --input ./incoming --out ./reports
+tpt-media-qc batch --profile client-a.yaml --input ./incoming --output ./reports
 ```
 
 Machine-readable CLI output stays stable per spec §16 (exit codes `0`–`6`).

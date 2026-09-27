@@ -23,3 +23,6 @@ rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 
 [features]
 sqlite = ["dep:rusqlite"]
+
+[dev-dependencies]
+tempfile.workspace = true

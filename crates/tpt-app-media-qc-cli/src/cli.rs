@@ -57,6 +57,10 @@ pub enum Command {
         /// One or more files or directories to scan recursively.
         files: Vec<PathBuf>,
 
+        /// One or more input files or directories (alternative to positional paths).
+        #[arg(long = "input", value_name = "PATH", num_args = 1..)]
+        input: Vec<PathBuf>,
+
         /// YAML profile file.
         #[arg(long, short = 'p')]
         profile: Option<PathBuf>,
@@ -66,7 +70,7 @@ pub enum Command {
         quick: bool,
 
         /// Directory to write reports into (one JSON per asset).
-        #[arg(long)]
+        #[arg(long, visible_alias = "output")]
         out: Option<PathBuf>,
 
         /// Stop at the first failing asset (still reports it).
@@ -237,6 +241,63 @@ mod tests {
         assert_eq!(fail, PathBuf::from("Rejected"));
         assert_eq!(report, Some(PathBuf::from("Reports")));
         assert!(quick);
+    }
+
+    #[test]
+    fn parses_batch_documented_input_and_output_flags() {
+        let cli = Cli::try_parse_from([
+            "tpt-media-qc",
+            "batch",
+            "--input",
+            "incoming",
+            "second-input",
+            "--output",
+            "reports",
+        ])
+        .unwrap();
+        let Command::Batch {
+            files,
+            input,
+            profile,
+            quick,
+            out,
+            fail_fast,
+        } = cli.command
+        else {
+            panic!("expected batch");
+        };
+        assert!(files.is_empty());
+        assert_eq!(
+            input,
+            vec![PathBuf::from("incoming"), PathBuf::from("second-input")]
+        );
+        assert!(profile.is_none() && !quick && !fail_fast);
+        assert_eq!(out, Some(PathBuf::from("reports")));
+    }
+
+    #[test]
+    fn parses_batch_positional_paths_and_legacy_out_flag() {
+        let cli = Cli::try_parse_from([
+            "tpt-media-qc",
+            "batch",
+            "one.mp4",
+            "two.mov",
+            "--out",
+            "reports",
+        ])
+        .unwrap();
+        let Command::Batch {
+            files, input, out, ..
+        } = cli.command
+        else {
+            panic!("expected batch");
+        };
+        assert_eq!(
+            files,
+            vec![PathBuf::from("one.mp4"), PathBuf::from("two.mov")]
+        );
+        assert!(input.is_empty());
+        assert_eq!(out, Some(PathBuf::from("reports")));
     }
 
     #[test]

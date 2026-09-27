@@ -53,13 +53,32 @@ Development and bundling:
 # Run the native shell
 cargo run --manifest-path crates/tpt-app-media-qc-tauri/Cargo.toml --bin tpt-media-qc-desktop
 
-# Build the Windows release bundle
-tauri build --config crates/tpt-app-media-qc-tauri/tauri.conf.json
+# Build a local release bundle
+cargo tauri build --config crates/tpt-app-media-qc-tauri/tauri.conf.json
 ```
+
+Pushing a `vX.Y.Z` tag that matches the Tauri configuration version runs
+[`.github/workflows/release.yml`](./.github/workflows/release.yml). It builds
+unsigned Windows, macOS and Linux bundles on native runners and attaches them
+to a draft GitHub Release. The workflow does not sign, notarize or upload to
+Gumroad; those remain launch gates in [`GUMROAD.md`](./GUMROAD.md).
 
 `ffprobe` must be on `PATH` for full and metadata scans. The current release is
 unsigned until a signing certificate and Windows release configuration are
 approved.
+
+### Optional local API
+
+The desktop process exposes a small HTTP/1.1 automation API only when
+`TPT_MEDIA_QC_API=1` is set. It binds to an ephemeral port on `127.0.0.1` and
+prints the selected address at startup; leaving the variable unset is the
+default. The endpoints are `GET /health`, `GET /profiles`, `POST /jobs`,
+`GET /jobs/:id`, `GET /jobs/:id/results`, and `POST /jobs/:id/cancel`.
+A job request is local JSON such as
+`{"asset":"C:/media/episode.mov","profile":"generic","quick":false}`.
+Cancellation is cooperative at job boundaries. The API has no upload endpoint,
+does not bind externally, and is not a replacement for OS-level authentication
+or sandboxing.
 
 ## Quick start
 
@@ -71,7 +90,7 @@ tpt-media-qc info episode-01.mov
 tpt-media-qc check --profile profiles/generic/generic.yaml --json out.json episode-01.mov
 
 # Batch-analyse an incoming folder, writing one JSON report per asset
-tpt-media-qc batch --profile profiles/generic/generic.yaml --input ./incoming --out ./reports
+tpt-media-qc batch --profile profiles/generic/generic.yaml --input ./incoming --output ./reports
 
 # List the rules a profile enables
 tpt-media-qc list-rules --profile profiles/generic/generic.yaml

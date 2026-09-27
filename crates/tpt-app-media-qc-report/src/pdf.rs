@@ -12,6 +12,8 @@ use lopdf::{dictionary, Document, Object, Stream};
 use tpt_app_media_qc_core::error::Result;
 use tpt_app_media_qc_model::report::Report;
 
+use crate::output::{commit_file, staged_file};
+
 const PAGE_WIDTH: f64 = 595.0;
 const PAGE_HEIGHT: f64 = 842.0;
 const MARGIN: f64 = 48.0;
@@ -81,8 +83,9 @@ pub fn render_pdf(path: &Path, report: &Report, _options: WritePdfOptions) -> Re
     });
     doc.trailer.set("Root", catalog_id);
     doc.compress();
-    doc.save(path)?;
-    Ok(())
+    let temporary = staged_file(path)?;
+    doc.save(temporary.path())?;
+    commit_file(temporary, path)
 }
 
 enum Font {

@@ -134,44 +134,37 @@ impl std::fmt::Display for Fingerprint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
-    fn temp_file(bytes: &[u8]) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("tpt-qc-fp-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("asset.bin");
-        let mut f = File::create(&path).unwrap();
-        f.write_all(bytes).unwrap();
-        path
+    fn temp_file(bytes: &[u8]) -> (tempfile::TempDir, std::path::PathBuf) {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("asset.bin");
+        std::fs::write(&path, bytes).unwrap();
+        (directory, path)
     }
 
     #[test]
     fn same_content_same_fingerprint() {
-        let a = temp_file(b"hello world media asset");
-        let b = temp_file(b"hello world media asset");
+        let (_a_dir, a) = temp_file(b"hello world media asset");
+        let (_b_dir, b) = temp_file(b"hello world media asset");
         let fa = Fingerprint::of_file(&a, FingerprintConfig::default()).unwrap();
         let fb = Fingerprint::of_file(&b, FingerprintConfig::default()).unwrap();
         assert_eq!(fa, fb);
-        let _ = std::fs::remove_dir_all(a.parent().unwrap());
-        let _ = std::fs::remove_dir_all(b.parent().unwrap());
     }
 
     #[test]
     fn different_content_different_fingerprint() {
-        let a = temp_file(b"abc");
-        let b = temp_file(b"abd");
+        let (_a_dir, a) = temp_file(b"abc");
+        let (_b_dir, b) = temp_file(b"abd");
         let fa = Fingerprint::of_file(&a, FingerprintConfig::default()).unwrap();
         let fb = Fingerprint::of_file(&b, FingerprintConfig::default()).unwrap();
         assert_ne!(fa, fb);
         assert_eq!(fa.to_hex().len(), 64);
-        let _ = std::fs::remove_dir_all(a.parent().unwrap());
-        let _ = std::fs::remove_dir_all(b.parent().unwrap());
     }
 
     #[test]
     fn replacement_detected_despite_same_prefix() {
-        let a = temp_file(b"00001111");
-        let b = temp_file(b"000011112222");
+        let (_a_dir, a) = temp_file(b"00001111");
+        let (_b_dir, b) = temp_file(b"000011112222");
         let cfg = FingerprintConfig {
             strategy: FingerprintStrategy::BoundedPrefix,
             max_bytes: 4,
@@ -179,8 +172,6 @@ mod tests {
         let fa = Fingerprint::of_file(&a, cfg).unwrap();
         let fb = Fingerprint::of_file(&b, cfg).unwrap();
         assert_ne!(fa, fb);
-        let _ = std::fs::remove_dir_all(a.parent().unwrap());
-        let _ = std::fs::remove_dir_all(b.parent().unwrap());
     }
 
     #[test]

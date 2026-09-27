@@ -68,7 +68,7 @@ peak-RSS measurements remain follow-up work.
 ## 5. How to profile
 
 ```sh
-cargo run --release -- batch --profile profiles/generic/generic.yaml --input ./incoming --out ./reports
+cargo run --release -- batch --profile profiles/generic/generic.yaml --input ./incoming --output ./reports
 ```
 
 Instrument with a profiler of your choice and `--release` (the dev profile

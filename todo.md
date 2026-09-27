@@ -125,10 +125,11 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
       the decode stack
 25. [x] Harden error handling — isolated per-job failure state, corrupt asset must not
       terminate batch (spec §21; batch continues past per-asset errors)
-26. [ ] Package Windows release — CI now builds/tests on push across
-      Linux/Windows/macOS (`.github/workflows/ci.yml`); signed installer
-      build, release-on-tag workflow, and the rest of the launch checklist
-      are tracked in `GUMROAD.md`
+26. [ ] Package Windows release — CI builds/tests on push across
+      Linux/Windows/macOS; a tag-triggered **unsigned** multi-platform bundle
+      workflow and draft GitHub Release are implemented in
+      `.github/workflows/release.yml`. Signing, notarization, Gumroad upload
+      and clean-machine validation remain in `GUMROAD.md`.
 27. [ ] Run a private beta with real professional media
 28. [ ] Verify against Definition of Done checklist (spec §30) before declaring MVP complete
 
@@ -142,25 +143,36 @@ Applies continuously across all phases, not a one-time gate.
   - [x] Unit tests per QC rule: valid input, invalid input, boundary case, malformed input, expected result
   - [x] Real-media CLI integration coverage (`crates/tpt-app-media-qc-cli/tests/real_media.rs`
         generates fixtures with `ffmpeg` and exercises `info`/`check` through the real
-        `ffprobe` + decode path; skips itself when the tools aren't on `PATH`)
-  - [ ] Property tests: timecode conversion, frame indexing, duration calculations, threshold logic, profile parsing, result aggregation
+        `ffprobe` + decode path; it also covers real-process batch failure isolation and
+        watch-folder routing; skips itself when the tools aren't on `PATH`)
+  - [x] Deterministic property-style matrix: timecode conversion (including 59.94
+        drop-frame), frame indexing, duration calculations, threshold logic,
+        profile parsing and result aggregation
   - [ ] Regression fixture added for every production bug (spec §24.5)
 - [ ] **Security & privacy (spec §22)**
   - [x] No mandatory network access for core operation
   - [x] No cloud upload, no external telemetry by default
   - [ ] Sandboxed optional AI integrations
   - [x] Safe handling of malformed media; no execution of embedded media content
-  - [ ] Strict path validation; safe temporary-file handling
+  - [x] Strict path validation and safe temporary-file handling (canonical media
+        inputs; validated export paths; RAII temporary files and staged report
+        replacement)
   - [ ] Media parsers fuzz tested (six targets compile; fuzz campaigns remain)
 - [ ] **Standards architecture (spec §25)**
-  - [ ] Implement standards (EBU R128, ATSC A/85, BT.1702, etc.) as profiles/rules, not hard-coded UI logic
+  - [x] Implement supported loudness standards (EBU R128, ATSC A/85 and
+        BS.1770-derived measurement selection) as profile/rule configuration;
+        every loudness finding records the selected standard and tolerances
+  - [ ] Add remaining video standards (for example BT.1702) after the required
+        interlace/field-order measurements and delivery rules are implemented
   - [x] Distinguish measurement algorithm vs. standard vs. profile vs. customer tolerance
   - [x] Do not claim formal standards compliance until validated against reference material/test suites
-- [ ] **Determinism & caching (spec §19)**
+- [x] **Determinism & caching (spec §19)**
   - [x] Cache keys include: asset fingerprint, application version, ruleset version, profile hash, analysis configuration hash
   - [x] Changing one rule's configuration invalidates only that rule's cached results, not the whole analysis
-- [ ] **Local API (spec §17)**
-  - [ ] Disabled by default; binds only to `127.0.0.1` when enabled
+- [x] **Local API (spec §17)**
+  - [x] Disabled by default; explicitly enabled with `TPT_MEDIA_QC_API=1` and
+        binds only to an ephemeral `127.0.0.1` port. Health, profiles, jobs,
+        results and cooperative cancellation are implemented.
 
 ---
 
@@ -204,7 +216,6 @@ Applies continuously across all phases, not a one-time gate.
 - [ ] Validate pricing hypothesis (spec §2.1): Professional $499, Studio $999, Facility $1,999+
 - [ ] Implement edition feature gating (spec §29): Professional / Studio / Facility
 - [ ] Defer Facility-tier features (LAN workers, central profile distribution) until customer demand is evidenced (spec §29, §32)
-- [ ] Gumroad launch checklist tracked in `GUMROAD.md` (blocking items: licensing
-      model decision for the public-license/paid-product tension, and bundling
-      or documenting the `ffprobe` dependency; the "Tauri app not implemented"
-      blocker there is now stale — see Phase 1 item 15)
+- [ ] Gumroad launch checklist tracked in `GUMROAD.md` (remaining blockers are
+      licensing model, `ffprobe` packaging/documentation, release artifacts,
+      signing and private-beta validation)

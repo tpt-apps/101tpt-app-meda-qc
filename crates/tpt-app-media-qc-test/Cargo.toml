@@ -13,6 +13,7 @@ workspace = true
 
 [dependencies]
 serde.workspace = true
+tempfile.workspace = true
 serde_json.workspace = true
 tpt-app-media-qc-core = { path = "../tpt-app-media-qc-core" }
 tpt-app-media-qc-model = { path = "../tpt-app-media-qc-model" }

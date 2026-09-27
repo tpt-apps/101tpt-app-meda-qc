@@ -6,6 +6,8 @@ use std::path::Path;
 use tpt_app_media_qc_core::error::Result;
 use tpt_app_media_qc_model::report::Report;
 
+use crate::output::{commit_writer, staged_writer};
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WriteCsvOptions {
     /// Emit a header row (default true).
@@ -14,7 +16,7 @@ pub struct WriteCsvOptions {
 
 /// Write one CSV row per finding.
 pub fn write_csv(path: &Path, report: &Report, options: WriteCsvOptions) -> Result<()> {
-    let mut out = csv_writer(path)?;
+    let mut out = staged_writer(path)?;
     if options.header {
         writeln!(
             out,
@@ -39,13 +41,7 @@ pub fn write_csv(path: &Path, report: &Report, options: WriteCsvOptions) -> Resu
         )?;
     }
 
-    out.flush()?;
-    Ok(())
-}
-
-fn csv_writer(path: &Path) -> Result<std::io::BufWriter<std::fs::File>> {
-    let file = std::fs::File::create(path)?;
-    Ok(std::io::BufWriter::new(file))
+    commit_writer(out, path)
 }
 
 fn write_csv_row(out: &mut impl Write, row: CsvRow<'_>) -> std::io::Result<()> {

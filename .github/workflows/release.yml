@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag matches the Tauri version
+        shell: bash
+        run: |
+          set -euo pipefail
+          config_version="$(jq -r '.version' crates/tpt-app-media-qc-tauri/tauri.conf.json)"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$config_version" != "$tag_version" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match tauri.conf.json version $config_version" >&2
+            exit 1
+          fi
+
+  build:
+    name: Build ${{ matrix.platform }} bundle
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            bundles: msi
+          - platform: macos-latest
+            bundles: dmg
+          - platform: ubuntu-22.04
+            bundles: deb,appimage
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux Tauri dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            xdg-utils
+
+      - name: Build unsigned Tauri bundle
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: crates/tpt-app-media-qc-tauri
+          args: --ci --bundles ${{ matrix.bundles }}
+          uploadUpdaterJson: false
+          uploadPlainBinary: false
+          uploadWorkflowArtifacts: false
+
+      - name: Upload bundle directory
+        uses: actions/upload-artifact@v4
+        with:
+          name: tpt-media-qc-${{ matrix.platform }}-bundle
+          path: ${{ github.workspace }}/target/release/bundle
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Create draft GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download platform bundles
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Attach bundles to a draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: TPT Media QC ${{ github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            Unsigned TPT Media QC bundles built from the tagged source.
+
+            These artifacts are a packaging baseline, not a signed commercial
+            release. Windows code signing, macOS notarization, private-beta
+            validation and Gumroad upload remain separate launch gates.
+          files: |
+            release-assets/**

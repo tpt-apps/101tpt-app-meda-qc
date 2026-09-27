@@ -10,7 +10,10 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
-use tpt_app_media_qc_cli::app::{is_media_file, run_qc};
+use tpt_app_media_qc_cli::app::run_qc;
+use tpt_app_media_qc_core::path::{
+    validate_existing_file, validate_media_file, validate_output_path,
+};
 use tpt_app_media_qc_model::asset::Asset;
 use tpt_app_media_qc_model::inspection::Inspection;
 use tpt_app_media_qc_model::report::{AnalysisId, Report, StatusCounts};
@@ -23,6 +26,8 @@ use tpt_app_media_qc_report::{
     build_report, render_html, render_pdf, write_csv, write_json_report, WriteCsvOptions,
     WriteHtmlOptions, WritePdfOptions,
 };
+
+mod local_api;
 
 const BUNDLED_PROFILES: &[(&str, &str)] = &[
     (
@@ -72,7 +77,9 @@ fn resolve_profile(selector: &str) -> Result<Profile, String> {
         return parse_str(source).map_err(|error| error.to_string());
     }
 
-    let source = std::fs::read_to_string(selector)
+    let profile_path = validate_existing_file(std::path::Path::new(selector))
+        .map_err(|error| format!("could not read profile '{selector}': {error}"))?;
+    let source = std::fs::read_to_string(profile_path)
         .map_err(|error| format!("could not read profile '{selector}': {error}"))?;
     parse_str(&source).map_err(|error| format!("invalid profile '{selector}': {error}"))
 }
@@ -98,10 +105,9 @@ fn desktop_run(mut run: QcRun, profile: &Profile) -> DesktopRun {
 }
 
 fn add_media_file(path: &Path, seen: &mut BTreeSet<PathBuf>, files: &mut Vec<String>) -> bool {
-    if !path.is_file() || !is_media_file(path) {
+    let Ok(key) = validate_media_file(path) else {
         return false;
-    }
-    let key = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    };
     if seen.insert(key) {
         files.push(path.to_string_lossy().into_owned());
     }
@@ -182,13 +188,15 @@ fn expand_media_paths(paths: Vec<String>, recursive: bool) -> Result<Vec<String>
 
 #[tauri::command]
 fn export_report(run: DesktopRun, path: String, format: String) -> Result<String, String> {
-    let output = PathBuf::from(path);
-    if let Some(parent) = output.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| format!("could not create report directory: {error}"))?;
-    }
+    let format = format.to_ascii_lowercase();
+    let extension = match format.as_str() {
+        "json" | "html" | "pdf" | "csv" => &format,
+        other => return Err(format!("unsupported report format '{other}'")),
+    };
+    let output = validate_output_path(&PathBuf::from(path), extension)
+        .map_err(|error| format!("invalid report path: {error}"))?;
 
-    match format.to_ascii_lowercase().as_str() {
+    match format.as_str() {
         "json" => write_json_report(&output, &run.report)
             .map_err(|error| format!("could not write JSON report: {error}"))?,
         "html" => render_html(&output, &run.report, WriteHtmlOptions { embed_json: true })
@@ -197,24 +205,37 @@ fn export_report(run: DesktopRun, path: String, format: String) -> Result<String
             .map_err(|error| format!("could not write PDF report: {error}"))?,
         "csv" => write_csv(&output, &run.report, WriteCsvOptions { header: true })
             .map_err(|error| format!("could not write CSV report: {error}"))?,
-        other => return Err(format!("unsupported report format '{other}'")),
+        _ => unreachable!("format was validated above"),
     }
     Ok(output.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
 fn open_path(app: AppHandle, path: String) -> Result<(), String> {
-    let target = PathBuf::from(&path);
-    if !target.exists() {
-        return Err(format!("path does not exist: {path}"));
-    }
+    let target = validate_existing_file(Path::new(&path))
+        .map_err(|error| format!("could not open '{path}': {error}"))?;
     app.opener()
-        .open_path(&path, None::<&str>)
-        .map_err(|error| format!("could not open '{path}': {error}"))
+        .open_path(target.to_string_lossy().as_ref(), None::<&str>)
+        .map_err(|error| format!("could not open '{}': {error}", target.display()))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let _api_server = match local_api::LocalApi::from_env() {
+        Ok(Some(api)) => Some(api.serve()),
+        Ok(None) => None,
+        Err(error) => {
+            eprintln!("error: could not start local API: {error}");
+            return;
+        }
+    };
+    if let Some(server) = _api_server.as_ref() {
+        println!(
+            "local API: enabled on http://{} (TPT_MEDIA_QC_API)",
+            server.address()
+        );
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())

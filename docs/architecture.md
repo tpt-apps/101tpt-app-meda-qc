@@ -163,8 +163,11 @@ hash; rule-level entries invalidate only the affected rule.
   `5` INPUT_ERROR, `6` INTERNAL_ERROR.
 - **Watch folders** (spec §13) route pass/warn/fail assets to output folders,
   fully locally. Implemented via the `watch` CLI command.
-- **Local API** (spec §17) is disabled by default and binds only to
-  `127.0.0.1` when enabled. Planned.
+- **Local API** (spec §17) is implemented in the desktop shell. It is disabled
+  by default, starts only with `TPT_MEDIA_QC_API=1`, binds an ephemeral port on
+  `127.0.0.1`, and exposes health, profile, job, result and cooperative-cancel
+  endpoints. Requests are size-bounded JSON and jobs use the same local engine
+  as the GUI/CLI; there is no media-upload endpoint or external bind mode.
 
 ## 10. Failure model
 

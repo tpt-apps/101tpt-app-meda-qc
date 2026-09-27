@@ -7,10 +7,12 @@
 //! * [`error`]    — the unified error type
 //! * [`cost`]     — scheduler cost classification ([spec § 11])
 //! * [`fingerprint`] — content-based asset fingerprinting ([spec § 6.1])
+//! * [`path`] — path validation used at import/export boundaries
 
 pub mod cost;
 pub mod error;
 pub mod fingerprint;
+pub mod path;
 
 /// Application identity and versioning.
 pub mod config {

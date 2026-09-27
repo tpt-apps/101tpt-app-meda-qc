@@ -75,11 +75,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Native Tauri 2 desktop application: dashboard, local media/folder import,
   drag-and-drop, bounded job queue controls, asset inspector, finding evidence,
   timeline markers, and JSON/HTML/CSV/PDF report export.
+- Optional localhost automation API (spec §17): disabled by default, enabled
+  with `TPT_MEDIA_QC_API=1`, loopback-only ephemeral binding, bounded JSON
+  requests, health/profile/job/result endpoints and cooperative cancellation.
+- Tag-triggered unsigned Tauri release workflow (`.github/workflows/release.yml`)
+  with a version guard, native Windows/macOS/Linux bundle matrix and draft
+  GitHub Release assembly.
+- Real-process CLI integration coverage for `info`/`check`, batch failure
+  isolation (spec §21) and watch-folder routing (spec §13).
+- Deterministic property-style test matrix for rational ordering, SMPTE
+  timecode/frame indexing, range duration arithmetic, thresholds, profile parsing
+  and result aggregation.
+- Standards configuration evidence: loudness findings now record the selected
+  standard, target and tolerance as structured evidence alongside the profile hash.
 - Dual MIT / Apache-2.0 licensing, packaging and repository documentation.
 
 ### Changed
 
-- None yet.
+- Media/profile paths are canonicalized at the application boundary, and report
+  exporters stage output in RAII-managed temporary files before replacement.
+- Deterministic time handling now uses wide rational comparison and records
+  59.94 drop-frame boundaries without arithmetic underflow.
 
 ### Deprecated
 
@@ -91,6 +107,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The optional local API now forces accepted loopback sockets into blocking mode
+  before parsing requests, preventing Windows connection resets during parallel
+  health/profile/job tests.
 - The ffprobe parser accepts numeric and string values emitted by current
   FFmpeg releases, and preserves discovered stream metadata for container,
   video and audio rules.
@@ -102,4 +121,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
-- None yet.
+- Strict path validation covers media/profile inputs and desktop report export
+  destinations; report writes are staged and replaced atomically.
+- The optional local API refuses non-loopback binds, limits request headers and
+  bodies, and is disabled unless explicitly enabled.

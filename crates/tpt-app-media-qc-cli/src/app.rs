@@ -1,10 +1,14 @@
 //! Subcommand implementations and exit-code mapping.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use tpt_app_media_qc_core::config::APP_VERSION;
 use tpt_app_media_qc_core::fingerprint::{Fingerprint, FingerprintConfig};
+use tpt_app_media_qc_core::path::{
+    validate_existing_directory, validate_existing_file, validate_media_file,
+};
 use tpt_app_media_qc_model::asset::{Asset, AssetFingerprint};
 use tpt_app_media_qc_model::report::AnalysisId;
 use tpt_app_media_qc_model::severity::VerdictDecision;
@@ -39,11 +43,16 @@ pub fn run(cli: Cli) -> i32 {
         } => run_check(file, profile, quick, json, html, pdf, csv, quiet),
         Command::Batch {
             files,
+            input,
             profile,
             quick,
             out,
             fail_fast,
-        } => run_batch(files, profile, quick, out, fail_fast),
+        } => {
+            let mut paths = files;
+            paths.extend(input);
+            run_batch(paths, profile, quick, out, fail_fast)
+        }
         Command::Info {
             file,
             profile,
@@ -92,7 +101,14 @@ fn load_profile(path: Option<&Path>) -> Result<Profile, i32> {
 
     match path {
         Some(p) => {
-            let raw = match std::fs::read_to_string(p) {
+            let profile_path = match validate_existing_file(p) {
+                Ok(path) => path,
+                Err(e) => {
+                    eprintln!("error: cannot read profile '{}': {e}", p.display());
+                    return Err(EXIT_PROFILE);
+                }
+            };
+            let raw = match std::fs::read_to_string(profile_path) {
                 Ok(s) => s,
                 Err(e) => {
                     eprintln!("error: cannot read profile '{}': {e}", p.display());
@@ -115,10 +131,21 @@ fn load_profile(path: Option<&Path>) -> Result<Profile, i32> {
 }
 
 pub(crate) fn build_asset(path: &Path) -> Result<Asset, i32> {
-    if !path.is_file() {
-        return Err(EXIT_PATH);
-    }
-    let fingerprint = match Fingerprint::of_file(path, FingerprintConfig::default()) {
+    let path = match validate_existing_file(path) {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("error: invalid media path '{}': {e}", path.display());
+            return Err(EXIT_PATH);
+        }
+    };
+    let metadata = match std::fs::metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(e) => {
+            eprintln!("error: could not stat '{}': {e}", path.display());
+            return Err(EXIT_ERROR);
+        }
+    };
+    let fingerprint = match Fingerprint::of_file(&path, FingerprintConfig::default()) {
         Ok(fp) => AssetFingerprint {
             sha256: fp.to_hex(),
             size_bytes: fp.as_bytes().len() as u64,
@@ -128,26 +155,17 @@ pub(crate) fn build_asset(path: &Path) -> Result<Asset, i32> {
             return Err(EXIT_ERROR);
         }
     };
-    let size = match std::fs::metadata(path) {
-        Ok(m) => m.len(),
-        Err(e) => {
-            eprintln!("error: could not stat '{}': {e}", path.display());
-            return Err(EXIT_ERROR);
-        }
-    };
+    let modified_time = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs());
     Ok(Asset {
         id: Default::default(),
-        path: path.to_path_buf(),
+        path,
         fingerprint,
-        size_bytes: size,
-        modified_time: std::fs::metadata(path)
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .map(|t| {
-                t.duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0)
-            }),
+        size_bytes: metadata.len(),
+        modified_time,
         duration: None,
         streams: vec![],
     })
@@ -180,12 +198,6 @@ pub fn run_qc(
     profile: Profile,
     quick: bool,
 ) -> std::result::Result<tpt_app_media_qc_pipeline::QcRun, String> {
-    if !path.is_file() {
-        return Err(format!(
-            "asset '{}' does not exist or is not a file",
-            path.display()
-        ));
-    }
     let asset =
         build_asset(path).map_err(|code| format!("could not prepare asset (exit code {code})"))?;
     let inspector =
@@ -365,16 +377,18 @@ fn run_check(
 
 fn collect_assets(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>, i32> {
     let mut out = Vec::new();
-    for p in paths {
-        if p.is_dir() {
+    for path in paths {
+        if let Ok(directory) = validate_existing_directory(&path) {
             let mut found: Vec<PathBuf> = Vec::new();
-            collect_dir(&p, &mut found)?;
+            collect_dir(&directory, &mut found)?;
             out.extend(found);
-        } else if p.is_file() {
-            out.push(p);
+        } else if let Ok(file) = validate_existing_file(&path) {
+            // Explicitly selected files are intentionally allowed without a
+            // recognised extension; the probe determines whether media data exists.
+            out.push(file);
         } else {
             return Err(err_exit(
-                format!("path '{}' does not exist", p.display()),
+                format!("path '{}' does not exist", path.display()),
                 EXIT_PATH,
             ));
         }
@@ -387,18 +401,36 @@ fn collect_assets(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>, i32> {
 }
 
 fn collect_dir(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), i32> {
-    for entry in std::fs::read_dir(dir).map_err(|e| {
+    let mut visited = BTreeSet::new();
+    collect_dir_inner(dir, out, &mut visited)
+}
+
+fn collect_dir_inner(
+    dir: &Path,
+    out: &mut Vec<PathBuf>,
+    visited: &mut BTreeSet<PathBuf>,
+) -> Result<(), i32> {
+    let directory = validate_existing_directory(dir).map_err(|error| {
         err_exit(
-            format!("cannot read directory '{}': {e}", dir.display()),
+            format!("cannot inspect directory '{}': {error}", dir.display()),
+            EXIT_ERROR,
+        )
+    })?;
+    if !visited.insert(directory.clone()) {
+        return Ok(());
+    }
+    for entry in std::fs::read_dir(&directory).map_err(|e| {
+        err_exit(
+            format!("cannot read directory '{}': {e}", directory.display()),
             EXIT_ERROR,
         )
     })? {
         let entry = entry.map_err(|_| EXIT_ERROR)?;
         let path = entry.path();
         if path.is_dir() {
-            collect_dir(&path, out)?;
-        } else if is_media_file(&path) {
-            out.push(path);
+            collect_dir_inner(&path, out, visited)?;
+        } else if let Ok(media) = validate_media_file(&path) {
+            out.push(media);
         }
     }
     Ok(())

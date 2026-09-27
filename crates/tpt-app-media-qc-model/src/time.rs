@@ -105,7 +105,8 @@ impl Rational {
     }
 }
 
-/// Total order via cross multiplication (works for any magnitudes).
+/// Total order via wide cross multiplication. `u128` keeps comparison
+/// defined for every pair of `u64` numerators/denominators.
 impl PartialOrd for Rational {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
@@ -114,7 +115,8 @@ impl PartialOrd for Rational {
 
 impl Ord for Rational {
     fn cmp(&self, other: &Self) -> Ordering {
-        (self.num * other.den).cmp(&(other.num * self.den))
+        (u128::from(self.num) * u128::from(other.den))
+            .cmp(&(u128::from(other.num) * u128::from(self.den)))
     }
 }
 
@@ -165,6 +167,16 @@ impl Timecode {
         }
     }
 
+    /// Convert a real frame count to the non-drop or SMPTE drop-frame display
+    /// index. Drop-frame numbering is only defined for 29.97 and 59.94 rates.
+    pub fn display_frame_index(self) -> Option<u64> {
+        if self.drop_frame {
+            drop_frame_display_index(self.frames, self.display_fps())
+        } else {
+            Some(self.frames)
+        }
+    }
+
     /// Seconds represented by this timecode.
     pub fn as_seconds(self) -> f64 {
         self.frames as f64 / self.rate.value()
@@ -172,19 +184,25 @@ impl Timecode {
 
     /// Integer frames-per-second used for the on-screen counter (29.97 → 30).
     pub fn display_fps(self) -> u64 {
-        self.rate.value().round() as u64
+        if self.rate.den == 0 {
+            return 0;
+        }
+        let value = self.rate.value();
+        if !value.is_finite() || value >= u64::MAX as f64 {
+            return 0;
+        }
+        value.round() as u64
     }
 
     /// Display as `HH:MM:SS:FF` (non-drop) or `HH:MM:SS;FF` (drop-frame).
     pub fn to_smpte(self) -> String {
         let fps = self.display_fps();
-        let idx = if self.drop_frame {
-            match drop_frame_display_index(self.frames, fps) {
-                Some(idx) => idx,
-                None => return format!("<unsupported drop-frame rate {}>", self.rate),
-            }
-        } else {
-            self.frames
+        if fps == 0 {
+            return format!("<invalid frame rate {}>", self.rate);
+        }
+        let idx = match self.display_frame_index() {
+            Some(index) => index,
+            None => return format!("<unsupported drop-frame rate {}>", self.rate),
         };
 
         let seconds_total = idx / fps;
@@ -202,10 +220,10 @@ impl Timecode {
 ///
 /// The convention (for 29.97): frame numbers `0` and `1` are omitted at the
 /// start of every minute except the first minute of each ten-minute block.
-/// Equivalently, within a ten-minute block the first minute is a full
-/// `display_fps * 60` frames long and each subsequent minute is
-/// `display_fps * 60 - drops_per_minute` frames long, with `drops_per_minute`
-/// being 2 for 29.97 and 4 for 59.94. The whole pattern is self-consistent
+/// For 59.94, four labels are omitted at each minute boundary, including the
+/// first minute of each block. Within a block, later minutes contain
+/// `display_fps * 60 - drops_per_minute` real frames. The whole pattern is
+/// self-consistent
 /// (one-to-one and monotonic) and reproduces the canonical SMPTE anchors:
 ///
 /// * 10 display minutes == 17,982 real frames (29.97);
@@ -224,19 +242,25 @@ fn drop_frame_display_index(real_frames: u64, display_fps: u64) -> Option<u64> {
 
     let frames_per_day_real = real_frames_per_block * 24;
     let frames_per_minute0 = display_fps * 60;
+    let frames_per_first_minute = match display_fps {
+        // 29.97 has a full first display minute; 59.94 drops four labels there.
+        30 => frames_per_minute0,
+        60 => frames_per_minute0 - drops_per_minute,
+        _ => return None,
+    };
     let frames_per_dropped_minute = frames_per_minute0 - drops_per_minute;
 
     let r = real_frames % frames_per_day_real;
     let blocks = r / real_frames_per_block;
     let m = r % real_frames_per_block;
 
-    let m_adjusted = if m < frames_per_minute0 {
-        // First (undropped) minute of the block: no drops yet.
+    let m_adjusted = if m < frames_per_first_minute {
+        // First minute of the block: no drop adjustment has happened yet.
         m
     } else {
-        // Subsequent minutes drop `drops_per_minute` frame numbers each.
-        let k = (m - frames_per_minute0) / frames_per_dropped_minute;
-        let k = k.min(9);
+        // Each later minute drops `drops_per_minute` display frame numbers.
+        let k = (m - frames_per_first_minute) / frames_per_dropped_minute;
+        let k = k.min(8);
         m + drops_per_minute * (1 + k)
     };
 
@@ -333,6 +357,27 @@ mod tests {
             Timecode::new(5792, Rational::from_parts(30000, 1001), true).to_smpte(),
             "00:03:13;08"
         );
+    }
+
+    #[test]
+    fn drop_frame_59_94_ten_minute_boundary() {
+        let rate = Rational::from_parts(60000, 1001);
+        let ten_minutes = Timecode::new(35_964, rate, true);
+        assert_eq!(ten_minutes.display_frame_index(), Some(36_000));
+        assert_eq!(ten_minutes.to_smpte(), "00:10:00;00");
+        // The first minute drops four labels: the first display minute starts
+        // after 3,596 real frames, not 3,600.
+        assert_eq!(Timecode::new(3_596, rate, true).to_smpte(), "00:01:00;00");
+    }
+
+    #[test]
+    fn invalid_rates_do_not_panic_when_formatted() {
+        let invalid = Timecode::new(1, Rational::from_parts(1, 0), false);
+        assert!(invalid.to_smpte().contains("invalid frame rate"));
+        let unsupported_drop = Timecode::new(1, Rational::from_parts(25, 1), true);
+        assert!(unsupported_drop
+            .to_smpte()
+            .contains("unsupported drop-frame rate"));
     }
 
     #[test]

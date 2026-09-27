@@ -7,6 +7,7 @@ use crate::rule::{
 use crate::util::{fail, inconclusive, info, segment_failures};
 use tpt_app_media_qc_core::cost::CostClass;
 use tpt_app_media_qc_model::asset::StreamKind;
+use tpt_app_media_qc_model::evidence::{Evidence, EvidenceKind};
 use tpt_app_media_qc_model::finding::RuleId;
 use tpt_app_media_qc_model::severity::Severity;
 use tpt_app_media_qc_model::value::Value;
@@ -521,6 +522,20 @@ struct LoudnessRuleImpl {
     cfg: LoudnessRule,
 }
 
+impl LoudnessRuleImpl {
+    fn standard_evidence(&self) -> Evidence {
+        Evidence::json(
+            EvidenceKind::JsonDiagnostic,
+            "Loudness standard",
+            serde_json::json!({
+                "standard": self.cfg.standard.label(),
+                "target_lufs": self.cfg.target_lufs,
+                "tolerance_lu": self.cfg.tolerance_lu,
+            }),
+        )
+    }
+}
+
 impl QcRule for LoudnessRuleImpl {
     fn id(&self) -> RuleId {
         RuleId::new("audio.loudness")
@@ -543,46 +558,53 @@ impl QcRule for LoudnessRuleImpl {
     }
     fn run(&self, ctx: &RuleContext<'_>) -> RuleResult {
         let Some(measurement) = audio_measurement(ctx) else {
-            return RuleResult::from_finding(inconclusive(
-                &self.id(),
-                self.cfg.severity,
-                "audio was not decoded, so loudness could not be measured",
-            ));
+            return RuleResult::from_finding(
+                inconclusive(
+                    &self.id(),
+                    self.cfg.severity,
+                    "audio was not decoded, so loudness could not be measured",
+                )
+                .evidence(self.standard_evidence()),
+            );
         };
         let Some(lufs) = measurement.loudness_lufs else {
-            return RuleResult::from_finding(inconclusive(
-                &self.id(),
-                self.cfg.severity,
-                "loudness was not measured for this stream",
-            ));
+            return RuleResult::from_finding(
+                inconclusive(
+                    &self.id(),
+                    self.cfg.severity,
+                    "loudness was not measured for this stream",
+                )
+                .evidence(self.standard_evidence()),
+            );
         };
-        let std = format!("{:?}", self.cfg.standard).to_lowercase();
+        let standard = self.cfg.standard.label();
         let delta = (lufs - self.cfg.target_lufs).abs();
-        if delta > self.cfg.tolerance_lu {
-            return RuleResult::from_finding(fail(
+        let finding = if delta > self.cfg.tolerance_lu {
+            fail(
                 &self.id(),
                 self.cfg.severity,
                 format!(
-                    "integrated loudness is {lufs:.1} LUFS ({std}), target {} ±{} LU",
+                    "integrated loudness is {lufs:.1} LUFS ({standard}), target {} ±{} LU",
                     self.cfg.target_lufs, self.cfg.tolerance_lu
                 ),
                 Some(Value::Ratio(lufs)),
                 Some(Value::Ratio(self.cfg.target_lufs)),
-            ));
-        }
-        if measurement.decode_errors > 0 {
-            return RuleResult::from_finding(inconclusive(
+            )
+        } else if measurement.decode_errors > 0 {
+            inconclusive(
                 &self.id(),
                 self.cfg.severity,
                 "audio decode had errors, so loudness may be inaccurate",
-            ));
-        }
-        RuleResult::from_finding(info(
-            &self.id(),
-            Severity::Info,
-            format!("loudness {lufs:.1} LUFS within target"),
-            Some(Value::Ratio(lufs)),
-        ))
+            )
+        } else {
+            info(
+                &self.id(),
+                Severity::Info,
+                format!("loudness {lufs:.1} LUFS within target ({standard})"),
+                Some(Value::Ratio(lufs)),
+            )
+        };
+        RuleResult::from_finding(finding.evidence(self.standard_evidence()))
     }
 }
 
@@ -831,6 +853,8 @@ mod tests {
         m.loudness_lufs = Some(-18.0);
         let r = rule.execute(&ctx_with(vec![m]));
         assert_eq!(r.findings[0].status, Status::Fail);
+        assert_eq!(r.findings[0].evidence.len(), 1);
+        assert_eq!(r.findings[0].evidence[0].label, "Loudness standard");
     }
 
     #[test]

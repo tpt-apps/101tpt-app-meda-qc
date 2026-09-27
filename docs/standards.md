@@ -1,8 +1,9 @@
 # Standards Architecture
 
-Standards (EBU R128, ATSC A/85, ITU-R BS.1770, BT.1702, …) are implemented as
-**profiles and rules, not hard-coded application logic** (spec §25). The
-application distinguishes four layers so a change in one never leaks into
+Standards configuration is implemented as **profiles and rules, not
+hard-coded application logic** (spec §25). Standards whose measurement and
+delivery coverage is not implemented remain explicitly marked as roadmap work.
+The application distinguishes four layers so a change in one never leaks into
 another:
 
 1. **Measurement algorithm** — how a quantity is computed (e.g. integrated
@@ -31,17 +32,23 @@ audio:
     severity: error
 ```
 
-The chosen standard is stored with every result so reports record *how* the
-number was obtained (spec §8.6).
+The chosen standard, target and tolerance are attached as JSON evidence to
+every loudness finding; the report also embeds the exact profile SHA-256. This
+records how the configured threshold was applied without claiming that the
+measurement algorithm has been validated for formal compliance (spec §8.6).
 
-## 2. Planned standard profiles
+## 2. Current and planned standard profiles
 
-Layout envisioned under [`profiles/`](../profiles/) (following spec §25):
+The currently supported standards configuration lives in
+[`profiles/`](../profiles/): EBU R128, ATSC A/85 and a BS.1770-derived
+streaming profile. BT.1702 and other video standards remain roadmap items:
+they require interlace/field-order measurements and corresponding delivery
+rules before they can be represented honestly.
 
 ```
 profiles/
 ├── generic/        # general-purpose default
-├── broadcast/      # e.g. ATSC A/85, BT.1702-flavoured delivery checks
+├── broadcast/      # EBU R128 and ATSC A/85 delivery profiles
 ├── streaming/      # OTT-oriented checks (VOD/CEG R128, targets below -23)
 └── examples/       # starter templates for new customers
 ```

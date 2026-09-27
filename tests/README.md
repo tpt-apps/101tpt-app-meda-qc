@@ -17,9 +17,9 @@ tests/
   expected result in `golden/` — implemented and enforced: the runner in
   `tpt-app-media-qc-test` verifies every manifest on `cargo test --workspace`
   and asserts coverage of every production rule.
-- **Property tests** (spec §24.3) cover timecode conversion, frame indexing,
-  duration calculations, threshold logic, profile parsing and result
-  aggregation (planned).
+- **Property tests** (spec §24.3) use a fixed-seed generated matrix covering
+  timecode conversion, frame indexing, duration calculations, threshold logic,
+  profile parsing and result aggregation.
 - **Fuzzing** (spec §24.4) targets containers, metadata, the profile parser,
   the result parser, CLI arguments, report generation and media-boundary
   handling.

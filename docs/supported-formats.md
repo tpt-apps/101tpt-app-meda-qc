@@ -72,4 +72,6 @@ validated against fixtures.
 Media parsers never *execute* embedded content, and parser code is a target
 for fuzzing (spec §22, §24.4). The probe boundary runs `ffprobe` as a separate
 process; when the in-process TPT stack is integrated, its parsers will be fuzz
-tested before being accepted.
+tested before being accepted. Media/profile inputs are canonicalized before
+use, and report exporters stage output in securely created temporary files
+before replacing the requested destination.

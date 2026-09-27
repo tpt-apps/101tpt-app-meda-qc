@@ -1,9 +1,12 @@
 //! Standalone HTML report rendering (single-file, self-contained).
 
+use std::io::Write;
 use std::path::Path;
 
 use tpt_app_media_qc_core::error::Result;
 use tpt_app_media_qc_model::report::Report;
+
+use crate::output::{commit_writer, staged_writer};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WriteHtmlOptions {
@@ -91,8 +94,9 @@ pub fn render_html(path: &Path, report: &Report, options: WriteHtmlOptions) -> R
     }
 
     body.push_str("</body></html>");
-    std::fs::write(path, body)?;
-    Ok(())
+    let mut out = staged_writer(path)?;
+    out.write_all(body.as_bytes())?;
+    commit_writer(out, path)
 }
 
 fn css_class(status: &str) -> &str {

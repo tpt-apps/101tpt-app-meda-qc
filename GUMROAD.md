@@ -1,14 +1,14 @@
 # Gumroad launch checklist
 
-Status: **not ready to package**. The desktop shell
-(`crates/tpt-app-media-qc-tauri`) is still a stub — this checklist is the plan
-for when it isn't. Revisit item-by-item before the first upload.
+Status: **not ready for a paid launch**. The desktop shell and an unsigned
+release-artifact workflow are implemented, but signing, notarization,
+dependency packaging, licensing decisions and private-beta validation remain
+open. Revisit item-by-item before the first upload.
 
 ## Blocking
 
-- [ ] Tauri desktop app actually implemented (currently a 1-line stub in
-      `crates/tpt-app-media-qc-tauri/src/lib.rs`). Gumroad customers expect a
-      double-click installer, not a CLI binary + a README explaining PATH.
+- [x] Tauri desktop app implemented (native Tauri 2 shell with dashboard,
+      import, local queue, inspector, timeline/evidence and report export).
 - [ ] Decide on licensing model before the store listing goes up. Current
       state: dual MIT/Apache-2.0 (fully permissive) on a public-looking
       GitHub org (`tpt-apps`), while `CONTRIBUTING.md` calls this the
@@ -24,15 +24,15 @@ for when it isn't. Revisit item-by-item before the first upload.
 
 ## Build & packaging
 
-- [ ] Cross-platform release builds: Windows (.msi/.exe via Tauri bundler),
-      macOS (.dmg, signed + notarized), Linux (.AppImage/.deb) if supported.
+- [x] Cross-platform **unsigned** release builds: Windows `.msi`, macOS `.dmg`,
+      and Linux `.deb`/`.AppImage` on native runners.
 - [ ] Code signing / notarization for Windows (Authenticode) and macOS
       (Apple Developer ID) — unsigned installers trigger SmartScreen/Gatekeeper
       warnings that kill conversion on a paid product.
-- [ ] Versioned release artifacts wired to CI (`.github/workflows/ci.yml` now
-      builds/tests on push; a separate `release.yml` triggered on tag push
-      should build the signed installers and attach them to a GitHub Release
-      / upload to Gumroad).
+- [x] Versioned **unsigned** release artifacts wired to CI: pushing a `v*` tag
+      matching the Tauri configuration version builds Windows/macOS/Linux bundles
+      and attaches them to a draft GitHub Release (`.github/workflows/release.yml`).
+      Signing, notarization and Gumroad upload remain separate blockers.
 - [ ] Confirm the git dependencies on `tpt-solutions/tpt-kinetix` and
       `tpt-solutions/tpt-cadence` are reachable by the CI/release runner — if
       those repos are private, the runner needs a deploy key or PAT with
@@ -43,8 +43,8 @@ for when it isn't. Revisit item-by-item before the first upload.
 - [ ] Product title, one-line pitch, and description (pull from `spec.txt` /
       README feature list — content-based fingerprinting, rule-based QC
       profiles, deterministic reports).
-- [ ] Screenshots/demo video of the actual GUI (can't be produced until the
-      Tauri shell exists).
+- [ ] Screenshots/demo video of the actual GUI (the Tauri shell now exists;
+      capture and approve store-ready assets before launch).
 - [ ] Pricing tier(s) — one-time license vs. subscription; single-seat vs.
       studio/team.
 - [ ] License key / activation mechanism if you want to gate paid use (Gumroad

@@ -139,14 +139,14 @@ fn main() {
         ),
     ];
 
-    // Report pipeline: build + render the text and print formats.
+    // Report pipeline: build + render the text and print formats. The temporary
+    // directory is RAII-managed so concurrent benchmark runs cannot share files.
     let run = run_fixture(&fixture, &profile);
     let report_for = || build_report(&run, AnalysisId::default(), &profile);
-    let tmp = std::env::temp_dir().join("tpt-qc-bench");
-    let _ = std::fs::create_dir_all(&tmp);
-    let json_path = tmp.join("bench.json");
-    let html_path = tmp.join("bench.html");
-    let pdf_path = tmp.join("bench.pdf");
+    let temporary = tempfile::tempdir().expect("benchmark temporary directory");
+    let json_path = temporary.path().join("bench.json");
+    let html_path = temporary.path().join("bench.html");
+    let pdf_path = temporary.path().join("bench.pdf");
 
     results.push(bench("report_build_and_json", 100, 9, 0, || {
         let report = report_for();
@@ -196,8 +196,6 @@ fn main() {
         .map(|r| (r.samples, r.iters))
         .unwrap_or((0, 0));
     println!("\n{samples} samples per bench, {iters} iterations per sample; lower is better.");
-
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 fn format_ns(ns: f64) -> String {

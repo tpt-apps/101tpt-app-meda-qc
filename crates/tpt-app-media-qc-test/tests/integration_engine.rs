@@ -82,17 +82,12 @@ fn clean_fixture_renders_every_report_format() {
     assert_eq!(report.integrity.asset_sha256, run.asset.fingerprint.sha256);
     assert_eq!(report.integrity.profile_sha256.len(), 64);
 
-    let dir = std::env::temp_dir().join(format!(
-        "tpt-qc-integration-{}-{}",
-        std::process::id(),
-        run.findings.len()
-    ));
-    std::fs::create_dir_all(&dir).expect("temp dir");
+    let directory = tempfile::tempdir().expect("temporary report directory");
 
-    let json_path = dir.join("report.json");
-    let html_path = dir.join("report.html");
-    let csv_path = dir.join("report.csv");
-    let pdf_path = dir.join("report.pdf");
+    let json_path = directory.path().join("report.json");
+    let html_path = directory.path().join("report.html");
+    let csv_path = directory.path().join("report.csv");
+    let pdf_path = directory.path().join("report.pdf");
 
     write_json_report(&json_path, &report).expect("json export");
     render_html(&html_path, &report, WriteHtmlOptions { embed_json: true }).expect("html export");
@@ -116,6 +111,4 @@ fn clean_fixture_renders_every_report_format() {
         round_trip.integrity.profile_sha256,
         report.integrity.profile_sha256
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }

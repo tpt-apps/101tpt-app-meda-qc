@@ -1,19 +1,18 @@
 //! JSON report writing.
 
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::Path;
 
 use tpt_app_media_qc_core::error::Result;
 use tpt_app_media_qc_model::report::Report;
 
+use crate::output::{commit_writer, staged_writer};
+
 /// Write the report as compact, machine-readable JSON with an integrity
 /// signature.
 pub fn write_json(path: &Path, report: &Report) -> Result<()> {
-    let file = File::create(path)?;
-    let writer = BufWriter::new(file);
-    serde_json::to_writer_pretty(writer, report)?;
-    Ok(())
+    let mut writer = staged_writer(path)?;
+    serde_json::to_writer_pretty(&mut writer, report)?;
+    commit_writer(writer, path)
 }
 
 #[cfg(test)]
@@ -66,6 +65,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("report.json");
         let report = minimal_report();
+        write_json(&path, &report).unwrap();
+        // A staged export must replace an existing report without exposing a
+        // partially written destination.
         write_json(&path, &report).unwrap();
         let back = std::fs::read_to_string(&path).unwrap();
         let parsed: Report = serde_json::from_str(&back).unwrap();

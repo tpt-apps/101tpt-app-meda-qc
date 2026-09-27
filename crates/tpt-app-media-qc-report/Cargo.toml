@@ -17,10 +17,8 @@ serde_json.workspace = true
 chrono.workspace = true
 uuid = { workspace = true, features = ["v4", "serde"] }
 lopdf.workspace = true
+tempfile.workspace = true
 tpt-app-media-qc-core = { path = "../tpt-app-media-qc-core" }
 tpt-app-media-qc-model = { path = "../tpt-app-media-qc-model" }
 tpt-app-media-qc-profile = { path = "../tpt-app-media-qc-profile" }
 tpt-app-media-qc-pipeline = { path = "../tpt-app-media-qc-pipeline" }
-
-[dev-dependencies]
-tempfile.workspace = true
