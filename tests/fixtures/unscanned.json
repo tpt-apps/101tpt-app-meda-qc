@@ -23,6 +23,14 @@
         "bitrate": 2304000, "duration": 120,
         "language": "en", "channel_layout": "stereo", "channels": 2,
         "sample_rate": 48000, "bit_depth": 24, "metadata": {}
+      },
+      {
+        "index": 2, "kind": "subtitle", "codec": "subrip", "codec_profile": null,
+        "width": null, "height": null, "pixel_format": null,
+        "frame_rate": null, "time_base": "1/1000",
+        "bitrate": null, "duration": 120,
+        "language": "eng", "channel_layout": null, "channels": null,
+        "sample_rate": null, "bit_depth": null, "metadata": {}
       }
     ]
   },

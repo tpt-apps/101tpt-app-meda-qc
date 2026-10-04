@@ -20,6 +20,46 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   10° field area criterion, general and saturated-red flashes); spatial
   patterns are not assessed and compliance is not claimed.
 
+- `video.hdr` rule: HDR/colorimetry **signalling** validation. Probe front-ends
+  record transfer, primaries, matrix, sample range, ST 2086 mastering display,
+  MaxCLL/MaxFALL and Dolby Vision presence in `HdrMetadata`, and the new
+  `rules.video.hdr` profile key checks the expected dynamic range (`sdr`,
+  `hdr10`/`pq`, `hlg` or `hdr`), BT.2020 signalling, limited range, ≥ 10-bit
+  depth, static-metadata presence and per-profile `max_cll_nits`/`max_fall_nits`
+  ceilings, with MaxFALL ≤ MaxCLL always enforced. An unsignalled transfer is
+  `Inconclusive`. Light levels come from static metadata rather than measured
+  pixels, and dynamic metadata (Dolby Vision RPU, HDR10+) is only detected, not
+  validated; no compliance is claimed. Ships with a bundled
+  `profiles/streaming/hdr10.yaml` delivery profile.
+
+- Subtitle/caption validation (spec §8.7): five new rules —
+  `subtitle.presence`, `subtitle.language`, `subtitle.timing`,
+  `subtitle.content` and `subtitle.duration_match`. Cue timing is measured from
+  packet headers and cue text from the packet payload, recorded in
+  `SubtitleMeasurements`, so every rule runs in the cheap metadata pass without
+  decoding picture or samples. Checks cover track presence, required ISO 639
+  languages (loose matching, so `en` satisfies `eng`), cue overlaps, invalid
+  durations, inter-cue gaps, cue dwell time, malformed and empty payloads,
+  characters per line, lines per cue and subtitle coverage against the video
+  duration. Character counts are taken after stripping SRT/ASS/WebVTT markup.
+  Text-dependent checks require a text-based subtitle codec and report
+  `Inconclusive` otherwise; cue analysis is capped at 100 000 cues per stream.
+  Golden fixtures and manifests cover the new rules. The previous
+  `subtitle.language`/`subtitle.missing_subtitles` placeholders are replaced by
+  the structured `subtitle.*` keys above (breaking for any profile using them).
+
+- `video.dead_pixels` rule: stuck/dead/flickering pixel detection (spec § 8.4)
+  over decoded AV1/VP9 frames. Every luma cell is compared across the decode and
+  flagged when it never brightens in bright shots (dead), never darkens in dark
+  shots (stuck), or alternates between both extremes (flicker). Judging only
+  against frames that provide contrast is what keeps static content such as
+  letterbox bars from being reported as defects. Flagged cells are clustered
+  4-connected and the largest cluster's position and size are attached to the
+  finding. Profile keys `max_pixels`, `max_clusters`, `include_flicker` and
+  `fail_on_limited_resolution`; analysis is capped at ~4.2 M cells per frame and
+  stride-samples above that. Luma-only heuristics — no chroma/subpixel defect
+  detection and no claim of compliance with a published standard.
+
 - Cargo workspace with the crates `core`, `model`, `rules`, `pipeline`,
   `profile`, `report`, `cli`, `tauri` and `test`.
 - Content-based asset fingerprinting (SHA-256), independent of file path.

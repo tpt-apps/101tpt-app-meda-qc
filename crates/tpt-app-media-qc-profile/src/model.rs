@@ -138,6 +138,28 @@ pub struct VideoRules {
     pub color_space: Option<ColorSpaceRule>,
     pub scan_format: Option<ScanFormatRule>,
     pub photosensitivity: Option<PhotosensitivityRule>,
+    pub hdr: Option<HdrRule>,
+    pub dead_pixels: Option<DeadPixelRule>,
+}
+
+/// Stuck/dead/flickering pixel limits ([spec § 8.4]).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DeadPixelRule {
+    /// Permitted flagged cells across all kinds (default 0).
+    #[serde(default)]
+    pub max_pixels: u64,
+    /// Permitted distinct defect clusters (default 0).
+    #[serde(default)]
+    pub max_clusters: u32,
+    /// Count flickering pixels as defects (default `true`).
+    #[serde(default = "default_true")]
+    pub include_flicker: bool,
+    /// Report `Inconclusive` when the picture was stride-sampled and coverage
+    /// is therefore coarser than one cell per source pixel (default `false`).
+    #[serde(default)]
+    pub fail_on_limited_resolution: bool,
+    #[serde(default)]
+    pub severity: Severity,
 }
 
 /// Exact expected resolution.
@@ -210,6 +232,42 @@ pub struct LumaRangeRule {
     pub max_out_of_legal: f64,
     #[serde(default)]
     pub severity: Severity,
+}
+
+/// Expected dynamic-range signalling.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HdrMode {
+    /// Standard dynamic range: neither PQ nor HLG.
+    Sdr,
+    /// HDR10: PQ (SMPTE ST 2084) with BT.2020 primaries.
+    Hdr10,
+    /// HLG (ARIB STD-B67) with BT.2020 primaries.
+    Hlg,
+    /// Either PQ or HLG.
+    Hdr,
+}
+
+/// HDR / colorimetry signalling rule.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HdrRule {
+    pub mode: HdrMode,
+    /// Require SMPTE ST 2086 mastering display and content light level
+    /// metadata for PQ content (default `true`).
+    #[serde(default = "default_true")]
+    pub require_static_metadata: bool,
+    /// Maximum permitted MaxCLL in nits.
+    #[serde(default)]
+    pub max_cll_nits: Option<u32>,
+    /// Maximum permitted MaxFALL in nits.
+    #[serde(default)]
+    pub max_fall_nits: Option<u32>,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Photosensitive-epilepsy general-flash rule.
@@ -423,17 +481,109 @@ pub struct DcOffsetRule {
 }
 
 // ---------------------------------------------------------------------------
-// Subtitle / voice rules (post-MVP; structure reserved now)
+// Subtitle / voice rules
 // ---------------------------------------------------------------------------
 
+/// Subtitle and caption rules ([spec § 8.7]).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SubtitleRules {
-    /// Demanded subtitle track language (e.g. `eng`).
+    /// Expected number of subtitle streams.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub language: Option<String>,
-    /// Severity used when no subtitle track at all is present.
+    pub presence: Option<SubtitlePresenceRule>,
+    /// Demanded subtitle track languages (e.g. `eng`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub missing_subtitles: Option<Severity>,
+    pub language: Option<SubtitleLanguageRule>,
+    /// Cue timing: overlaps, invalid durations, gaps and cue length.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timing: Option<SubtitleTimingRule>,
+    /// Cue content: malformed/empty payloads and character limits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content: Option<SubtitleContentRule>,
+    /// Subtitle coverage against the video duration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_match: Option<SubtitleDurationRule>,
+}
+
+/// How many subtitle tracks a delivery must carry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubtitlePresenceRule {
+    #[serde(default = "default_one")]
+    pub min_subtitle: u32,
+    #[serde(default)]
+    pub max_subtitle: Option<u32>,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+/// Which subtitle languages must be present, and how many times each.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubtitleLanguageRule {
+    /// ISO 639-2/B codes that must each appear at least `min_tracks` times.
+    pub required: Vec<String>,
+    /// Required occurrences of each language (default 1).
+    #[serde(default = "default_one")]
+    pub min_tracks: u32,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+/// Cue timing thresholds ([spec § 8.7] timing / overlaps / invalid durations).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubtitleTimingRule {
+    /// Permitted cues overlapping the next cue (default 0).
+    #[serde(default)]
+    pub max_overlaps: u32,
+    /// Permitted cues that do not end after they start (default 0).
+    #[serde(default)]
+    pub max_invalid_durations: u32,
+    /// Permitted silence between cues, in milliseconds. Unset disables the check.
+    #[serde(default)]
+    pub max_gap_ms: Option<u64>,
+    /// Maximum permitted single-cue display time, in milliseconds.
+    #[serde(default)]
+    pub max_cue_duration_ms: Option<u64>,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+/// Cue content thresholds ([spec § 8.7] malformed data / character limits).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubtitleContentRule {
+    /// Permitted cues whose payload is not decodable text (default 0).
+    #[serde(default)]
+    pub max_malformed: u32,
+    /// Permitted cues that decode but show nothing (default 0).
+    #[serde(default)]
+    pub max_empty: u32,
+    /// Maximum characters on one line. Unset disables the check.
+    #[serde(default)]
+    pub max_chars_per_line: Option<u32>,
+    /// Maximum lines within one cue. Unset disables the check.
+    #[serde(default)]
+    pub max_lines_per_cue: Option<u32>,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+/// Subtitle coverage versus the video it belongs to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubtitleDurationRule {
+    /// Permitted shortfall of subtitle coverage against video duration, in ms.
+    #[serde(default = "default_subtitle_tolerance")]
+    pub tolerance_ms: u64,
+    /// Permit subtitles that run past the end of the video (default `true`).
+    #[serde(default = "default_true")]
+    pub allow_longer: bool,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+fn default_subtitle_tolerance() -> u64 {
+    1000
+}
+
+fn default_one() -> u32 {
+    1
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

@@ -50,6 +50,10 @@ const BUNDLED_PROFILES: &[(&str, &str)] = &[
         "streaming-vod",
         include_str!("../../../profiles/streaming/vod.yaml"),
     ),
+    (
+        "streaming-hdr10",
+        include_str!("../../../profiles/streaming/hdr10.yaml"),
+    ),
 ];
 
 const MAX_IMPORT_FILES: usize = 10_000;
@@ -262,6 +266,9 @@ mod tests {
     fn bundled_profiles_are_valid() {
         let profiles = list_profiles();
         assert!(profiles.iter().any(|profile| profile.id == "generic"));
+        assert!(profiles
+            .iter()
+            .any(|profile| profile.id == "streaming-hdr10"));
         assert!(profiles.len() >= 4);
     }
 

@@ -64,3 +64,30 @@ pub fn bundled_asset<'a>() -> &'a Asset {
         ],
     })
 }
+
+/// A video + one English subtitle track, used by the subtitle rule tests
+/// ([spec § 8.7]).
+pub fn subtitle_asset() -> Asset {
+    let mut asset = bundled_asset().clone();
+    asset.streams.push(Stream {
+        index: StreamId::new(2),
+        kind: StreamKind::Subtitle,
+        codec: Some("subrip".into()),
+        codec_profile: None,
+        width: None,
+        height: None,
+        pixel_format: None,
+        field_order: None,
+        frame_rate: None,
+        time_base: Some(Rational::from_parts(1, 1000)),
+        bitrate: None,
+        duration: Some(DurationSeconds::from_millis(120_000)),
+        language: Some("eng".into()),
+        channel_layout: None,
+        channels: None,
+        sample_rate: None,
+        bit_depth: None,
+        metadata: BTreeMap::new(),
+    });
+    asset
+}

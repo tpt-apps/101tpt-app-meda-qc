@@ -12,9 +12,11 @@ pub mod parse;
 pub use hash::{per_rule_config_hash, profile_sha256};
 pub use model::{
     AudioRules, ChannelLayoutRule, ContainerRules, CountThresholdRule, DbThresholdRule,
-    DurationThresholdRule, ExpectValueRule, FrameRateRule, LoudnessRule, LoudnessStandard,
-    MinBitrateRule, Policy, Profile, Resolution, ResolutionRule, RuleSetConfig, SubtitleRules,
-    TimestampContinuityRule, ToleranceRule, VideoRules, VoiceRules,
+    DeadPixelRule, DurationThresholdRule, ExpectValueRule, FrameRateRule, LoudnessRule,
+    LoudnessStandard, MinBitrateRule, Policy, Profile, Resolution, ResolutionRule, RuleSetConfig,
+    SubtitleContentRule, SubtitleDurationRule, SubtitleLanguageRule, SubtitlePresenceRule,
+    SubtitleRules, SubtitleTimingRule, TimestampContinuityRule, ToleranceRule, VideoRules,
+    VoiceRules,
 };
 pub use parse::{parse_str, ProfileError};
 

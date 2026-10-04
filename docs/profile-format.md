@@ -81,6 +81,8 @@ Severities are `info`, `warning`, `error`, `critical`.
 | `color_space` | mapping / scalar | `expected` colour-space tag (e.g. `bt709`, `bt2020nc`) |
 | `scan_format` | mapping / scalar | `scan`: `progressive`/`interlaced`/`any` (scalar shorthand allowed); `field_order`: `top_field_first`/`bottom_field_first`/`any`. At least one non-`any` expectation required. Unsignalled field order is `Inconclusive` against `progressive` and a failure against `interlaced`/pinned orders |
 | `photosensitivity` | mapping | `max_flashes_per_second` (default 3). Harding/BT.1702-style: per-pixel opposing luminance transitions (≥ 0.1, darker state < 0.8) over ≥ 25 % of the 10° field, plus a saturated-red test; general and red flashes judged separately; needs full decode (AV1/VP9) |
+| `hdr` | mapping / scalar | `mode` (required): `sdr`, `hdr10` (or `pq`), `hlg` or `hdr` (either PQ or HLG); `require_static_metadata` (default `true` — ST 2086 mastering display and MaxCLL/MaxFALL for PQ); `max_cll_nits`, `max_fall_nits` ceilings. Metadata-driven: also checks BT.2020 primaries/matrix, limited range and ≥ 10-bit depth for HDR, and MaxFALL ≤ MaxCLL always. Unsignalled transfer is `Inconclusive`; light levels are read from static metadata, not measured from pixels |
+| `dead_pixels` | mapping / scalar | `max_pixels` (default 0), `max_clusters` (default 0), `include_flicker` (default `true`), `fail_on_limited_resolution` (default `false`). Needs full decode (AV1/VP9). Flagged pixels are clustered and the largest cluster's position and size are attached to the finding |
 
 ## 5. Audio rules (spec §8.5, §8.6)
 
@@ -100,18 +102,55 @@ Severities are `info`, `warning`, `error`, `critical`.
 Loudness standard defaults: EBU R128 → `-23 LUFS`, ATSC A/85 → `-24 LUFS`,
 BS.1770 → `-18 LUFS`.
 
-## 6. Subtitle / voice rules (post-MVP placeholders)
+## 6. Subtitle rules (spec § 8.7)
+
+| Key | Form | Meaning |
+|-----|------|---------|
+| `presence` | mapping / scalar | `min_subtitle` (default 1), `max_subtitle`. Scalar shorthand (`presence: error`) means "at least one track". Reports `Inconclusive` when the container was not scanned |
+| `language` | mapping | `required`: list of ISO 639 codes that must each be present `min_tracks` times (default 1). Matching is case-insensitive, ignores region subtags, and treats the legacy two-letter codes as their three-letter equivalents (`en` = `eng`) |
+| `timing` | mapping | `max_overlaps` (default 0), `max_invalid_durations` (default 0), `max_gap_ms`, `max_cue_duration_ms`. Overlaps and invalid durations are reported per cue with its time range; gaps and cue length are reported as measured-vs-limit values |
+| `content` | mapping | `max_malformed` (default 0), `max_empty` (default 0), `max_chars_per_line`, `max_lines_per_cue`. Character limits require a text-based subtitle codec; otherwise the rule reports `Inconclusive` |
+| `duration_match` | mapping | `tolerance_ms` (default 1000), `allow_longer` (default `true`). Compares the end of the last cue against the video duration |
 
 ```yaml
 subtitle:
-  language: "eng"        # demanded subtitle track language
-  missing_subtitles: error
-
-voice:
-  {}                     # reserved for spec §8.8
+  presence:
+    min_subtitle: 1
+    severity: error
+  language:
+    required: ["eng"]
+    severity: error
+  timing:
+    max_overlaps: 0
+    max_gap_ms: 5000
+    max_cue_duration_ms: 7000
+    severity: warning
+  content:
+    max_malformed: 0
+    max_chars_per_line: 42
+    max_lines_per_cue: 2
+    severity: warning
+  duration_match:
+    tolerance_ms: 1000
+    severity: warning
 ```
 
-## 7. Policy
+All five rules are metadata-driven (`CostClass::Metadata`): cue timing comes from
+packet headers and cue text from the packet payload, so no picture or sample is
+decoded. Character counts are taken **after** stripping SRT/ASS/WebVTT markup
+(`{\...}` override blocks, `<i>`-style tags and trailing cue settings), so they
+describe what is rendered rather than how the file encodes it. See
+[`docs/supported-formats.md`](./supported-formats.md) for which subtitle codecs
+are inspected for text.
+
+## 7. Voice rules (post-MVP placeholder, spec § 8.8)
+
+```yaml
+voice:
+  {}                     # reserved
+```
+
+## 8. Policy
 
 ```yaml
 policy:

@@ -69,6 +69,13 @@ rules:
     photosensitivity:
       max_flashes_per_second: 3
       severity: error
+    hdr:
+      mode: sdr
+      severity: error
+    dead_pixels:
+      max_pixels: 0
+      max_clusters: 0
+      severity: error
 
   audio:
     sample_rate:
@@ -103,6 +110,29 @@ rules:
       severity: error
     dc_offset:
       max_offset_percent: 1
+      severity: error
+
+  subtitle:
+    presence:
+      min_subtitle: 1
+      severity: error
+    language:
+      required: ["eng"]
+      severity: error
+    timing:
+      max_overlaps: 0
+      max_invalid_durations: 0
+      max_gap_ms: 3000
+      max_cue_duration_ms: 7000
+      severity: error
+    content:
+      max_malformed: 0
+      max_empty: 0
+      max_chars_per_line: 42
+      max_lines_per_cue: 2
+      severity: error
+    duration_match:
+      tolerance_ms: 1000
       severity: error
 
 policy:

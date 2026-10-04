@@ -65,6 +65,8 @@ pub fn per_rule_config_hash(profile: &Profile, rule_id: &str) -> Option<String> 
         "video.color_space" => hash(&v.color_space),
         "video.scan_format" => hash(&v.scan_format),
         "video.photosensitivity" => hash(&v.photosensitivity),
+        "video.hdr" => hash(&v.hdr),
+        "video.dead_pixels" => hash(&v.dead_pixels),
         "audio.sample_rate" => hash(&a.sample_rate),
         "audio.bit_depth" => hash(&a.bit_depth),
         "audio.channel_layout" => hash(&a.channel_layout),
@@ -75,8 +77,11 @@ pub fn per_rule_config_hash(profile: &Profile, rule_id: &str) -> Option<String> 
         "audio.loudness" => hash(&a.loudness),
         "audio.phase" => hash(&a.phase),
         "audio.dc_offset" => hash(&a.dc_offset),
+        "subtitle.presence" => hash(&s.presence),
         "subtitle.language" => hash(&s.language),
-        "subtitle.missing_subtitles" => hash(&s.missing_subtitles),
+        "subtitle.timing" => hash(&s.timing),
+        "subtitle.content" => hash(&s.content),
+        "subtitle.duration_match" => hash(&s.duration_match),
         _ => None,
     }
 }

@@ -88,3 +88,112 @@ fn generic_profile_matches_cli_default_shape() {
     assert!(profile.rules.video.black_frames.is_some());
     assert!(profile.rules.audio.loudness.is_some());
 }
+
+#[test]
+fn hdr10_profile_configures_the_hdr_rule() {
+    let text = std::fs::read_to_string(profiles_root().join("streaming/hdr10.yaml")).unwrap();
+    let profile = parse_str(&text).expect("hdr10 profile parses");
+    let hdr = profile.rules.video.hdr.expect("hdr rule configured");
+    assert_eq!(hdr.mode, tpt_app_media_qc_profile::model::HdrMode::Hdr10);
+    assert_eq!(hdr.max_cll_nits, Some(4000));
+    assert!(hdr.require_static_metadata);
+}
+
+#[test]
+fn unknown_hdr_mode_is_rejected() {
+    let text = "name: x\nversion: 1\nrules:\n  video:\n    hdr: dolby\n";
+    assert!(parse_str(text).is_err());
+}
+
+#[test]
+fn subtitle_rules_parse_with_documented_defaults() {
+    use tpt_app_media_qc_model::severity::Severity;
+    let text = "\
+name: subs
+version: 1
+rules:
+  subtitle:
+    presence:
+      min_subtitle: 2
+      max_subtitle: 4
+      severity: error
+    language:
+      required: [\"eng\", \"fre\"]
+      min_tracks: 2
+    timing:
+      max_gap_ms: 5000
+      max_cue_duration_ms: 7000
+      severity: warning
+    content:
+      max_chars_per_line: 42
+      max_lines_per_cue: 2
+    duration_match:
+      tolerance_ms: 250
+      allow_longer: false
+      severity: warning
+";
+    let profile = parse_str(text).expect("subtitle profile parses");
+    let s = &profile.rules.subtitle;
+
+    let presence = s.presence.expect("presence configured");
+    assert_eq!(presence.min_subtitle, 2);
+    assert_eq!(presence.max_subtitle, Some(4));
+    assert_eq!(presence.severity, Severity::Error);
+
+    let language = s.language.as_ref().expect("language configured");
+    assert_eq!(language.required, ["eng".to_string(), "fre".to_string()]);
+    assert_eq!(language.min_tracks, 2);
+
+    let timing = s.timing.expect("timing configured");
+    // Unset limits fall back to "no defect tolerated".
+    assert_eq!(timing.max_overlaps, 0);
+    assert_eq!(timing.max_invalid_durations, 0);
+    assert_eq!(timing.max_gap_ms, Some(5_000));
+    assert_eq!(timing.max_cue_duration_ms, Some(7_000));
+
+    let content = s.content.expect("content configured");
+    assert_eq!(content.max_malformed, 0);
+    assert_eq!(content.max_empty, 0);
+    assert_eq!(content.max_chars_per_line, Some(42));
+
+    let duration = s.duration_match.expect("duration_match configured");
+    assert_eq!(duration.tolerance_ms, 250);
+    assert!(!duration.allow_longer);
+}
+
+#[test]
+fn subtitle_scalar_shorthands_use_sane_defaults() {
+    let text = "name: subs\nversion: 1\nrules:\n  subtitle:\n    presence: error\n    timing: warning\n    content: error\n    duration_match: warning\n";
+    let s = parse_str(text).expect("shorthand parses").rules.subtitle;
+    assert_eq!(s.presence.expect("presence").min_subtitle, 1);
+    assert!(s.presence.expect("presence").max_subtitle.is_none());
+    let timing = s.timing.expect("timing");
+    assert_eq!(timing.max_overlaps, 0);
+    assert!(timing.max_gap_ms.is_none());
+    let duration = s.duration_match.expect("duration_match");
+    assert_eq!(duration.tolerance_ms, 1000);
+    assert!(duration.allow_longer);
+    assert!(s.language.is_none());
+}
+
+#[test]
+fn malformed_subtitle_blocks_are_rejected() {
+    // Unknown key at the group level.
+    assert!(parse_str("name: x\nrules:\n  subtitle:\n    missing_subtitles: error\n").is_err());
+    // Unknown key inside a rule mapping.
+    assert!(
+        parse_str("name: x\nrules:\n  subtitle:\n    timing:\n      max_overlaps_typo: 1\n")
+            .is_err()
+    );
+    // `language` needs an explicit required list; a bare severity is ambiguous.
+    assert!(parse_str("name: x\nrules:\n  subtitle:\n    language: error\n").is_err());
+    // Empty required list is meaningless.
+    assert!(
+        parse_str("name: x\nrules:\n  subtitle:\n    language:\n      required: []\n").is_err()
+    );
+    // `allow_longer` must be a boolean.
+    assert!(parse_str(
+        "name: x\nrules:\n  subtitle:\n    duration_match:\n      allow_longer: yes please\n"
+    )
+    .is_err());
+}

@@ -9,12 +9,13 @@
 use crate::model::{
     default_aspect_tolerance, default_frame_rate_tolerance, default_max_streams, default_min_phase,
     AspectRatioRule, AudioRules, BitDepthRule, ChannelLayoutRule, ColorSpaceRule, ContainerRules,
-    CountThresholdRule, DbThresholdRule, DcOffsetRule, DurationThresholdRule, ExpectValueRule,
-    FieldOrderExpectation, FrameRateRule, LoudnessRule, LoudnessStandard, LumaRangeRule,
-    MinBitrateRule, PhaseRule, PhotosensitivityRule, Policy, Profile, Ratio, Resolution,
-    ResolutionRule, RuleSetConfig, SampleRateRule, ScanExpectation, ScanFormatRule,
-    StreamPresenceRule, SubtitleRules, TimestampContinuityRule, ToleranceRule, VideoRules,
-    VoiceRules,
+    CountThresholdRule, DbThresholdRule, DcOffsetRule, DeadPixelRule, DurationThresholdRule,
+    ExpectValueRule, FieldOrderExpectation, FrameRateRule, HdrMode, HdrRule, LoudnessRule,
+    LoudnessStandard, LumaRangeRule, MinBitrateRule, PhaseRule, PhotosensitivityRule, Policy,
+    Profile, Ratio, Resolution, ResolutionRule, RuleSetConfig, SampleRateRule, ScanExpectation,
+    ScanFormatRule, StreamPresenceRule, SubtitleContentRule, SubtitleDurationRule,
+    SubtitleLanguageRule, SubtitlePresenceRule, SubtitleRules, SubtitleTimingRule,
+    TimestampContinuityRule, ToleranceRule, VideoRules, VoiceRules,
 };
 use serde_yaml::{Mapping, Value};
 use tpt_app_media_qc_model::severity::Severity;
@@ -282,6 +283,8 @@ fn parse_video(map: &Mapping) -> Result<VideoRules, ProfileError> {
             "color_space",
             "scan_format",
             "photosensitivity",
+            "hdr",
+            "dead_pixels",
         ]
         .contains(&k.as_str())
         {
@@ -301,6 +304,8 @@ fn parse_video(map: &Mapping) -> Result<VideoRules, ProfileError> {
         color_space: parse_color_space(map)?,
         scan_format: parse_scan_format(map)?,
         photosensitivity: parse_photosensitivity(map)?,
+        hdr: parse_hdr(map)?,
+        dead_pixels: parse_dead_pixels(map)?,
     })
 }
 
@@ -457,6 +462,102 @@ fn parse_luma_range(map: &Mapping) -> Result<Option<LumaRangeRule>, ProfileError
         max_out_of_legal,
         severity: spec.severity,
     }))
+}
+
+fn parse_hdr(map: &Mapping) -> Result<Option<HdrRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "hdr") else {
+        return Ok(None);
+    };
+    let path = "rules.video.hdr";
+    let mode_text = match (spec.config, spec.scalar) {
+        (Some(m), _) => required_string(m, "mode", path)?,
+        (None, Some(scalar)) => string_from_value(scalar, path)?,
+        (None, None) => return Err(err(path, "missing 'mode'")),
+    };
+    let mode = match mode_text.trim().to_ascii_lowercase().as_str() {
+        "sdr" => HdrMode::Sdr,
+        "hdr10" | "pq" => HdrMode::Hdr10,
+        "hlg" => HdrMode::Hlg,
+        "hdr" | "any_hdr" => HdrMode::Hdr,
+        other => {
+            return Err(err(
+                path,
+                format!("unknown hdr mode '{other}' (expected sdr, hdr10, hlg or hdr)"),
+            ))
+        }
+    };
+    let mut rule = HdrRule {
+        mode,
+        require_static_metadata: true,
+        max_cll_nits: None,
+        max_fall_nits: None,
+        severity: spec.severity,
+    };
+    if let Some(m) = spec.config {
+        match m.get(Value::String("require_static_metadata".into())) {
+            Some(Value::Bool(b)) => rule.require_static_metadata = *b,
+            Some(_) => return Err(err(path, "require_static_metadata must be true or false")),
+            None => {}
+        }
+        rule.max_cll_nits = optional_u64(m, "max_cll_nits", path)?.map(|v| v as u32);
+        rule.max_fall_nits = optional_u64(m, "max_fall_nits", path)?.map(|v| v as u32);
+    }
+    Ok(Some(rule))
+}
+
+fn parse_dead_pixels(map: &Mapping) -> Result<Option<DeadPixelRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "dead_pixels") else {
+        return Ok(None);
+    };
+    let path = "rules.video.dead_pixels";
+    let Some(m) = spec.config else {
+        return Ok(Some(DeadPixelRule {
+            max_pixels: 0,
+            max_clusters: 0,
+            include_flicker: true,
+            fail_on_limited_resolution: false,
+            severity: spec.severity,
+        }));
+    };
+    reject_unknown_video_keys(
+        m,
+        path,
+        &[
+            "max_pixels",
+            "max_clusters",
+            "include_flicker",
+            "fail_on_limited_resolution",
+            "severity",
+        ],
+    )?;
+    let bool_key = |m: &Mapping, key: &str| -> Result<Option<bool>, ProfileError> {
+        match m.get(Value::String(key.into())) {
+            Some(Value::Bool(b)) => Ok(Some(*b)),
+            Some(_) => Err(err(path, format!("{key} must be true or false"))),
+            None => Ok(None),
+        }
+    };
+    Ok(Some(DeadPixelRule {
+        max_pixels: optional_u64(m, "max_pixels", path)?.unwrap_or(0),
+        max_clusters: optional_u64(m, "max_clusters", path)?.unwrap_or(0) as u32,
+        include_flicker: bool_key(m, "include_flicker")?.unwrap_or(true),
+        fail_on_limited_resolution: bool_key(m, "fail_on_limited_resolution")?.unwrap_or(false),
+        severity: spec.severity,
+    }))
+}
+
+fn reject_unknown_video_keys(
+    m: &Mapping,
+    path: &str,
+    allowed: &[&str],
+) -> Result<(), ProfileError> {
+    for k in m.keys() {
+        let k = as_key(k);
+        if !allowed.contains(&k.as_str()) {
+            return Err(err(path, format!("unknown key '{k}'")));
+        }
+    }
+    Ok(())
 }
 
 fn parse_photosensitivity(map: &Mapping) -> Result<Option<PhotosensitivityRule>, ProfileError> {
@@ -764,30 +865,193 @@ fn parse_dc_offset(map: &Mapping) -> Result<Option<DcOffsetRule>, ProfileError> 
 fn parse_subtitle(map: &Mapping) -> Result<SubtitleRules, ProfileError> {
     for k in map.keys() {
         let k = as_key(k);
-        if !["language", "missing_subtitles"].contains(&k.as_str()) {
+        if ![
+            "presence",
+            "language",
+            "timing",
+            "content",
+            "duration_match",
+        ]
+        .contains(&k.as_str())
+        {
             return Err(err("rules.subtitle", format!("unknown subtitle key '{k}'")));
         }
     }
 
-    let language = match map.get(Value::String("language".into())) {
-        Some(v) => Some(string_from_value(v, "rules.subtitle.language")?),
-        None => None,
-    };
-    let missing_subtitles = parse_severity_rule_sub(map)?;
     Ok(SubtitleRules {
-        language,
-        missing_subtitles,
+        presence: parse_subtitle_presence(map)?,
+        language: parse_subtitle_language(map)?,
+        timing: parse_subtitle_timing(map)?,
+        content: parse_subtitle_content(map)?,
+        duration_match: parse_subtitle_duration(map)?,
     })
 }
 
-fn parse_severity_rule_sub(map: &Mapping) -> Result<Option<Severity>, ProfileError> {
-    match map.get(Value::String("missing_subtitles".into())) {
-        Some(v) => Ok(Some(severity_from_value(
-            v,
-            "rules.subtitle.missing_subtitles",
-        )?)),
-        None => Ok(None),
+fn parse_subtitle_presence(map: &Mapping) -> Result<Option<SubtitlePresenceRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "presence") else {
+        return Ok(None);
+    };
+    let path = "rules.subtitle.presence";
+    let Some(m) = spec.config else {
+        // Scalar shorthand: `presence: error` means "at least one track".
+        return Ok(Some(SubtitlePresenceRule {
+            min_subtitle: 1,
+            max_subtitle: None,
+            severity: spec.severity,
+        }));
+    };
+    reject_unknown_keys(m, path, &["min_subtitle", "max_subtitle", "severity"])?;
+    Ok(Some(SubtitlePresenceRule {
+        min_subtitle: optional_u64(m, "min_subtitle", path)?.unwrap_or(1) as u32,
+        max_subtitle: optional_u64(m, "max_subtitle", path)?.map(|v| v as u32),
+        severity: spec.severity,
+    }))
+}
+
+fn parse_subtitle_language(map: &Mapping) -> Result<Option<SubtitleLanguageRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "language") else {
+        return Ok(None);
+    };
+    let path = "rules.subtitle.language";
+    let Some(m) = spec.config else {
+        return Err(err(
+            path,
+            "language rule requires a mapping with a 'required' list",
+        ));
+    };
+    reject_unknown_keys(m, path, &["required", "min_tracks", "severity"])?;
+    let required = match m.get(Value::String("required".into())) {
+        Some(Value::Sequence(seq)) => seq
+            .iter()
+            .map(|v| string_from_value(v, &format!("{path}.required")))
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(other) => {
+            return Err(err(
+                &format!("{path}.required"),
+                format!("expected a list of language codes, got {}", ty(other)),
+            ))
+        }
+        None => return Err(err(path, "missing 'required'")),
+    };
+    if required.is_empty() {
+        return Err(err(
+            &format!("{path}.required"),
+            "at least one language code is required",
+        ));
     }
+    Ok(Some(SubtitleLanguageRule {
+        required,
+        min_tracks: optional_u64(m, "min_tracks", path)?.unwrap_or(1) as u32,
+        severity: spec.severity,
+    }))
+}
+
+fn parse_subtitle_timing(map: &Mapping) -> Result<Option<SubtitleTimingRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "timing") else {
+        return Ok(None);
+    };
+    let path = "rules.subtitle.timing";
+    let Some(m) = spec.config else {
+        return Ok(Some(SubtitleTimingRule {
+            max_overlaps: 0,
+            max_invalid_durations: 0,
+            max_gap_ms: None,
+            max_cue_duration_ms: None,
+            severity: spec.severity,
+        }));
+    };
+    reject_unknown_keys(
+        m,
+        path,
+        &[
+            "max_overlaps",
+            "max_invalid_durations",
+            "max_gap_ms",
+            "max_cue_duration_ms",
+            "severity",
+        ],
+    )?;
+    Ok(Some(SubtitleTimingRule {
+        max_overlaps: optional_u64(m, "max_overlaps", path)?.unwrap_or(0) as u32,
+        max_invalid_durations: optional_u64(m, "max_invalid_durations", path)?.unwrap_or(0) as u32,
+        max_gap_ms: optional_u64(m, "max_gap_ms", path)?,
+        max_cue_duration_ms: optional_u64(m, "max_cue_duration_ms", path)?,
+        severity: spec.severity,
+    }))
+}
+
+fn parse_subtitle_content(map: &Mapping) -> Result<Option<SubtitleContentRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "content") else {
+        return Ok(None);
+    };
+    let path = "rules.subtitle.content";
+    let Some(m) = spec.config else {
+        return Ok(Some(SubtitleContentRule {
+            max_malformed: 0,
+            max_empty: 0,
+            max_chars_per_line: None,
+            max_lines_per_cue: None,
+            severity: spec.severity,
+        }));
+    };
+    reject_unknown_keys(
+        m,
+        path,
+        &[
+            "max_malformed",
+            "max_empty",
+            "max_chars_per_line",
+            "max_lines_per_cue",
+            "severity",
+        ],
+    )?;
+    Ok(Some(SubtitleContentRule {
+        max_malformed: optional_u64(m, "max_malformed", path)?.unwrap_or(0) as u32,
+        max_empty: optional_u64(m, "max_empty", path)?.unwrap_or(0) as u32,
+        max_chars_per_line: optional_u64(m, "max_chars_per_line", path)?.map(|v| v as u32),
+        max_lines_per_cue: optional_u64(m, "max_lines_per_cue", path)?.map(|v| v as u32),
+        severity: spec.severity,
+    }))
+}
+
+fn parse_subtitle_duration(map: &Mapping) -> Result<Option<SubtitleDurationRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "duration_match") else {
+        return Ok(None);
+    };
+    let path = "rules.subtitle.duration_match";
+    let Some(m) = spec.config else {
+        return Ok(Some(SubtitleDurationRule {
+            tolerance_ms: default_subtitle_tolerance(),
+            allow_longer: true,
+            severity: spec.severity,
+        }));
+    };
+    reject_unknown_keys(m, path, &["tolerance_ms", "allow_longer", "severity"])?;
+    let allow_longer = match m.get(Value::String("allow_longer".into())) {
+        Some(Value::Bool(b)) => *b,
+        Some(_) => return Err(err(path, "allow_longer must be true or false")),
+        None => true,
+    };
+    Ok(Some(SubtitleDurationRule {
+        tolerance_ms: optional_u64(m, "tolerance_ms", path)?
+            .unwrap_or_else(default_subtitle_tolerance),
+        allow_longer,
+        severity: spec.severity,
+    }))
+}
+
+fn default_subtitle_tolerance() -> u64 {
+    1000
+}
+
+fn reject_unknown_keys(m: &Mapping, path: &str, allowed: &[&str]) -> Result<(), ProfileError> {
+    for k in m.keys() {
+        let k = as_key(k);
+        if !allowed.contains(&k.as_str()) {
+            return Err(err(path, format!("unknown key '{k}'")));
+        }
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

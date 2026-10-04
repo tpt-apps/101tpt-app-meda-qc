@@ -52,21 +52,62 @@ uses these checks for a 576i25 interlaced, top-field-first delivery with
 EBU R128 audio. Additional video standards can now be layered on the same
 rule as profile configuration.
 
-## 3. Current and planned standard profiles
+## 3. HDR / dynamic-range signalling
+
+Dynamic range is measured from **signalled metadata only** — the `HdrMetadata`
+recorded on `VideoMeasurements` by the probe front-end (transfer, primaries,
+matrix, sample range, ST 2086 mastering display, MaxCLL/MaxFALL, Dolby Vision
+flag) — and judged by the `video.hdr` profile rule (`mode`: `sdr`, `hdr10`/PQ,
+`hlg`, or `hdr` for either). Findings record the signalled transfer as the
+measured value and the expected mode as the expected value, and an unsignalled
+transfer reports `Inconclusive` rather than assuming SDR.
+
+```yaml
+video:
+  hdr:
+    mode: hdr10
+    require_static_metadata: true
+    max_cll_nits: 4000
+    max_fall_nits: 1000
+    severity: error
+```
+
+For HDR content the rule additionally expects BT.2020 primaries and matrix,
+limited (`tv`) range and at least 10-bit samples; for PQ with
+`require_static_metadata` it expects an ST 2086 mastering display plus both
+MaxCLL and MaxFALL. MaxFALL above MaxCLL, a mastering minimum luminance at or
+above its maximum, and the optional `max_cll_nits`/`max_fall_nits` ceilings are
+always checked when the values are signalled.
+
+An HDR10 streaming delivery profile
+([`profiles/streaming/hdr10.yaml`](../profiles/streaming/hdr10.yaml)) configures
+these checks for 3840×2160 PQ/BT.2020 content and is bundled in the desktop app
+profile list.
+
+Limitations (spec §25): this is **signalling validation, not HDR compliance
+certification**. Light levels are read from the container's static metadata and
+are never re-measured from decoded pixels, so content that mislabels its own
+signalling is not detected. Dynamic metadata (Dolby Vision RPU, HDR10+) is only
+*detected* and recorded — its content is not validated. The profile's thresholds
+are commonly-used delivery values, not a normative requirement of any HDR
+specification.
+
+## 4. Current and planned standard profiles
 
 The currently supported standards configuration lives in
 [`profiles/`](../profiles/): EBU R128, ATSC A/85, a BS.1770-derived
-streaming profile and the BT.1700/BT.1702-flavoured SD profile.
+streaming profile, the BT.1700/BT.1702-flavoured SD profile and an HDR10
+streaming profile.
 
 ```
 profiles/
 ├── generic/        # general-purpose default
 ├── broadcast/      # EBU R128, ATSC A/85 and BT.1702-style SD delivery profiles
-├── streaming/      # OTT-oriented checks (VOD/CEG R128, targets below -23)
+├── streaming/      # OTT-oriented checks (VOD/CEG R128, targets below -23; HDR10 delivery)
 └── examples/       # starter templates for new customers
 ```
 
-## 4. Compliance policy
+## 5. Compliance policy
 
 We **do not claim formal compliance** with any industry standard until the
 implementation has been validated against appropriate reference material / test
@@ -92,14 +133,44 @@ Measurement implementation notes:
   audio shorter than 3 s leaves `loudness_range_lu` unmeasured.
 - The measurement code is cross-checked in tests against `ffmpeg -af ebur128`
   reference readings for tone, mono/stereo and gated signals.
+- Stuck-pixel analysis (`video.dead_pixels`, spec § 8.4) compares every luma cell
+  across decoded frames and flags three signatures: a cell that never brightens
+  past 8 in *bright* frames (dead), one that never darkens below 247 in *dark*
+  frames (stuck), and one that reaches both extremes (flicker). Requiring both
+  bright and dark frames is what keeps static content — letterbox bars, borders,
+  a night sky — from being reported as a defect, because those pixels are only
+  ever judged against frames whose own level makes the comparison meaningful; at
+  least 3 frames of each kind are required before anything is judged. Flagged
+  cells are grouped into 4-connected clusters (largest first, capped at 64) and
+  reported in **source** pixels so a defect can be located even when the grid
+  was reduced. Limits: levels are fixed heuristics rather than a published
+  standard, the comparison is on 8-bit luma only (no chroma/subpixel defects),
+  chroma-subsampled formats analyse the luma plane alone, and pictures above
+  ~4.2 M cells are stride-sampled (the measurement then records
+  `resolution_limited`, which a profile can treat as `Inconclusive`). Only the
+  decoded picture is examined — defects already baked into the source file are
+  indistinguishable from genuine sensor defects after encoding.
 - Phase and DC-offset thresholds are heuristic defaults (profile-configurable)
   rather than normative requirements.
+- Subtitle cue timing (spec §8.7) comes from packet headers, not a decode pass,
+  so `subtitle.timing` and `subtitle.duration_match` run in the cheap metadata
+  pass for every subtitle codec. A cue whose end is not after its start is
+  counted as an invalid duration, and `max_gap_ms` measures the largest silence
+  *between* cues rather than leading or trailing silence. Cue text is read only
+  for text-based codecs; character counts are taken after stripping SRT/ASS/WebVTT
+  markup, and a payload that is not valid UTF-8 counts as malformed rather than
+  being silently skipped. No reading-rate or minimum-dwell-time standard is
+  applied, and no compliance with any captioning specification is claimed.
 
-## 5. Where the code lives
+## 6. Where the code lives
 
 - Standard constants and enums: `tpt-app-media-qc-profile::model`
-  (`LoudnessStandard`, `LoudnessRule`).
+  (`LoudnessStandard`, `LoudnessRule`, `HdrMode`, `HdrRule`, `DeadPixelRule`,
+  `Subtitle*Rule`).
 - Measurement fields: `tpt-app-media-qc-model::inspection`
-  (`AudioMeasurements`).
-- Rule evaluation: `tpt-app-media-qc-rules::audio`.
+  (`AudioMeasurements`, `HdrMetadata`, `DeadPixelStats`, `SubtitleMeasurements`).
+- Measurement algorithms: `tpt-app-media-qc-decode::deadpixels`, `::pse`,
+  `::loudness` (`crates/tpt-app-media-qc-decode/src/`).
+- Rule evaluation: `tpt-app-media-qc-rules::audio`, `tpt-app-media-qc-rules::video`,
+  `tpt-app-media-qc-rules::subtitle`.
 - Bundled example profiles: [`profiles/`](../profiles/).

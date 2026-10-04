@@ -737,6 +737,7 @@ fn profile_has_decode_rules(profile: &Profile) -> bool {
         || profile.rules.video.corrupt_frames.is_some()
         || profile.rules.video.luma_range.is_some()
         || profile.rules.video.photosensitivity.is_some()
+        || profile.rules.video.dead_pixels.is_some()
         || profile.rules.audio.silence.is_some()
         || profile.rules.audio.clipping.is_some()
         || profile.rules.audio.peak.is_some()

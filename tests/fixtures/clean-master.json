@@ -23,6 +23,14 @@
         "bitrate": 2304000, "duration": 120,
         "language": "en", "channel_layout": "stereo", "channels": 2,
         "sample_rate": 48000, "bit_depth": 24, "metadata": {}
+      },
+      {
+        "index": 2, "kind": "subtitle", "codec": "subrip", "codec_profile": null,
+        "width": null, "height": null, "pixel_format": null,
+        "frame_rate": null, "time_base": "1/1000",
+        "bitrate": null, "duration": 120,
+        "language": "eng", "channel_layout": null, "channels": null,
+        "sample_rate": null, "bit_depth": null, "metadata": {}
       }
     ]
   },
@@ -43,6 +51,8 @@
         "stream_idx": 0,
         "decoded_frame_count": 3000,
         "flash": { "transitions_ms": [[], []] },
+        "hdr": { "transfer": "bt709", "primaries": "bt709", "matrix": "bt709", "range": "tv" },
+        "dead_pixels": { "frames_sampled": 250, "cells_examined": 1920, "resolution_limited": false, "dark_cells": 0, "bright_cells": 0, "flicker_cells": 0, "clusters": [] },
         "frame_rate_observed": "25/1",
         "decode_errors": 0,
         "black_frames": [],
@@ -65,6 +75,22 @@
         "loudness_range_lu": 6.0,
         "phase_correlation": 0.9,
         "dc_offset_percent": 0.0
+      }
+    ],
+    "subtitle": [
+      {
+        "stream_idx": 2,
+        "cue_count": 200,
+        "text_decoded": true,
+        "invalid_durations": [],
+        "overlaps": [],
+        "malformed": [],
+        "empty_cues": [],
+        "max_gap_ms": 2500,
+        "max_line_chars": 40,
+        "max_lines_per_cue": 2,
+        "max_cue_duration_ms": 6000,
+        "covered_until_ms": 120000
       }
     ],
     "diagnostics": {}

@@ -23,6 +23,14 @@
         "bitrate": 2304000, "duration": 120,
         "language": "en", "channel_layout": "stereo", "channels": 2,
         "sample_rate": 48000, "bit_depth": 24, "metadata": {}
+      },
+      {
+        "index": 2, "kind": "subtitle", "codec": "subrip", "codec_profile": null,
+        "width": null, "height": null, "pixel_format": null,
+        "frame_rate": null, "time_base": "1/1000",
+        "bitrate": null, "duration": 120,
+        "language": "eng", "channel_layout": null, "channels": null,
+        "sample_rate": null, "bit_depth": null, "metadata": {}
       }
     ]
   },
@@ -43,6 +51,8 @@
         "stream_idx": 0,
         "decoded_frame_count": 2997,
         "flash": { "transitions_ms": [[30000, 30100, 30200, 30300, 30400, 30500, 30600, 30700], [50000, 50100]] },
+        "hdr": { "transfer": "smpte2084", "primaries": "bt2020", "matrix": "bt2020nc", "range": "tv", "max_cll": 1000, "max_fall": 1200 },
+        "dead_pixels": { "frames_sampled": 250, "cells_examined": 1920, "resolution_limited": false, "dark_cells": 4, "bright_cells": 1, "flicker_cells": 2, "clusters": [ { "x": 400, "y": 300, "width": 2, "height": 2, "cells": 2, "kind": "dead" }, { "x": 900, "y": 700, "width": 1, "height": 1, "cells": 1, "kind": "dead" }, { "x": 120, "y": 950, "width": 1, "height": 1, "cells": 1, "kind": "stuck" }, { "x": 1500, "y": 500, "width": 2, "height": 1, "cells": 2, "kind": "flicker" } ] },
         "frame_rate_observed": "24000/1001",
         "decode_errors": 7,
         "black_frames": [{ "start_ms": 3000, "end_ms": 6000 }],
@@ -69,6 +79,22 @@
         "loudness_range_lu": 6.0,
         "phase_correlation": 0.9,
         "dc_offset_percent": 0.0
+      }
+    ],
+    "subtitle": [
+      {
+        "stream_idx": 2,
+        "cue_count": 40,
+        "text_decoded": true,
+        "invalid_durations": [{ "start_ms": 30000, "end_ms": 30000 }],
+        "overlaps": [{ "start_ms": 5000, "end_ms": 8000 }],
+        "malformed": [{ "start_ms": 60000, "end_ms": 62000 }],
+        "empty_cues": [{ "start_ms": 70000, "end_ms": 72000 }],
+        "max_gap_ms": 45000,
+        "max_line_chars": 60,
+        "max_lines_per_cue": 3,
+        "max_cue_duration_ms": 9000,
+        "covered_until_ms": 45000
       }
     ],
     "diagnostics": {}

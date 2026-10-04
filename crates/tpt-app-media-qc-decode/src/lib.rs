@@ -12,6 +12,7 @@
 //! time.
 
 mod audio;
+mod deadpixels;
 mod loudness;
 mod pse;
 
@@ -323,6 +324,9 @@ impl KinetixVideoInspector {
         measurement.colorspace = metadata
             .video_for(stream_idx)
             .and_then(|video| video.colorspace.clone());
+        measurement.hdr = metadata
+            .video_for(stream_idx)
+            .and_then(|video| video.hdr.clone());
         Ok((measurement, codec))
     }
 }
@@ -588,6 +592,7 @@ pub struct VideoFrameAnalyzer {
     freeze_ranges: Vec<TimeRange>,
     duplicate_ranges: Vec<TimeRange>,
     flash: pse::FlashDetector,
+    dead_pixels: deadpixels::DeadPixelDetector,
 }
 
 impl VideoFrameAnalyzer {
@@ -611,6 +616,7 @@ impl VideoFrameAnalyzer {
             freeze_ranges: Vec::new(),
             duplicate_ranges: Vec::new(),
             flash: pse::FlashDetector::default(),
+            dead_pixels: deadpixels::DeadPixelDetector::new(deadpixels::DeadPixelConfig::default()),
         }
     }
 
@@ -641,6 +647,13 @@ impl VideoFrameAnalyzer {
         let duration_ms = self.frame_duration_ms(timestamp_ms);
         if let Some(grid) = pse::grid_frame(&frame) {
             self.flash.push(timestamp_ms, &grid);
+        }
+        // Stuck-pixel analysis needs its own pass over the luma plane; it keeps
+        // per-cell state, so it cannot share the streaming luma totals.
+        if let Some(reduced) =
+            deadpixels::DeadPixelDetector::reduce(frame.width, frame.height, luma_values(&frame)?)
+        {
+            self.dead_pixels.push(reduced);
         }
         let end_ms = timestamp_ms.saturating_add(duration_ms);
         let mean = luma.stats.mean();
@@ -726,6 +739,8 @@ impl VideoFrameAnalyzer {
             colorspace: None,
             field_order: None,
             flash: Some(self.flash.finish()),
+            hdr: None,
+            dead_pixels: self.dead_pixels.finish(),
         }
     }
 }
@@ -859,6 +874,81 @@ mod tests {
             pixel_format: PixelFormat::Yuv420p,
             is_key_frame: false,
         }
+    }
+
+    /// A full-resolution 64x64 frame whose luma plane is `level`, except the
+    /// single cell at `pinned` which is forced to `pin`.
+    fn wide_frame(level: u8, pinned: Option<(u32, u32)>, pin: u8, timestamp_ms: i64) -> VideoFrame {
+        let (w, h) = (64u32, 64u32);
+        let mut luma = vec![level; (w * h) as usize];
+        if let Some((x, y)) = pinned {
+            luma[(y * w + x) as usize] = pin;
+        }
+        let mut data = luma;
+        data.resize((w * h * 3 / 2) as usize, 128);
+        let pts = Timestamp::new(timestamp_ms, (1, 1000));
+        VideoFrame {
+            pts,
+            dts: pts,
+            data,
+            width: w,
+            height: h,
+            pixel_format: PixelFormat::Yuv420p,
+            is_key_frame: timestamp_ms == 0,
+        }
+    }
+
+    #[test]
+    fn dead_pixel_analysis_runs_on_a_full_decode_and_finds_no_defect_in_clean_content() {
+        let mut analyzer = VideoFrameAnalyzer::new(
+            0,
+            Some(Rational::new(25, 1).unwrap()),
+            &VideoAnalyzerConfig::default(),
+        );
+        // Alternating flat white / flat black: the hardest case for false
+        // positives, because every pixel changes level constantly.
+        for i in 0..8 {
+            let level = if i % 2 == 0 { 235 } else { 16 };
+            analyzer.push(wide_frame(level, None, 0, i * 40)).unwrap();
+        }
+        let stats = analyzer.finish().dead_pixels.expect("analysis ran");
+        assert_eq!(stats.frames_sampled, 8);
+        assert_eq!(stats.cells_examined, 64 * 64);
+        assert!(!stats.resolution_limited);
+        assert_eq!(stats.total_cells(), 0, "{stats:?}");
+    }
+
+    #[test]
+    fn dead_pixel_analysis_finds_a_pinned_cell_across_a_real_decode() {
+        let mut analyzer = VideoFrameAnalyzer::new(
+            0,
+            Some(Rational::new(25, 1).unwrap()),
+            &VideoAnalyzerConfig::default(),
+        );
+        // Cell (10, 20) stays black while the rest of the frame follows the scene.
+        for i in 0..8 {
+            let level = if i % 2 == 0 { 235 } else { 16 };
+            analyzer
+                .push(wide_frame(level, Some((10, 20)), 0, i * 40))
+                .unwrap();
+        }
+        let stats = analyzer.finish().dead_pixels.expect("analysis ran");
+        assert!(stats.dark_cells >= 1, "{stats:?}");
+        assert!(!stats.clusters.is_empty());
+        // The cluster is reported in source pixels so it can be located.
+        let cluster = stats.clusters[0];
+        assert_eq!(
+            cluster.kind,
+            tpt_app_media_qc_model::inspection::DeadPixelKind::Dead
+        );
+        assert!(
+            cluster.x <= 10 && cluster.x + cluster.width > 10,
+            "{cluster:?}"
+        );
+        assert!(
+            cluster.y <= 20 && cluster.y + cluster.height > 20,
+            "{cluster:?}"
+        );
     }
 
     #[test]

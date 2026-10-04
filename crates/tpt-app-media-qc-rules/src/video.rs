@@ -1,4 +1,4 @@
-//! Video checks ([spec § 8.2, § 8.3]): resolution, frame rate, aspect ratio,
+//! Video checks ([spec Â§ 8.2, Â§ 8.3]): resolution, frame rate, aspect ratio,
 //! colour space, black/freeze/duplicate/corrupt frames, luma range.
 
 use crate::rule::{
@@ -11,9 +11,9 @@ use tpt_app_media_qc_model::finding::RuleId;
 use tpt_app_media_qc_model::severity::Severity;
 use tpt_app_media_qc_model::value::Value;
 use tpt_app_media_qc_profile::model::{
-    AspectRatioRule, ColorSpaceRule, CountThresholdRule, DurationThresholdRule,
-    FieldOrderExpectation, FrameRateRule, LumaRangeRule, PhotosensitivityRule, Resolution,
-    ResolutionRule, ScanExpectation, ScanFormatRule, VideoRules,
+    AspectRatioRule, ColorSpaceRule, CountThresholdRule, DeadPixelRule, DurationThresholdRule,
+    FieldOrderExpectation, FrameRateRule, HdrMode, HdrRule, LumaRangeRule, PhotosensitivityRule,
+    Resolution, ResolutionRule, ScanExpectation, ScanFormatRule, VideoRules,
 };
 
 pub const RULE_IDS: &[&str] = &[
@@ -28,6 +28,8 @@ pub const RULE_IDS: &[&str] = &[
     "video.luma_range",
     "video.scan_format",
     "video.photosensitivity",
+    "video.hdr",
+    "video.dead_pixels",
 ];
 
 pub fn build(profile: &tpt_app_media_qc_profile::model::Profile, out: &mut Vec<Box<dyn QcRule>>) {
@@ -64,6 +66,12 @@ pub fn build(profile: &tpt_app_media_qc_profile::model::Profile, out: &mut Vec<B
     }
     if let Some(cfg) = v.photosensitivity {
         out.push(Box::new(PhotosensitivityRuleImpl { cfg }));
+    }
+    if let Some(cfg) = v.hdr {
+        out.push(Box::new(HdrRuleImpl { cfg }));
+    }
+    if let Some(cfg) = v.dead_pixels {
+        out.push(Box::new(DeadPixelRuleImpl { cfg }));
     }
 }
 
@@ -351,8 +359,8 @@ impl QcRule for ScanFormatRuleImpl {
 
         // Scan-structure expectation first. An unsignalled field order is
         // common on progressive web deliverables and carries no evidence of
-        // interlacement, so it cannot disprove a `progressive` expectation —
-        // it is reported Inconclusive instead (spec §3.4). For an `interlaced`
+        // interlacement, so it cannot disprove a `progressive` expectation â€”
+        // it is reported Inconclusive instead (spec Â§3.4). For an `interlaced`
         // delivery the signal must be present, so `unknown` is a defect.
         match self.cfg.scan {
             ScanExpectation::Progressive => {
@@ -684,8 +692,8 @@ impl QcRule for CorruptFramesRule {
         };
         if measurement.decoded_frame_count.unwrap_or(0) == 0 {
             // Decode errors recorded without a single decoded frame describe the
-            // decode attempt, not corrupt frames in the asset (spec § 8.2). A
-            // codec the adapter does not decode (H.264, HEVC, ProRes…) must never
+            // decode attempt, not corrupt frames in the asset (spec Â§ 8.2). A
+            // codec the adapter does not decode (H.264, HEVC, ProResâ€¦) must never
             // be reported as corrupt media, so this stays inconclusive.
             return RuleResult::from_finding(inconclusive(
                 &self.id(),
@@ -779,6 +787,289 @@ impl QcRule for LumaRangeRuleImpl {
 }
 
 // ---------------------------------------------------------------------------
+// hdr (dynamic range signalling and static metadata)
+// ---------------------------------------------------------------------------
+
+struct HdrRuleImpl {
+    cfg: HdrRule,
+}
+
+fn is_bt2020(tag: &str) -> bool {
+    tag.to_ascii_lowercase().starts_with("bt2020")
+}
+
+impl QcRule for HdrRuleImpl {
+    fn id(&self) -> RuleId {
+        RuleId::new("video.hdr")
+    }
+    fn description(&self) -> RuleDescription {
+        RuleDescription {
+            name: "HDR signalling",
+            summary: "Transfer, primaries, bit depth and static HDR metadata are consistent with the expected dynamic range.",
+            version: "0.1",
+        }
+    }
+    fn capabilities(&self) -> Capabilities {
+        metadata_capabilities()
+    }
+    fn run(&self, ctx: &RuleContext<'_>) -> RuleResult {
+        use tpt_app_media_qc_model::inspection::DynamicRange;
+        let id = self.id();
+        let severity = self.cfg.severity;
+        let Some(range) = video_measurement(ctx)
+            .and_then(|m| m.hdr.as_ref())
+            .and_then(|hdr| hdr.dynamic_range().map(|range| (hdr, range)))
+        else {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                "the video stream did not report a transfer characteristic",
+            ));
+        };
+        let (hdr, actual) = range;
+        let mut problems: Vec<String> = Vec::new();
+        let expected_label = match self.cfg.mode {
+            HdrMode::Sdr => "SDR",
+            HdrMode::Hdr10 => "HDR10 (PQ)",
+            HdrMode::Hlg => "HLG",
+            HdrMode::Hdr => "HDR (PQ or HLG)",
+        };
+        let matches_mode = matches!(
+            (self.cfg.mode, actual),
+            (HdrMode::Sdr, DynamicRange::Sdr)
+                | (HdrMode::Hdr10, DynamicRange::Pq)
+                | (HdrMode::Hlg, DynamicRange::Hlg)
+                | (HdrMode::Hdr, DynamicRange::Pq | DynamicRange::Hlg)
+        );
+        if !matches_mode {
+            problems.push(format!(
+                "transfer is {}, expected {expected_label}",
+                hdr.transfer.as_deref().unwrap_or("unknown")
+            ));
+        }
+        if actual != DynamicRange::Sdr {
+            match hdr.primaries.as_deref() {
+                Some(p) if !is_bt2020(p) => {
+                    problems.push(format!("HDR signalled with {p} primaries, expected bt2020"))
+                }
+                None => problems.push("HDR signalled without colour primaries".into()),
+                _ => {}
+            }
+            match hdr.matrix.as_deref() {
+                Some(m) if !is_bt2020(m) => {
+                    problems.push(format!("HDR signalled with {m} matrix, expected bt2020nc"))
+                }
+                _ => {}
+            }
+            if let Some(range) = hdr.range.as_deref() {
+                if range != "tv" {
+                    problems.push(format!(
+                        "HDR delivery should be limited range, found {range}"
+                    ));
+                }
+            }
+            let depth_ok = ctx
+                .primary_stream(StreamKind::Video)
+                .and_then(|s| s.pixel_format.as_deref())
+                .map(|fmt| fmt.contains("10") || fmt.contains("12") || fmt.contains("16"));
+            if depth_ok == Some(false) {
+                problems.push("HDR requires at least 10-bit sample depth".into());
+            }
+        }
+        if actual == DynamicRange::Pq && self.cfg.require_static_metadata && !hdr.dolby_vision {
+            if hdr.mastering_display.is_none() {
+                problems.push("mastering display metadata (ST 2086) is missing".into());
+            }
+            if hdr.max_cll.is_none() || hdr.max_fall.is_none() {
+                problems.push("content light level (MaxCLL/MaxFALL) is missing".into());
+            }
+        }
+        if let (Some(cll), Some(fall)) = (hdr.max_cll, hdr.max_fall) {
+            if fall > cll {
+                problems.push(format!("MaxFALL {fall} exceeds MaxCLL {cll}"));
+            }
+        }
+        if let (Some(limit), Some(cll)) = (self.cfg.max_cll_nits, hdr.max_cll) {
+            if cll > limit {
+                problems.push(format!("MaxCLL {cll} nits exceeds the {limit} nit limit"));
+            }
+        }
+        if let (Some(limit), Some(fall)) = (self.cfg.max_fall_nits, hdr.max_fall) {
+            if fall > limit {
+                problems.push(format!("MaxFALL {fall} nits exceeds the {limit} nit limit"));
+            }
+        }
+        if let Some(mastering) = hdr.mastering_display {
+            if let (Some(min), Some(max)) =
+                (mastering.min_luminance_nits, mastering.max_luminance_nits)
+            {
+                if min >= max {
+                    problems.push(format!(
+                        "mastering display minimum luminance {min} is not below maximum {max}"
+                    ));
+                }
+            }
+        }
+        if problems.is_empty() {
+            return RuleResult::pass();
+        }
+        RuleResult::findings(
+            problems
+                .into_iter()
+                .map(|message| {
+                    fail(
+                        &id,
+                        severity,
+                        message,
+                        Some(Value::Text(
+                            hdr.transfer.clone().unwrap_or_else(|| "unknown".into()),
+                        )),
+                        Some(Value::Text(expected_label.into())),
+                    )
+                })
+                .collect(),
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// dead_pixels (stuck / dead / flickering sensor defects)
+// ---------------------------------------------------------------------------
+
+struct DeadPixelRuleImpl {
+    cfg: DeadPixelRule,
+}
+
+fn decode_capabilities() -> Capabilities {
+    Capabilities {
+        required_streams: &[StreamKind::Video],
+        decode: DecodeRequirement::FullFrame,
+        incremental: false,
+        gpu: false,
+        cost: CostClass::FullDecode,
+    }
+}
+
+impl QcRule for DeadPixelRuleImpl {
+    fn id(&self) -> RuleId {
+        RuleId::new("video.dead_pixels")
+    }
+    fn description(&self) -> RuleDescription {
+        RuleDescription {
+            name: "Dead pixels",
+            summary: "No pixel stays at an extreme level, or alternates between extremes, while the picture changes.",
+            version: "0.1",
+        }
+    }
+    fn capabilities(&self) -> Capabilities {
+        decode_capabilities()
+    }
+    fn run(&self, ctx: &RuleContext<'_>) -> RuleResult {
+        use tpt_app_media_qc_model::inspection::DeadPixelKind;
+        let id = self.id();
+        let severity = self.cfg.severity;
+        let Some(measurement) = video_measurement(ctx) else {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                "video was not measured (no decoded video data)",
+            ));
+        };
+        // `None` means the decode pass did not run this analysis.
+        let Some(stats) = measurement.dead_pixels.as_ref() else {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                "dead-pixel analysis did not run, so stuck pixels could not be checked",
+            ));
+        };
+        if stats.frames_sampled == 0 {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                "dead-pixel analysis saw no decoded frames",
+            ));
+        }
+
+        // A stride-sampled grid can miss isolated defects, so a zero count there
+        // is weaker evidence. Only a profile that asked for it cares.
+        if stats.resolution_limited && self.cfg.fail_on_limited_resolution {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                format!(
+                    "picture exceeded the per-frame cell budget, so only every {}th pixel was compared",
+                    stats.cells_examined
+                ),
+            ));
+        }
+
+        let counted = |kind: DeadPixelKind| match kind {
+            DeadPixelKind::Dead => stats.dark_cells,
+            DeadPixelKind::Stuck => stats.bright_cells,
+            DeadPixelKind::Flicker if self.cfg.include_flicker => stats.flicker_cells,
+            _ => 0,
+        };
+        let total: u64 = [
+            DeadPixelKind::Dead,
+            DeadPixelKind::Stuck,
+            DeadPixelKind::Flicker,
+        ]
+        .into_iter()
+        .map(counted)
+        .sum();
+        let cluster_count = stats
+            .clusters
+            .iter()
+            .filter(|c| c.kind != DeadPixelKind::Flicker || self.cfg.include_flicker)
+            .count() as u32;
+
+        let mut findings = Vec::new();
+        if total > self.cfg.max_pixels {
+            findings.push(fail(
+                &id,
+                severity,
+                format!(
+                    "{total} stuck pixel(s) over {} decoded frame(s): {} dead, {} stuck, {} flickering",
+                    stats.frames_sampled, stats.dark_cells, stats.bright_cells, stats.flicker_cells
+                ),
+                Some(Value::UInt(total)),
+                Some(Value::UInt(self.cfg.max_pixels)),
+            ));
+        }
+        if cluster_count as u64 > self.cfg.max_clusters as u64 {
+            findings.push(fail(
+                &id,
+                severity,
+                format!("{cluster_count} distinct dead-pixel cluster(s) on screen"),
+                Some(Value::UInt(cluster_count as u64)),
+                Some(Value::UInt(self.cfg.max_clusters as u64)),
+            ));
+        }
+        // Attach the largest cluster so an operator can locate the defect.
+        if !findings.is_empty() {
+            if let Some(worst) = stats.clusters.first() {
+                findings.push(info(
+                    &id,
+                    severity,
+                    format!(
+                        "largest cluster: {} {} pixel(s) at ({}, {}) sized {}x{}",
+                        worst.cells,
+                        worst.kind.as_str(),
+                        worst.x,
+                        worst.y,
+                        worst.width,
+                        worst.height
+                    ),
+                    Some(Value::UInt(worst.cells as u64)),
+                ));
+            }
+        }
+        RuleResult::findings(findings)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // photosensitivity (general flash)
 // ---------------------------------------------------------------------------
 
@@ -788,7 +1079,7 @@ struct PhotosensitivityRuleImpl {
 
 /// Merged windows (ms) in which more than `limit` flashes occur within any one
 /// second, for one region's transition timestamps. A flash is a pair of
-/// opposing transitions, so the transition budget is `2 × limit`.
+/// opposing transitions, so the transition budget is `2 Ã— limit`.
 fn flash_hazard_windows(transitions: &[u64], limit: f64) -> Vec<(u64, u64, f64)> {
     let mut windows: Vec<(u64, u64, f64)> = Vec::new();
     let mut start = 0usize;
@@ -898,7 +1189,10 @@ mod tests {
     use super::*;
     use crate::testutil::bundled_asset;
     use tpt_app_media_qc_model::finding::TimeRange;
-    use tpt_app_media_qc_model::inspection::{Inspection, LumaStats, VideoMeasurements};
+    use tpt_app_media_qc_model::inspection::{
+        DeadPixelCluster, DeadPixelKind, DeadPixelStats, HdrMetadata, Inspection, LumaStats,
+        VideoMeasurements,
+    };
     use tpt_app_media_qc_model::severity::VerdictDecision;
     use tpt_app_media_qc_profile::model::Ratio;
 
@@ -1151,7 +1445,7 @@ mod tests {
 
     #[test]
     fn corrupt_frames_without_decoded_frames_is_inconclusive_not_fail() {
-        // An asset whose codec the adapter does not decode (H.264, HEVC, …)
+        // An asset whose codec the adapter does not decode (H.264, HEVC, â€¦)
         // yields zero decoded frames. Recorded decode errors must not be
         // reported as corrupt media against a zero-event profile limit.
         let rule = corrupt_rule(0);
@@ -1228,6 +1522,270 @@ mod tests {
         let mut m = measurement();
         m.decoded_frame_count = Some(10);
         let result = photosensitivity().run(&ctx_with(vec![m]));
+        assert_eq!(result.findings[0].status, VerdictDecision::Inconclusive);
+    }
+
+    fn hdr_ctx(hdr: Option<HdrMetadata>) -> RuleContext<'static> {
+        let mut m = measurement();
+        m.hdr = hdr;
+        ctx_with(vec![m])
+    }
+
+    /// Like `hdr_ctx` but with a 10-bit video stream.
+    fn hdr_ctx_10bit(hdr: HdrMetadata) -> RuleContext<'static> {
+        let mut ctx = hdr_ctx(Some(hdr));
+        let mut asset = bundled_asset().clone();
+        asset.streams[0].pixel_format = Some("yuv420p10le".into());
+        ctx.asset = Box::leak(Box::new(asset));
+        ctx
+    }
+
+    fn hdr10() -> HdrMetadata {
+        use tpt_app_media_qc_model::inspection::{HdrMetadata, MasteringDisplay};
+        HdrMetadata {
+            transfer: Some("smpte2084".into()),
+            primaries: Some("bt2020".into()),
+            matrix: Some("bt2020nc".into()),
+            range: Some("tv".into()),
+            mastering_display: Some(MasteringDisplay {
+                min_luminance_nits: Some(0.005),
+                max_luminance_nits: Some(1000.0),
+                ..Default::default()
+            }),
+            max_cll: Some(1000),
+            max_fall: Some(400),
+            dolby_vision: false,
+        }
+    }
+
+    fn hdr_rule(mode: HdrMode) -> HdrRuleImpl {
+        HdrRuleImpl {
+            cfg: HdrRule {
+                mode,
+                require_static_metadata: true,
+                max_cll_nits: None,
+                max_fall_nits: None,
+                severity: Severity::Error,
+            },
+        }
+    }
+
+    fn fail_messages(result: &RuleResult) -> Vec<String> {
+        result
+            .findings
+            .iter()
+            .filter(|f| f.status == VerdictDecision::Fail)
+            .map(|f| f.message.clone())
+            .collect()
+    }
+
+    #[test]
+    fn hdr10_with_complete_metadata_passes() {
+        let ctx = hdr_ctx_10bit(hdr10());
+        assert!(fail_messages(&hdr_rule(HdrMode::Hdr10).run(&ctx)).is_empty());
+    }
+
+    #[test]
+    fn hdr10_missing_static_metadata_and_8_bit_fail() {
+        let mut hdr = hdr10();
+        hdr.mastering_display = None;
+        hdr.max_cll = None;
+        let ctx = hdr_ctx(Some(hdr));
+        let messages = fail_messages(&hdr_rule(HdrMode::Hdr10).run(&ctx));
+        assert!(
+            messages.iter().any(|m| m.contains("mastering display")),
+            "{messages:?}"
+        );
+        assert!(
+            messages.iter().any(|m| m.contains("content light")),
+            "{messages:?}"
+        );
+        assert!(
+            messages.iter().any(|m| m.contains("10-bit")),
+            "{messages:?}"
+        );
+    }
+
+    #[test]
+    fn hdr_against_sdr_expectation_fails() {
+        let ctx = hdr_ctx_10bit(hdr10());
+        let messages = fail_messages(&hdr_rule(HdrMode::Sdr).run(&ctx));
+        assert!(
+            messages.iter().any(|m| m.contains("expected SDR")),
+            "{messages:?}"
+        );
+    }
+
+    #[test]
+    fn inconsistent_light_levels_and_limits_fail() {
+        let mut hdr = hdr10();
+        hdr.max_fall = Some(1200);
+        let ctx = hdr_ctx_10bit(hdr);
+        let mut rule = hdr_rule(HdrMode::Hdr10);
+        rule.cfg.max_cll_nits = Some(800);
+        let messages = fail_messages(&rule.run(&ctx));
+        assert!(
+            messages.iter().any(|m| m.contains("exceeds MaxCLL")),
+            "{messages:?}"
+        );
+        assert!(
+            messages.iter().any(|m| m.contains("800 nit")),
+            "{messages:?}"
+        );
+    }
+
+    #[test]
+    fn sdr_bt709_passes_sdr_expectation() {
+        use HdrMetadata;
+        let ctx = hdr_ctx(Some(HdrMetadata {
+            transfer: Some("bt709".into()),
+            primaries: Some("bt709".into()),
+            ..Default::default()
+        }));
+        assert!(fail_messages(&hdr_rule(HdrMode::Sdr).run(&ctx)).is_empty());
+    }
+
+    #[test]
+    fn unreported_transfer_is_inconclusive() {
+        let result = hdr_rule(HdrMode::Hdr10).run(&hdr_ctx(None));
+        assert_eq!(result.findings[0].status, VerdictDecision::Inconclusive);
+    }
+
+    fn dead_pixel_rule(cfg: DeadPixelRule) -> DeadPixelRuleImpl {
+        DeadPixelRuleImpl { cfg }
+    }
+
+    fn default_dead_pixel_cfg() -> DeadPixelRule {
+        DeadPixelRule {
+            max_pixels: 0,
+            max_clusters: 0,
+            include_flicker: true,
+            fail_on_limited_resolution: false,
+            severity: Severity::Error,
+        }
+    }
+
+    fn dead_pixel_ctx(stats: Option<DeadPixelStats>) -> RuleContext<'static> {
+        let mut m = measurement();
+        m.decoded_frame_count = Some(250);
+        m.dead_pixels = stats;
+        ctx_with(vec![m])
+    }
+
+    fn clean_stats() -> DeadPixelStats {
+        DeadPixelStats {
+            frames_sampled: 250,
+            cells_examined: 2_073_600,
+            resolution_limited: false,
+            ..Default::default()
+        }
+    }
+
+    fn cluster(kind: DeadPixelKind, cells: u32) -> DeadPixelCluster {
+        DeadPixelCluster {
+            x: 100,
+            y: 200,
+            width: 2,
+            height: 2,
+            cells,
+            kind,
+        }
+    }
+
+    #[test]
+    fn clean_picture_passes_the_dead_pixel_rule() {
+        let ctx = dead_pixel_ctx(Some(clean_stats()));
+        assert!(fail_messages(&dead_pixel_rule(default_dead_pixel_cfg()).run(&ctx)).is_empty());
+    }
+
+    #[test]
+    fn missing_analysis_is_inconclusive_not_a_pass() {
+        let result = dead_pixel_rule(default_dead_pixel_cfg()).run(&dead_pixel_ctx(None));
+        assert_eq!(result.findings[0].status, VerdictDecision::Inconclusive);
+        assert!(result.findings[0].message.contains("did not run"));
+    }
+
+    #[test]
+    fn stuck_pixels_beyond_the_limit_fail_with_a_located_cluster() {
+        let stats = DeadPixelStats {
+            dark_cells: 3,
+            clusters: vec![
+                cluster(DeadPixelKind::Dead, 2),
+                cluster(DeadPixelKind::Dead, 1),
+            ],
+            ..clean_stats()
+        };
+        let ctx = dead_pixel_ctx(Some(stats));
+        let messages = fail_messages(&dead_pixel_rule(default_dead_pixel_cfg()).run(&ctx));
+        assert_eq!(messages.len(), 2, "{messages:?}");
+        assert!(messages[0].contains("3 stuck pixel(s)"), "{messages:?}");
+        assert!(
+            messages[1].contains("2 distinct dead-pixel cluster"),
+            "{messages:?}"
+        );
+        // A locator finding accompanies the failure so an operator can find it.
+        let located = dead_pixel_rule(default_dead_pixel_cfg())
+            .run(&ctx)
+            .findings
+            .iter()
+            .any(|f| f.message.contains("largest cluster") && f.message.contains("(100, 200)"));
+        assert!(located, "expected a cluster locator finding");
+    }
+
+    #[test]
+    fn flicker_pixels_are_ignored_when_the_profile_excludes_them() {
+        let stats = DeadPixelStats {
+            flicker_cells: 4,
+            clusters: vec![cluster(DeadPixelKind::Flicker, 4)],
+            ..clean_stats()
+        };
+        let ctx = dead_pixel_ctx(Some(stats));
+
+        let mut cfg = default_dead_pixel_cfg();
+        assert!(!fail_messages(&dead_pixel_rule(cfg).run(&ctx)).is_empty());
+
+        cfg.include_flicker = false;
+        assert!(fail_messages(&dead_pixel_rule(cfg).run(&ctx)).is_empty());
+    }
+
+    #[test]
+    fn dead_pixels_within_the_limit_pass() {
+        let stats = DeadPixelStats {
+            dark_cells: 2,
+            clusters: vec![cluster(DeadPixelKind::Dead, 2)],
+            ..clean_stats()
+        };
+        let ctx = dead_pixel_ctx(Some(stats));
+        let mut cfg = default_dead_pixel_cfg();
+        cfg.max_pixels = 2;
+        cfg.max_clusters = 1;
+        assert!(fail_messages(&dead_pixel_rule(cfg).run(&ctx)).is_empty());
+    }
+
+    #[test]
+    fn stride_sampled_coverage_is_inconclusive_only_when_requested() {
+        let stats = DeadPixelStats {
+            resolution_limited: true,
+            ..clean_stats()
+        };
+        let ctx = dead_pixel_ctx(Some(stats));
+
+        // Default: still a pass, the defects simply were not resolvable.
+        assert!(fail_messages(&dead_pixel_rule(default_dead_pixel_cfg()).run(&ctx)).is_empty());
+
+        let mut cfg = default_dead_pixel_cfg();
+        cfg.fail_on_limited_resolution = true;
+        let result = dead_pixel_rule(cfg).run(&ctx);
+        assert_eq!(result.findings[0].status, VerdictDecision::Inconclusive);
+    }
+
+    #[test]
+    fn an_analysis_that_saw_no_frames_is_inconclusive() {
+        let stats = DeadPixelStats {
+            frames_sampled: 0,
+            ..clean_stats()
+        };
+        let result = dead_pixel_rule(default_dead_pixel_cfg()).run(&dead_pixel_ctx(Some(stats)));
         assert_eq!(result.findings[0].status, VerdictDecision::Inconclusive);
     }
 }

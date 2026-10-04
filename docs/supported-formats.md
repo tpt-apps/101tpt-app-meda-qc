@@ -79,8 +79,17 @@ validated against fixtures.
   a single corrupt asset must never terminate a batch (spec §21).
 - **Batch scanning:** only the extensions listed above are picked up for
   directory scans; explicit files are attempted regardless of extension.
-- **Subtitle/caption and voice streams:** structural support exists in the
-  model and profile format; validation rules land post-MVP (spec §8.7, §8.8).
+- **Subtitle/caption streams:** validated by the `subtitle.*` rules (spec §8.7) —
+  presence, language, cue timing (overlaps, invalid durations, gaps, cue length),
+  cue content (malformed/empty payloads, characters per line, lines per cue) and
+  coverage against the video duration. Cue timing is read for **every** subtitle
+  codec. Cue *text* — and therefore the character-limit, empty-cue and
+  malformed-payload checks — requires a text-based payload and is limited to
+  `subrip`, `srt`, `ass`, `ssa`, `webvtt`, `text`, `microdvd`, `mpl2` and
+  `subviewer`. Bitmap/structured formats (`dvdsub`, `hdmv_pgs_subtitle`,
+  `dvb_subtitle`, `mov_text`) are timing-only and report `Inconclusive` for the
+  text-dependent checks rather than guessing. Cue analysis is capped at 100 000
+  cues per stream. Voice streams remain a placeholder (spec §8.8).
 
 ## 5. Security note
 

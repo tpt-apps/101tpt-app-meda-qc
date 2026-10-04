@@ -12,6 +12,7 @@
 
 mod audio;
 mod container;
+mod subtitle;
 #[cfg(test)]
 mod testutil;
 mod util;
@@ -24,17 +25,19 @@ pub use container::build as build_container_rules;
 pub use rule::{
     Capabilities, DecodeRequirement, QcRule, RuleContext, RuleDescription, RuleExt, RuleResult,
 };
+pub use subtitle::build as build_subtitle_rules;
 pub use video::build as build_video_rules;
 
 /// Build every rule configured by a profile ([spec § 9]).
 ///
-/// The order is deterministic (container, video, audio) so engines and reports
-/// iterate rules in a stable order.
+/// The order is deterministic (container, video, audio, subtitle) so engines
+/// and reports iterate rules in a stable order.
 pub fn build_rules(profile: &tpt_app_media_qc_profile::model::Profile) -> Vec<Box<dyn QcRule>> {
     let mut rules: Vec<Box<dyn QcRule>> = Vec::new();
     container::build(profile, &mut rules);
     video::build(profile, &mut rules);
     audio::build(profile, &mut rules);
+    subtitle::build(profile, &mut rules);
     rules
 }
 
@@ -44,6 +47,7 @@ pub fn known_rule_ids() -> Vec<&'static str> {
         .iter()
         .chain(video::RULE_IDS.iter())
         .chain(audio::RULE_IDS.iter())
+        .chain(subtitle::RULE_IDS.iter())
         .copied()
         .collect()
 }

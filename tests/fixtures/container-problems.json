@@ -48,6 +48,7 @@
         "decode_errors": 0,
         "decoded_frame_count": 3000,
         "flash": { "transitions_ms": [[], []] },
+        "hdr": { "transfer": "bt709", "primaries": "bt709", "matrix": "bt709", "range": "tv" },
         "black_frames": [],
         "freeze_frames": [],
         "duplicate_frames": [],

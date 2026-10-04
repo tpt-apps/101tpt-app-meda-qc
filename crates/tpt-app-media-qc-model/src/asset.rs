@@ -139,6 +139,10 @@ impl StreamId {
     pub fn as_usize(&self) -> usize {
         self.0 as usize
     }
+
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
 }
 
 impl std::fmt::Display for StreamId {

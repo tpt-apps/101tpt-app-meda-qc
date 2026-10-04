@@ -12,11 +12,11 @@ encoded media, no `ffprobe` install. The harness lives in
 
 | fixture               | scenario                                                                                                                       | golden verdict |
 |-----------------------|--------------------------------------------------------------------------------------------------------------------------------|----------------|
-| `clean-master`        | fully in-spec master (H.264 1080p25 + 48 kHz/24-bit stereo)                                                                     | pass           |
+| `clean-master`        | fully in-spec master (H.264 1080p25 + 48 kHz/24-bit stereo + one `eng` subtitle track)                                          | pass           |
 | `container-problems`  | corrupt container, malformed metadata, duration/bitrate/timecode/timebase/timestamp violations, unexpected `data` stream, no audio | fail           |
-| `video-defects`       | wrong resolution/frame rate/aspect/colour, signalled top-field-first against a progressive expectation, black/freeze/duplicate/corrupt events, out-of-legal luma | fail           |
+| `video-defects`       | wrong resolution/frame rate/aspect/colour, signalled top-field-first against a progressive expectation, black/freeze/duplicate/corrupt events, out-of-legal luma, 7 stuck/flickering pixels in 4 clusters, overlapping/invalid/empty/malformed subtitle cues and short subtitle coverage | fail           |
 | `audio-defects`       | wrong sample rate/bit depth/layout, silence, clipping, over-limit peak/true-peak, off-target loudness, out-of-phase, DC offset  | fail           |
-| `boundary-thresholds` | every threshold value **exactly at its limit** (thresholds compare strictly `>`, so these pass)                                  | pass           |
+| `boundary-thresholds` | every threshold value **exactly at its limit** (thresholds compare strictly `>`, so these pass), including the subtitle limits  | pass           |
 | `unscanned`           | streams present but no probe/decode measurements — rules report `Inconclusive`, never guess (spec §3.4)                          | warn           |
 
 The all-rules `golden-suite.yaml` profile enables every built-in rule so each

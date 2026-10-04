@@ -1,0 +1,47 @@
+# HDR10 (PQ / BT.2020) streaming delivery profile.
+#
+# Checks that dynamic-range signalling is coherent: PQ transfer with BT.2020
+# primaries and matrix, limited range, at least 10-bit samples, and ST 2086
+# mastering display plus MaxCLL/MaxFALL static metadata with MaxFALL <= MaxCLL.
+#
+# NOTE (spec §25): thresholds are commonly used delivery values, not a claim of
+# formal compliance with any HDR specification.
+name: "streaming-hdr10"
+version: 1
+description: "HDR10 streaming delivery with signalling and static-metadata checks."
+
+rules:
+  container:
+    readable: error
+    container_validity: error
+    stream_presence:
+      min_video: 1
+      min_audio: 1
+      max_streams: 32
+
+  video:
+    resolution:
+      expected: "3840x2160"
+      severity: error
+    hdr:
+      mode: hdr10
+      require_static_metadata: true
+      max_cll_nits: 4000
+      max_fall_nits: 1000
+      severity: error
+    photosensitivity:
+      max_flashes_per_second: 3
+      severity: warning
+    black_frames:
+      max_duration_ms: 1000
+      severity: warning
+
+  audio:
+    clipping:
+      max_events: 0
+      severity: error
+    loudness:
+      standard: ebu-r128
+      target_lufs: -23
+      tolerance_lu: 1.0
+      severity: warning

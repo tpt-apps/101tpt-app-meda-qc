@@ -41,11 +41,18 @@ Rules consume **measurements**, not raw media bytes (spec §3.5). The
   the stream table is supplied by the metadata front-end and consumed by rules.
 - `VideoMeasurements` — observed frame rate, decode errors, black/freeze/
   duplicate-frame segments, luma statistics, colour-space tag, scanning order
-  (field order).
+  (field order) and HDR/colorimetry signalling (`HdrMetadata`: transfer,
+  primaries, matrix, sample range, ST 2086 mastering display, MaxCLL/MaxFALL),
+  plus stuck-pixel analysis (`DeadPixelStats`: dead/stuck/flickering cell counts,
+  clustered defect locations and whether coverage was stride-limited).
 - `AudioMeasurements` — decoded sample-frame coverage, decode errors, bounded
   silence segments and truncation state, clipping events, peak (dBFS), true peak
   (dBTP), integrated loudness (LUFS), loudness range, phase correlation and DC
   offset.
+- `SubtitleMeasurements` — cue count, cue text decoding state, invalid durations,
+  overlaps, malformed and empty cues, largest gap between cues, longest cue,
+  longest line in characters, most lines in a cue, and the point subtitle
+  coverage reaches (`covered_until_ms`).
 
 Missing measurements (`None`/empty) are expected on the metadata-only path;
 rules must report `Inconclusive` or pass accordingly (spec §3.4).
