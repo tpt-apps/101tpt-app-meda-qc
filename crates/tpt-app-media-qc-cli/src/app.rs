@@ -12,6 +12,7 @@ use tpt_app_media_qc_core::path::{
 use tpt_app_media_qc_model::asset::{Asset, AssetFingerprint};
 use tpt_app_media_qc_model::report::AnalysisId;
 use tpt_app_media_qc_model::severity::VerdictDecision;
+use tpt_app_media_qc_pipeline::compare::{compare, CompareTolerances, DifferenceKind};
 use tpt_app_media_qc_pipeline::{arc, InspectionLevel, Inspector, NoopInspector, QcEngine};
 use tpt_app_media_qc_profile::model::Profile;
 use tpt_app_media_qc_profile::{parse_str, profile_sha256};
@@ -25,7 +26,8 @@ use crate::cli::{Cli, Command};
 use crate::probe::{FfprobeInspector, HybridInspector};
 
 use crate::exit::{
-    exit_code_for_verdict, EXIT_ERROR, EXIT_FAIL, EXIT_NO_INSPECTOR, EXIT_PATH, EXIT_PROFILE,
+    exit_code_for_verdict, EXIT_ERROR, EXIT_FAIL, EXIT_NO_INSPECTOR, EXIT_OK, EXIT_PATH,
+    EXIT_PROFILE, EXIT_WARN,
 };
 
 /// Run the parsed CLI and return the process exit code.
@@ -58,6 +60,24 @@ pub fn run(cli: Cli) -> i32 {
             profile,
             quick,
         } => run_info(file, profile, quick),
+        Command::Compare {
+            left,
+            right,
+            quick,
+            json,
+            duration_tolerance_ms,
+            loudness_tolerance_lu,
+        } => run_compare(
+            left,
+            right,
+            quick,
+            json,
+            CompareTolerances {
+                duration_ms: duration_tolerance_ms,
+                loudness_lu: loudness_tolerance_lu,
+                ..CompareTolerances::default()
+            },
+        ),
         Command::ListRules { profile } => run_list_rules(profile),
         Command::Watch {
             input,
@@ -523,6 +543,90 @@ fn run_batch(
 // info
 // ---------------------------------------------------------------------------
 
+fn inspect_for_compare(
+    file: &Path,
+    quick: bool,
+) -> Result<tpt_app_media_qc_model::inspection::Inspection, i32> {
+    if !file.is_file() {
+        return Err(err_exit(
+            format!("asset '{}' not found", file.display()),
+            EXIT_PATH,
+        ));
+    }
+    let profile = load_profile(None)?;
+    let inspector = make_inspector(quick)?;
+    let level = if quick {
+        InspectionLevel::MetadataOnly
+    } else {
+        InspectionLevel::Full
+    };
+    let asset = build_asset(file)?;
+    QcEngine::new(Arc::new(profile), inspector)
+        .check(&asset, level)
+        .map(|run| run.inspection)
+        .map_err(|e| {
+            err_exit(
+                format!("probe failed for '{}': {e}", file.display()),
+                EXIT_ERROR,
+            )
+        })
+}
+
+fn run_compare(
+    left: PathBuf,
+    right: PathBuf,
+    quick: bool,
+    json: Option<PathBuf>,
+    tolerances: CompareTolerances,
+) -> i32 {
+    let left_inspection = match inspect_for_compare(&left, quick) {
+        Ok(i) => i,
+        Err(code) => return code,
+    };
+    let right_inspection = match inspect_for_compare(&right, quick) {
+        Ok(i) => i,
+        Err(code) => return code,
+    };
+    let result = compare(&left_inspection, &right_inspection, &tolerances);
+
+    println!("TPT Media QC {} · comparison", APP_VERSION);
+    println!("left   {}", left.display());
+    println!("right  {}", right.display());
+    for d in &result.differences {
+        let tag = match d.kind {
+            DifferenceKind::Major => "MAJOR",
+            DifferenceKind::Minor => "minor",
+        };
+        println!(
+            "{tag}  {} · {}: {}  ->  {}",
+            d.scope, d.field, d.left, d.right
+        );
+    }
+    println!(
+        "{} difference(s) · {} field(s) match · {} unmeasured",
+        result.differences.len(),
+        result.matching_fields,
+        result.unmeasured_fields
+    );
+    if let Some(path) = json {
+        let body = match serde_json::to_string_pretty(&result) {
+            Ok(b) => b,
+            Err(e) => return err_exit(format!("could not serialise comparison: {e}"), EXIT_ERROR),
+        };
+        if let Err(e) = std::fs::write(&path, body) {
+            return err_exit(
+                format!("could not write '{}': {e}", path.display()),
+                EXIT_ERROR,
+            );
+        }
+    }
+    match result.worst() {
+        None => EXIT_OK,
+        Some(DifferenceKind::Minor) => EXIT_WARN,
+        Some(DifferenceKind::Major) => EXIT_FAIL,
+    }
+}
+
 fn run_info(file: PathBuf, profile_path: Option<PathBuf>, quick: bool) -> i32 {
     if !file.is_file() {
         return err_exit(format!("asset '{}' not found", file.display()), EXIT_PATH);
@@ -632,6 +736,7 @@ fn profile_has_decode_rules(profile: &Profile) -> bool {
         || profile.rules.video.duplicate_frames.is_some()
         || profile.rules.video.corrupt_frames.is_some()
         || profile.rules.video.luma_range.is_some()
+        || profile.rules.video.photosensitivity.is_some()
         || profile.rules.audio.silence.is_some()
         || profile.rules.audio.clipping.is_some()
         || profile.rules.audio.peak.is_some()

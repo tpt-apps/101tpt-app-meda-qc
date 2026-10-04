@@ -21,6 +21,20 @@ open. Revisit item-by-item before the first upload.
       (`crates/tpt-app-media-qc-cli/src/probe.rs`). Either bundle a static
       ffmpeg/ffprobe binary with the installer, or clearly document it as a
       required separate install — customers won't have it by default.
+      **Patent caveat:** stock ffmpeg/ffprobe builds contain H.264 (and AAC,
+      HEVC…) decoders, and AVC patent pools license decoders as well as
+      encoders. Nothing is bundled today (the release workflow and Tauri
+      config ship no ffmpeg), so the app itself ships no H.264 decoder. If you
+      choose to bundle, use a custom ffprobe build with those decoders
+      disabled, or take licensing advice first; documenting ffprobe as a
+      customer-installed prerequisite keeps that liability with the customer.
+- [x] H.264 decode removed from the product (patent licensing). Full-decode
+      video QC now covers royalty-free AV1 and VP9 (MP4 and Matroska/WebM)
+      through `tpt-kinetix-av1` / `tpt-kinetix-vp9`; H.264 and other codecs
+      still get full ffprobe metadata and container QC, with frame-decode rules
+      reported `Inconclusive`. AAC was never decoded. Not legal advice —
+      re-check the remaining codec/patent posture (Kinetix `PATENTS.md`,
+      ffprobe distribution, rav1e licence terms) before the first paid release.
 
 ## Build & packaging
 
@@ -36,13 +50,18 @@ open. Revisit item-by-item before the first upload.
 - [ ] Confirm the git dependencies on `tpt-solutions/tpt-kinetix` and
       `tpt-solutions/tpt-cadence` are reachable by the CI/release runner — if
       those repos are private, the runner needs a deploy key or PAT with
-      access, or release builds will fail to fetch them.
+      access, or release builds will fail to fetch them. Kinetix is pinned to
+      rev `1a8623c` (AV1/VP9 pixel-exact); the `tpt-kinetix-av1` crate pulls in
+      `rav1e`, which adds noticeable compile time to release builds.
 
 ## Gumroad listing content
 
 - [ ] Product title, one-line pitch, and description (pull from `spec.txt` /
       README feature list — content-based fingerprinting, rule-based QC
-      profiles, deterministic reports).
+      profiles, deterministic reports). State the codec scope honestly: frame
+      analysis for AV1/VP9, WAV/AIFF/FLAC audio decode, and metadata/container
+      QC for everything ffprobe can read (including H.264/AAC, which are not
+      decoded).
 - [ ] Screenshots/demo video of the actual GUI (the Tauri shell now exists;
       capture and approve store-ready assets before launch).
 - [ ] Pricing tier(s) — one-time license vs. subscription; single-seat vs.

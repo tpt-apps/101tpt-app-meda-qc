@@ -23,34 +23,49 @@ bitrate and timecode presence.
 
 Full-decode adapters are deliberately narrow and capability-driven:
 
-- **Video container:** MP4/ISO-BMFF through `tpt-kinetix-demux`.
-- **Video codec:** H.264/AVC through `tpt-kinetix-h264`.
+- **Video containers:** MP4/ISO-BMFF, Matroska/WebM and MPEG-TS (188-byte transport
+  streams, incl. HLS segments) through `tpt-kinetix-demux`.
+- **Video codec:** AV1 and VP9 through `tpt-kinetix-av1` / `tpt-kinetix-vp9`.
+  **No H.264/AVC decoder ships.** AVC patent pools license decoders as well as
+  encoders, so H.264 assets are still fully inspected for metadata and container
+  rules by `ffprobe`, while their frame-decode rules report `Inconclusive`.
 - **Video measurements:** observed frame rate, black-frame ranges, freeze-frame
   ranges, duplicate-frame ranges, decode-error count and all-sample luma
   statistics (min/max/mean/legal-range fractions).
 - **Standalone audio containers:** WAV, AIFF/AIFC and FLAC through the pinned
   Cadence readers.
 - **Audio measurements:** decoded-frame coverage, silence ranges, clipping
-  events, sample peak, stereo phase correlation and DC offset. Silence ranges
-  are bounded; if their retention limit is reached, the silence rule returns
-  `Inconclusive`. True peak and BS.1770 loudness are deliberately unmeasured,
-  not represented as compliant values.
+  events, sample peak, true peak (BS.1770-4 Annex 2), gated integrated
+  loudness (BS.1770-4 K-weighting and §5 gating), stereo phase correlation and
+  DC offset. Silence ranges are bounded; if their retention limit is reached,
+  the silence rule returns `Inconclusive`. Loudness range (EBU Tech 3342) needs
+  at least 3 s of audio, and integrated loudness needs at least one complete 400 ms
+  gating block — shorter files report it as unmeasured rather than as a
+  compliant value.
 - **Unsupported/incomplete input:** adapters record no decoded coverage or an
   explicit incomplete state and the affected rules return `Inconclusive`; they
-  never turn an empty measurement into a pass.
+  never turn an empty measurement into a pass. A container or codec that cannot
+  be decoded (H.264, HEVC, ProRes, MXF, …) is reported as unsupported and never
+  as a decode error, so `video.corrupt_frames` cannot fail an asset simply
+  because it was not decoded.
 
-The pinned Kinetix MP4 demuxer is currently in-memory. The video adapter
+The pinned Kinetix demuxers are currently in-memory. The video adapter
 therefore refuses files over 512 MiB rather than allocating without a bound.
-Embedded MP4 audio, HEVC/AV1/VP9, MXF, MPEG-TS and other containers remain
-follow-up work through the Kinetix/Cadence bridge and other foundation crates.
+Embedded audio, HEVC, MXF and other containers remain follow-up work through
+the Kinetix/Cadence bridge and other foundation crates. MPEG-TS coverage is
+188-byte packets only: audio elementary streams inside a transport stream are
+demuxed but not decoded (the Cadence readers take standalone files), so a
+broadcast `.ts` gets full video frame QC while its audio silence/clipping/
+loudness findings stay `Inconclusive`.
 
 ## 3. Intended target coverage (post-integration)
 
 - **Containers:** MP4/MOV (QuickTime), MXF (OP1a, OP-Atom), MPEG-TS/M2TS, MKV,
   WebM, AVI, WAV/W64, MP3, FLAC, Ogg/Opus, AC-3/E-AC-3, AAC (in supported
   containers).
-- **Video codecs:** H.264/AVC, H.265/HEVC, AV1, VP9, ProRes, XAVC, DNxHD/HR,
-  MPEG-2, VC-1 as the foundation matures.
+- **Video codecs:** AV1, VP9 today; H.265/HEVC, ProRes, XAVC, DNxHD/HR,
+  MPEG-2, VC-1 as the foundation matures. H.264/AVC is intentionally absent
+  (patent licensing); its assets stay metadata-inspectable.
 - **Audio codecs:** PCM, AAC, AC-3/E-AC-3, MP3, FLAC, Opus, DTS as handled by
   `tpt-cadence`.
 

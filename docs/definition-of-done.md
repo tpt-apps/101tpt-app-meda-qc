@@ -10,7 +10,7 @@ alone. Re-run this audit before declaring the MVP complete (todo item 28).
 |---|---------------|--------|----------|
 | 1 | Install without development tooling | **Partial** | `.github/workflows/release.yml` builds unsigned per-OS bundles on tag; `ffprobe` requirement is documented (`GUMROAD.md`, `docs/supported-formats.md`). Signing/notarization and an installer UX check need external credentials — see `GUMROAD.md`. |
 | 2 | Drag a media file into the application | Done | Desktop import card + drag-and-drop overlay (`crates/tpt-app-media-qc-tauri/ui/app.js`), folder import, `MAX_IMPORT_FILES` bound. |
-| 3 | Inspect all supported streams | Done (declared scope) | MP4/ISO-BMFF + H.264 via Kinetix, WAV/AIFF/FLAC via Cadence, metadata via `ffprobe`; unsupported codecs are reported as such, never guessed (`docs/supported-formats.md`). |
+| 3 | Inspect all supported streams | Done (declared scope) | AV1/VP9 in MP4, Matroska/WebM and MPEG-TS via Kinetix (H.264 deliberately not decoded, patent licensing), WAV/AIFF/FLAC via Cadence, metadata via `ffprobe`; unsupported codecs are reported as such, never guessed (`docs/supported-formats.md`). |
 | 4 | QC profile can be selected or created | Done | Profile selector in the desktop app, custom YAML profile picker, bundled `profiles/` tree with strict parser (`docs/profile-format.md`); creation is editing YAML in any editor by design (spec §9). |
 | 5 | Complete QC job runs offline | Done | No network in the engine; the only optional listener is the loopback-only local API (`crates/tpt-app-media-qc-tauri/src/local_api.rs`). |
 | 6 | Multiple files processed concurrently | Done | Cost-class scheduler with bounded concurrency and backpressure (`crates/tpt-app-media-qc-pipeline/src/scheduler.rs`). |
@@ -26,7 +26,7 @@ alone. Re-run this audit before declaring the MVP complete (todo item 28).
 | 16 | Reproducible from fingerprint + profile + versions | Done | Cache keys and report integrity fields: asset SHA-256, profile SHA-256, app version, ruleset version (`docs/report-format.md`, `docs/performance.md`). |
 | 17 | No internet connection required | Done | Offline-first; no telemetry, no cloud upload (spec §22). |
 | 18 | Clean-machine installation tested | **External** | Requires a pristine machine per OS with the produced bundles; blockers are signing (optional) and `ffprobe` availability (`GUMROAD.md`). |
-| 19 | Performance benchmarked on representative HD/UHD | **Partial** | `qc-bench` micro-benchmarks with committed baseline (`tests/performance/baseline.md`); representative *media* benchmarks grow with decode coverage (MP4/H.264 benchmarked; other codecs capability-gated). |
+| 19 | Performance benchmarked on representative HD/UHD | **Partial** | `qc-bench` micro-benchmarks with committed baseline (`tests/performance/baseline.md`); representative *media* benchmarks grow with decode coverage (AV1/VP9 decode benchmarks are follow-up work; other codecs capability-gated). |
 
 ## Remaining before MVP completion
 

@@ -213,3 +213,68 @@ fn real_watch_routes_a_preexisting_asset() {
         "watch must write a per-asset report when requested"
     );
 }
+
+fn generate_tone(path: &Path, frequency: u32, amplitude_db: i32, channels: &str) -> bool {
+    Command::new("ffmpeg")
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+        ])
+        .arg(format!(
+            "sine=frequency={frequency}:sample_rate=48000:duration=4"
+        ))
+        .args(["-af", &format!("volume={amplitude_db}dB"), "-ac", channels])
+        .args(["-c:a", "pcm_s16le"])
+        .arg(path)
+        .output()
+        .map(|result| result.status.success())
+        .unwrap_or(false)
+}
+
+#[test]
+fn real_compare_reports_identity_and_audio_differences() {
+    if !tool_available("ffmpeg") || !tool_available("ffprobe") {
+        eprintln!("skipping real-media compare test: ffmpeg/ffprobe is unavailable");
+        return;
+    }
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let (a, b) = (
+        directory.path().join("a.wav"),
+        directory.path().join("b.wav"),
+    );
+    assert!(generate_tone(&a, 1000, -10, "2"));
+    assert!(generate_tone(&b, 1000, -20, "1"));
+
+    let same = Command::new(cli_path())
+        .arg("compare")
+        .arg(&a)
+        .arg(&a)
+        .output()
+        .expect("compare process starts");
+    assert_eq!(
+        same.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&same.stdout)
+    );
+
+    let json = directory.path().join("diff.json");
+    let different = Command::new(cli_path())
+        .arg("compare")
+        .arg(&a)
+        .arg(&b)
+        .arg("--json")
+        .arg(&json)
+        .output()
+        .expect("compare process starts");
+    assert_eq!(different.status.code(), Some(2));
+    let stdout = String::from_utf8_lossy(&different.stdout);
+    assert!(stdout.contains("channels"), "{stdout}");
+    assert!(stdout.contains("integrated loudness"), "{stdout}");
+    assert!(json.is_file());
+}

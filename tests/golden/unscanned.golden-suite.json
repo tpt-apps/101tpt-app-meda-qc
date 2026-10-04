@@ -31,6 +31,7 @@
     "video.frame_rate": "pass",
     "video.freeze_frames": "inconclusive",
     "video.luma_range": "inconclusive",
+    "video.photosensitivity": "inconclusive",
     "video.resolution": "pass",
     "video.scan_format": "pass"
   },

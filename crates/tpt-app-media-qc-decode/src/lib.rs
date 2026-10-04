@@ -1,11 +1,19 @@
 //! Kinetix-backed video inspection for TPT Media QC.
 //!
-//! Kinetix owns MP4 demuxing and H.264 reconstruction; this crate reduces
-//! decoded frames to the stable [`Inspection`] model consumed by QC rules.
-//! The pinned MP4 demuxer is in-memory, so large inputs are refused rather
-//! than loaded without a bound. Decoded frames are analysed one at a time.
+//! Kinetix owns MP4 and Matroska/WebM demuxing and AV1/VP9 reconstruction;
+//! this crate reduces decoded frames to the stable [`Inspection`] model
+//! consumed by QC rules. H.264 is deliberately not decoded: the AVC patent
+//! pools license decoders as well as encoders. Files in other codecs still get
+//! full ffprobe metadata QC, and their frame-decode rules stay inconclusive.
+//! Both decoders run in Kinetix strict mode, so a stream they cannot
+//! reconstruct faithfully is reported as unmeasurable instead of being
+//! analysed. The pinned demuxers are in-memory, so large inputs are refused
+//! rather than loaded without a bound. Decoded frames are analysed one at a
+//! time.
 
 mod audio;
+mod loudness;
+mod pse;
 
 pub use audio::{AudioAnalyzerConfig, CadenceAudioInspector};
 
@@ -15,19 +23,234 @@ use tpt_app_media_qc_model::inspection::{Inspection, LumaStats, VideoMeasurement
 use tpt_app_media_qc_model::time::{FrameRate, Rational};
 use tpt_app_media_qc_model::TimeRange;
 use tpt_app_media_qc_pipeline::{InspectionLevel, Inspector};
+use tpt_kinetix_av1::Av1Decoder;
 use tpt_kinetix_core::codec::{CodecId, MediaType};
+use tpt_kinetix_core::error::KinetixError;
 use tpt_kinetix_core::frame::VideoFrame;
 use tpt_kinetix_core::packet::Packet;
 use tpt_kinetix_core::pixel_format::PixelFormat;
-use tpt_kinetix_demux::mp4::boxes::parse_box_header;
-use tpt_kinetix_demux::{Demuxer, Mp4Demuxer};
-use tpt_kinetix_h264::nal::{parse_nal_units_from_avcc, NalUnit};
-use tpt_kinetix_h264::H264Decoder;
+use tpt_kinetix_demux::{Demuxer, MkvDemuxer, Mp4Demuxer, TsDemuxer};
+use tpt_kinetix_vp9::Vp9Decoder;
 
-/// Maximum MP4 input accepted by the current in-memory Kinetix demuxer.
+/// Maximum input accepted by the current in-memory Kinetix demuxers.
 pub const DEFAULT_MAX_DECODE_INPUT_BYTES: u64 = 512 * 1024 * 1024;
 
-/// Deterministic thresholds for the first H.264 video pass.
+/// Royalty-free video codecs the adapter can decode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VideoCodec {
+    Av1,
+    Vp9,
+}
+
+impl VideoCodec {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Av1 => "AV1",
+            Self::Vp9 => "VP9",
+        }
+    }
+}
+
+enum VideoDecoder {
+    Av1(Box<Av1Decoder>),
+    Vp9(Box<Vp9Decoder>),
+}
+
+impl VideoDecoder {
+    fn new(codec: VideoCodec) -> Self {
+        match codec {
+            // Strict mode makes a decoder refuse to hand back frames it cannot
+            // reconstruct faithfully (AV1 grey placeholders), so they are never
+            // measured as real video.
+            VideoCodec::Av1 => Self::Av1(Box::new(Av1Decoder::new().with_strict(true))),
+            VideoCodec::Vp9 => Self::Vp9(Box::new(Vp9Decoder::new().with_strict(true))),
+        }
+    }
+
+    fn decode(&mut self, packet: &Packet) -> std::result::Result<Option<VideoFrame>, KinetixError> {
+        match self {
+            Self::Av1(decoder) => decoder.decode(packet),
+            Self::Vp9(decoder) => decoder.decode(packet),
+        }
+    }
+
+    fn flush(&mut self) -> std::result::Result<Vec<VideoFrame>, KinetixError> {
+        match self {
+            Self::Av1(decoder) => decoder.flush(),
+            Self::Vp9(_) => Ok(Vec::new()),
+        }
+    }
+}
+
+/// A demuxer positioned on the video track chosen for decode.
+struct VideoSource {
+    demuxer: Box<dyn Demuxer>,
+    codec: VideoCodec,
+    /// Index of the track within the container; used as the metadata stream index.
+    stream_idx: u64,
+    /// `Packet::stream_index` value that belongs to the chosen track.
+    packet_stream: u32,
+    /// Sample count when the container reports it up front.
+    expected_packets: Option<usize>,
+}
+
+fn is_mkv(bytes: &[u8]) -> bool {
+    bytes.starts_with(&[0x1A, 0x45, 0xDF, 0xA3])
+}
+
+fn is_iso_bmff(bytes: &[u8]) -> bool {
+    bytes.get(4..8).is_some_and(|tag| {
+        matches!(
+            tag,
+            b"ftyp" | b"moov" | b"mdat" | b"free" | b"skip" | b"wide" | b"styp"
+        )
+    })
+}
+
+/// MPEG-TS is a raw transport stream: fixed 188-byte packets each starting with
+/// the `0x47` sync byte. Check the first two packets so an incidental leading
+/// `0x47` in some other container does not claim the file.
+fn is_mpeg_ts(bytes: &[u8]) -> bool {
+    const TS_PACKET_LEN: usize = 188;
+    const SYNC_BYTE: u8 = 0x47;
+    bytes.len() >= TS_PACKET_LEN * 2 && bytes[0] == SYNC_BYTE && bytes[TS_PACKET_LEN] == SYNC_BYTE
+}
+
+fn open_video_source(bytes: Vec<u8>) -> std::result::Result<VideoSource, DecodeFailure> {
+    if is_mkv(&bytes) {
+        let demuxer = MkvDemuxer::new(bytes).map_err(|error| {
+            DecodeFailure::Failed(Error::Probe(format!("Kinetix MKV demux failed: {error}")))
+        })?;
+        let found = demuxer
+            .tracks()
+            .iter()
+            .enumerate()
+            .find_map(|(index, track)| {
+                let codec = match track.codec_id.as_str() {
+                    "V_AV1" => VideoCodec::Av1,
+                    "V_VP9" => VideoCodec::Vp9,
+                    _ => return None,
+                };
+                Some((index, track.track_number, codec))
+            });
+        let Some((index, track_number, codec)) = found else {
+            return Err(unsupported_video_codec(
+                demuxer.tracks().iter().map(|track| track.codec_id.as_str()),
+            ));
+        };
+        return Ok(VideoSource {
+            demuxer: Box::new(demuxer),
+            codec,
+            stream_idx: index as u64,
+            packet_stream: track_number as u32,
+            expected_packets: None,
+        });
+    }
+    if is_iso_bmff(&bytes) {
+        let demuxer = Mp4Demuxer::new(bytes).map_err(|error| {
+            DecodeFailure::Failed(Error::Probe(format!("Kinetix MP4 demux failed: {error}")))
+        })?;
+        let found = demuxer
+            .tracks()
+            .iter()
+            .enumerate()
+            .find_map(|(index, track)| {
+                if track.media_type != MediaType::Video {
+                    return None;
+                }
+                let codec = match track.codec {
+                    Some(CodecId::Av1) => VideoCodec::Av1,
+                    Some(CodecId::Vp9) => VideoCodec::Vp9,
+                    _ => return None,
+                };
+                Some((index, track.sample_count(), codec))
+            });
+        let Some((index, samples, codec)) = found else {
+            return Err(unsupported_video_codec(
+                demuxer
+                    .tracks()
+                    .iter()
+                    .filter(|track| track.media_type == MediaType::Video)
+                    .map(|track| track.codec.map(|codec| codec.name()).unwrap_or("unknown")),
+            ));
+        };
+        return Ok(VideoSource {
+            demuxer: Box::new(demuxer),
+            codec,
+            stream_idx: index as u64,
+            packet_stream: index as u32,
+            expected_packets: Some(samples),
+        });
+    }
+    if is_mpeg_ts(&bytes) {
+        let demuxer = TsDemuxer::new(bytes).map_err(|error| {
+            DecodeFailure::Failed(Error::Probe(format!(
+                "Kinetix MPEG-TS demux failed: {error}"
+            )))
+        })?;
+        // `streams()` is PID-ordered, which is also how ffprobe enumerates
+        // transport-stream streams, so the ordinal lines up with the metadata
+        // pass.
+        let streams = demuxer.streams();
+        let found = streams.iter().enumerate().find_map(|(index, stream)| {
+            if stream.media_type != MediaType::Video {
+                return None;
+            }
+            let codec = match stream.codec {
+                Some(CodecId::Av1) => VideoCodec::Av1,
+                Some(CodecId::Vp9) => VideoCodec::Vp9,
+                _ => return None,
+            };
+            Some((index, stream.pid, codec))
+        });
+        let Some((index, pid, codec)) = found else {
+            return Err(unsupported_video_codec(
+                streams
+                    .iter()
+                    .filter(|stream| stream.media_type == MediaType::Video)
+                    .map(|stream| stream.codec.map(|codec| codec.name()).unwrap_or("unknown")),
+            ));
+        };
+        return Ok(VideoSource {
+            demuxer: Box::new(demuxer),
+            codec,
+            stream_idx: index as u64,
+            packet_stream: u32::from(pid),
+            expected_packets: None,
+        });
+    }
+    Err(DecodeFailure::Unsupported(
+        "frame decode supports MP4, Matroska/WebM and MPEG-TS containers only".into(),
+    ))
+}
+
+fn unsupported_video_codec<'a>(found: impl Iterator<Item = &'a str>) -> DecodeFailure {
+    let found: Vec<&str> = found.collect();
+    DecodeFailure::Unsupported(format!(
+        "frame decode supports AV1 and VP9 video only (H.264 is not decoded because of \
+         patent licensing); found: {}",
+        if found.is_empty() {
+            "no video track".to_string()
+        } else {
+            found.join(", ")
+        }
+    ))
+}
+
+fn map_decode_error(codec: VideoCodec, error: KinetixError) -> DecodeFailure {
+    match error {
+        KinetixError::NotPixelExact(reason) => DecodeFailure::Unsupported(format!(
+            "Kinetix {} decoder cannot reconstruct this stream faithfully: {reason}",
+            codec.label()
+        )),
+        other => DecodeFailure::Failed(Error::Probe(format!(
+            "Kinetix {} decode failed: {other}",
+            codec.label()
+        ))),
+    }
+}
+
+/// Deterministic thresholds for the video analysis pass.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VideoAnalyzerConfig {
     pub black_luma_threshold: u8,
@@ -47,7 +270,7 @@ impl Default for VideoAnalyzerConfig {
     }
 }
 
-/// Full-decode inspector for MP4/ISO-BMFF files containing H.264 video.
+/// Full-decode inspector for MP4 and Matroska/WebM files containing AV1 or VP9 video.
 pub struct KinetixVideoInspector {
     config: VideoAnalyzerConfig,
     max_input_bytes: u64,
@@ -70,113 +293,99 @@ impl KinetixVideoInspector {
         self
     }
 
-    fn decode_mp4(
+    fn decode_video(
         &self,
         asset: &Asset,
         metadata: &Inspection,
-    ) -> std::result::Result<VideoMeasurements, DecodeFailure> {
-        let bytes =
-            std::fs::read(&asset.path).map_err(|error| DecodeFailure::Failed(error.into()))?;
-        if bytes.len() as u64 > self.max_input_bytes {
+    ) -> std::result::Result<(VideoMeasurements, VideoCodec), DecodeFailure> {
+        let size = std::fs::metadata(&asset.path)
+            .map_err(|error| DecodeFailure::Failed(error.into()))?
+            .len();
+        if size > self.max_input_bytes {
             return Err(DecodeFailure::Unsupported(format!(
-                "MP4 input is {} bytes; the current Kinetix adapter limit is {} bytes",
-                bytes.len(),
+                "input is {size} bytes; the current Kinetix adapter limit is {} bytes",
                 self.max_input_bytes
             )));
         }
-        let config = avc_decoder_config(&bytes).map_err(DecodeFailure::Failed)?;
-        let mut demuxer = Mp4Demuxer::new(bytes).map_err(|error| {
-            DecodeFailure::Failed(Error::Probe(format!("Kinetix MP4 demux failed: {error}")))
-        })?;
-        let track_index = demuxer
-            .tracks()
-            .iter()
-            .position(|track| {
-                track.media_type == MediaType::Video && track.codec == Some(CodecId::H264)
-            })
-            .ok_or_else(|| {
-                DecodeFailure::Unsupported(
-                    "the pinned Kinetix adapter currently decodes H.264 video in MP4 only".into(),
-                )
-            })?;
-        let stream_idx = track_index as u64;
-        let mut decoder = H264Decoder::new().with_display_order().with_strict(true);
+        let bytes =
+            std::fs::read(&asset.path).map_err(|error| DecodeFailure::Failed(error.into()))?;
+        let mut source = open_video_source(bytes)?;
+        let codec = source.codec;
+        let stream_idx = source.stream_idx;
         let nominal_frame_rate = metadata
             .video_for(stream_idx)
             .and_then(|video| video.frame_rate_observed)
             .or(self.config.nominal_frame_rate);
         let mut analyzer = VideoFrameAnalyzer::new(stream_idx, nominal_frame_rate, &self.config);
-        let expected_video_packets = demuxer.tracks()[track_index].sample_count();
-        if expected_video_packets == 0 {
-            return Err(DecodeFailure::Failed(Error::Probe(
-                "Kinetix MP4 video track contains no samples".into(),
-            )));
-        }
-        let mut sent_parameter_sets = false;
-        let mut video_packets_seen = 0usize;
-
-        loop {
-            let packet = demuxer.read_packet().map_err(|error| {
-                DecodeFailure::Failed(Error::Probe(format!("Kinetix packet read failed: {error}")))
-            })?;
-            let Some(packet) = packet else { break };
-            if packet.stream_index != track_index as u32 {
-                continue;
-            }
-            video_packets_seen += 1;
-
-            let mut data = if sent_parameter_sets {
-                Vec::new()
-            } else {
-                sent_parameter_sets = true;
-                avc_parameter_set_prelude(&config)
-            };
-            data.extend(
-                avcc_to_annex_b(&packet.data, config.length_size).map_err(DecodeFailure::Failed)?,
-            );
-            let h264_packet = Packet {
-                pts: packet.pts,
-                dts: packet.dts,
-                data,
-                stream_index: packet.stream_index,
-                is_key_frame: packet.is_key_frame,
-            };
-            let frame = decoder.decode(&h264_packet).map_err(|error| {
-                DecodeFailure::Failed(Error::Probe(format!(
-                    "Kinetix H.264 decode failed: {error}"
-                )))
-            })?;
-            if let Some(frame) = frame {
-                analyzer.push(frame).map_err(DecodeFailure::Failed)?;
-            }
-            if video_packets_seen >= expected_video_packets {
-                break;
-            }
-        }
-        if video_packets_seen < expected_video_packets {
-            return Err(DecodeFailure::Failed(Error::Probe(format!(
-                "Kinetix MP4 demux ended after {video_packets_seen} of {expected_video_packets} video samples"
-            ))));
-        }
-
-        let flushed = decoder.flush().map_err(|error| {
-            DecodeFailure::Failed(Error::Probe(format!("Kinetix H.264 flush failed: {error}")))
-        })?;
-        for frame in flushed {
-            analyzer.push(frame).map_err(DecodeFailure::Failed)?;
-        }
-        if analyzer.frame_count() == 0 {
-            return Err(DecodeFailure::Failed(Error::Probe(
-                "Kinetix H.264 decoder produced no frames".into(),
-            )));
-        }
+        decode_source(&mut source, &mut analyzer)?;
 
         let mut measurement = analyzer.finish();
         measurement.colorspace = metadata
             .video_for(stream_idx)
             .and_then(|video| video.colorspace.clone());
-        Ok(measurement)
+        Ok((measurement, codec))
     }
+}
+
+/// Feeds every packet of the chosen track through the decoder into `analyzer`.
+fn decode_source(
+    source: &mut VideoSource,
+    analyzer: &mut VideoFrameAnalyzer,
+) -> std::result::Result<(), DecodeFailure> {
+    let codec = source.codec;
+    let mut decoder = VideoDecoder::new(codec);
+    if source.expected_packets == Some(0) {
+        return Err(DecodeFailure::Failed(Error::Probe(
+            "Kinetix video track contains no samples".into(),
+        )));
+    }
+    let mut video_packets_seen = 0usize;
+
+    loop {
+        let packet = source.demuxer.read_packet().map_err(|error| {
+            DecodeFailure::Failed(Error::Probe(format!("Kinetix packet read failed: {error}")))
+        })?;
+        let Some(packet) = packet else { break };
+        if packet.stream_index != source.packet_stream {
+            continue;
+        }
+        video_packets_seen += 1;
+        let frame = decoder
+            .decode(&packet)
+            .map_err(|error| map_decode_error(codec, error))?;
+        if let Some(frame) = frame {
+            analyzer.push(frame).map_err(DecodeFailure::Failed)?;
+        }
+        if source
+            .expected_packets
+            .is_some_and(|expected| video_packets_seen >= expected)
+        {
+            break;
+        }
+    }
+    if let Some(expected) = source.expected_packets {
+        if video_packets_seen < expected {
+            return Err(DecodeFailure::Failed(Error::Probe(format!(
+                "Kinetix demux ended after {video_packets_seen} of {expected} video samples"
+            ))));
+        }
+    }
+
+    let flushed = decoder
+        .flush()
+        .map_err(|error| map_decode_error(codec, error))?;
+    for frame in flushed {
+        analyzer.push(frame).map_err(DecodeFailure::Failed)?;
+    }
+    if analyzer.frame_count() == 0 {
+        // No frames from a track we could open means the stream could not be
+        // measured (for example missing sequence headers), not that it is corrupt.
+        return Err(DecodeFailure::Unsupported(format!(
+            "Kinetix {} decoder produced no frames",
+            codec.label()
+        )));
+    }
+    Ok(())
 }
 
 enum DecodeFailure {
@@ -192,7 +401,7 @@ impl Default for KinetixVideoInspector {
 
 impl Inspector for KinetixVideoInspector {
     fn name(&self) -> &str {
-        "tpt-kinetix-h264"
+        "tpt-kinetix-av1-vp9"
     }
 
     fn inspect_metadata(&self, _asset: &Asset) -> Result<Inspection> {
@@ -223,8 +432,8 @@ impl Inspector for KinetixVideoInspector {
             return Ok(incomplete);
         }
 
-        match self.decode_mp4(asset, metadata) {
-            Ok(measurement) => {
+        match self.decode_video(asset, metadata) {
+            Ok((measurement, codec)) => {
                 let mut decoded = metadata.clone();
                 let stream_idx = measurement.stream_idx;
                 let frame_count = measurement.decoded_frame_count;
@@ -235,7 +444,8 @@ impl Inspector for KinetixVideoInspector {
                     "video_decode".into(),
                     serde_json::json!({
                         "status": "complete",
-                        "backend": "tpt-kinetix-demux + tpt-kinetix-h264",
+                        "backend": "tpt-kinetix-demux + tpt-kinetix-av1/vp9",
+                        "codec": codec.label(),
                         "frames": frame_count,
                         "luma_sampling": "all decoded luma samples",
                         "black_threshold_max_luma": self.config.black_luma_threshold,
@@ -377,6 +587,7 @@ pub struct VideoFrameAnalyzer {
     black_ranges: Vec<TimeRange>,
     freeze_ranges: Vec<TimeRange>,
     duplicate_ranges: Vec<TimeRange>,
+    flash: pse::FlashDetector,
 }
 
 impl VideoFrameAnalyzer {
@@ -399,6 +610,7 @@ impl VideoFrameAnalyzer {
             black_ranges: Vec::new(),
             freeze_ranges: Vec::new(),
             duplicate_ranges: Vec::new(),
+            flash: pse::FlashDetector::default(),
         }
     }
 
@@ -427,6 +639,9 @@ impl VideoFrameAnalyzer {
             })
             .unwrap_or(0);
         let duration_ms = self.frame_duration_ms(timestamp_ms);
+        if let Some(grid) = pse::grid_frame(&frame) {
+            self.flash.push(timestamp_ms, &grid);
+        }
         let end_ms = timestamp_ms.saturating_add(duration_ms);
         let mean = luma.stats.mean();
         let delta = self.previous.map(|previous| (mean - previous.mean).abs());
@@ -510,6 +725,7 @@ impl VideoFrameAnalyzer {
             luma: self.luma.finish(),
             colorspace: None,
             field_order: None,
+            flash: Some(self.flash.finish()),
         }
     }
 }
@@ -532,33 +748,7 @@ fn merge_luma(mut total: LumaTotals, frame: LumaTotals) -> LumaTotals {
 }
 
 fn frame_luma(frame: &VideoFrame) -> Result<FrameLuma> {
-    let pixels = (frame.width as usize)
-        .checked_mul(frame.height as usize)
-        .ok_or_else(|| Error::Probe("decoded frame dimensions overflow".into()))?;
-    let values: Box<dyn Iterator<Item = u8> + '_> = match frame.pixel_format {
-        PixelFormat::Yuv420p | PixelFormat::Yuv422p | PixelFormat::Yuv444p => {
-            let plane = frame.data.get(..pixels).ok_or_else(|| {
-                Error::Probe(format!(
-                    "decoded frame has {} luma bytes; expected {pixels}",
-                    frame.data.len()
-                ))
-            })?;
-            Box::new(plane.iter().copied())
-        }
-        PixelFormat::Rgb24 | PixelFormat::Bgr24 => {
-            let bytes = pixels
-                .checked_mul(3)
-                .ok_or_else(|| Error::Probe("RGB frame size overflow".into()))?;
-            let data = frame.data.get(..bytes).ok_or_else(|| {
-                Error::Probe(format!(
-                    "decoded frame has {} RGB bytes; expected {bytes}",
-                    frame.data.len()
-                ))
-            })?;
-            let bgr = frame.pixel_format == PixelFormat::Bgr24;
-            Box::new(data.chunks_exact(3).map(move |pixel| rgb_luma(pixel, bgr)))
-        }
-    };
+    let values = luma_values(frame)?;
     let mut stats = LumaTotals::default();
     let mut hash = 0xcbf29ce484222325u64;
     for value in values {
@@ -574,6 +764,70 @@ fn frame_luma(frame: &VideoFrame) -> Result<FrameLuma> {
     Ok(FrameLuma { stats, hash })
 }
 
+/// Row-major 8-bit luma samples of a decoded frame.
+fn luma_values(frame: &VideoFrame) -> Result<Box<dyn Iterator<Item = u8> + '_>> {
+    let pixels = (frame.width as usize)
+        .checked_mul(frame.height as usize)
+        .ok_or_else(|| Error::Probe("decoded frame dimensions overflow".into()))?;
+    let values: Box<dyn Iterator<Item = u8> + '_> = match frame.pixel_format {
+        PixelFormat::Yuv420p | PixelFormat::Yuv422p | PixelFormat::Yuv444p | PixelFormat::Gray => {
+            let plane = frame.data.get(..pixels).ok_or_else(|| {
+                Error::Probe(format!(
+                    "decoded frame has {} luma bytes; expected {pixels}",
+                    frame.data.len()
+                ))
+            })?;
+            Box::new(plane.iter().copied())
+        }
+        PixelFormat::Yuv420p10le
+        | PixelFormat::Yuv422p10le
+        | PixelFormat::Yuv444p10le
+        | PixelFormat::Gray10le
+        | PixelFormat::Yuv420p12le
+        | PixelFormat::Yuv422p12le
+        | PixelFormat::Yuv444p12le
+        | PixelFormat::Gray12le => {
+            // Luma is the first plane in every high-bit-depth layout. Scale it
+            // to 8 bits so legal-range and black thresholds stay comparable.
+            let shift = match frame.pixel_format {
+                PixelFormat::Yuv420p10le
+                | PixelFormat::Yuv422p10le
+                | PixelFormat::Yuv444p10le
+                | PixelFormat::Gray10le => 2,
+                _ => 4,
+            };
+            let bytes = pixels
+                .checked_mul(2)
+                .ok_or_else(|| Error::Probe("high-bit-depth frame size overflow".into()))?;
+            let plane = frame.data.get(..bytes).ok_or_else(|| {
+                Error::Probe(format!(
+                    "decoded frame has {} luma bytes; expected {bytes}",
+                    frame.data.len()
+                ))
+            })?;
+            Box::new(
+                plane.chunks_exact(2).map(move |word| {
+                    (u16::from_le_bytes([word[0], word[1]]) >> shift).min(255) as u8
+                }),
+            )
+        }
+        PixelFormat::Rgb24 | PixelFormat::Bgr24 => {
+            let bytes = pixels
+                .checked_mul(3)
+                .ok_or_else(|| Error::Probe("RGB frame size overflow".into()))?;
+            let data = frame.data.get(..bytes).ok_or_else(|| {
+                Error::Probe(format!(
+                    "decoded frame has {} RGB bytes; expected {bytes}",
+                    frame.data.len()
+                ))
+            })?;
+            let bgr = frame.pixel_format == PixelFormat::Bgr24;
+            Box::new(data.chunks_exact(3).map(move |pixel| rgb_luma(pixel, bgr)))
+        }
+    };
+    Ok(values)
+}
+
 fn rgb_luma(pixel: &[u8], bgr: bool) -> u8 {
     let (red, green, blue) = if bgr {
         (pixel[2], pixel[1], pixel[0])
@@ -585,153 +839,13 @@ fn rgb_luma(pixel: &[u8], bgr: bool) -> u8 {
         .clamp(0.0, 255.0) as u8
 }
 
-#[derive(Debug)]
-struct AvcDecoderConfig {
-    length_size: u8,
-    parameter_sets: Vec<Vec<u8>>,
-}
-
-fn avc_decoder_config(bytes: &[u8]) -> Result<AvcDecoderConfig> {
-    let payload = find_avc_config(bytes)?
-        .ok_or_else(|| Error::Probe("MP4 has no readable avcC decoder configuration".into()))?;
-    if payload.len() < 6 {
-        return Err(Error::Probe("MP4 avcC box is truncated".into()));
-    }
-    let length_size = (payload[4] & 0x03) + 1;
-    let sps_count = (payload[5] & 0x1f) as usize;
-    if sps_count == 0 {
-        return Err(Error::Probe("MP4 avcC box contains no SPS".into()));
-    }
-    let mut offset = 6usize;
-    let mut parameter_sets = Vec::with_capacity(sps_count + 1);
-    for _ in 0..sps_count {
-        let (set, next) = read_avc_parameter_set(&payload, offset)?;
-        parameter_sets.push(set.to_vec());
-        offset = next;
-    }
-    let pps_count = *payload
-        .get(offset)
-        .ok_or_else(|| Error::Probe("MP4 avcC box has no PPS count".into()))?
-        as usize;
-    offset += 1;
-    if pps_count == 0 {
-        return Err(Error::Probe("MP4 avcC box contains no PPS".into()));
-    }
-    for _ in 0..pps_count {
-        let (set, next) = read_avc_parameter_set(&payload, offset)?;
-        parameter_sets.push(set.to_vec());
-        offset = next;
-    }
-    Ok(AvcDecoderConfig {
-        length_size,
-        parameter_sets,
-    })
-}
-
-fn read_avc_parameter_set(bytes: &[u8], offset: usize) -> Result<(&[u8], usize)> {
-    let length_bytes = bytes
-        .get(offset..offset + 2)
-        .ok_or_else(|| Error::Probe("MP4 avcC parameter-set length is truncated".into()))?;
-    let length = u16::from_be_bytes([length_bytes[0], length_bytes[1]]) as usize;
-    let start = offset + 2;
-    let end = start
-        .checked_add(length)
-        .ok_or_else(|| Error::Probe("MP4 avcC parameter-set length overflows".into()))?;
-    let value = bytes
-        .get(start..end)
-        .ok_or_else(|| Error::Probe("MP4 avcC parameter-set payload is truncated".into()))?;
-    Ok((value, end))
-}
-
-fn find_avc_config(bytes: &[u8]) -> Result<Option<Vec<u8>>> {
-    fn walk(data: &[u8], skip: usize) -> Result<Option<Vec<u8>>> {
-        let mut rest = data
-            .get(skip..)
-            .ok_or_else(|| Error::Probe("MP4 box header is truncated".into()))?;
-        while !rest.is_empty() {
-            if rest.len() < 8 {
-                return Ok(None);
-            }
-            let (after_header, header) = parse_box_header(rest)
-                .map_err(|error| Error::Probe(format!("invalid MP4 box header: {error}")))?;
-            let header_len = rest.len() - after_header.len();
-            let size = header.size as usize;
-            if size == 0 || size < header_len || size > rest.len() {
-                return Err(Error::Probe(format!(
-                    "MP4 box {:?} has invalid size {size} for {} available bytes",
-                    String::from_utf8_lossy(&header.box_type),
-                    rest.len()
-                )));
-            }
-            let payload_len = size - header_len;
-            let payload = &after_header[..payload_len];
-            if &header.box_type == b"avcC" {
-                return Ok(Some(payload.to_vec()));
-            }
-            if is_mp4_container(&header.box_type) {
-                let child_skip = match &header.box_type {
-                    b"stsd" => 8usize,
-                    b"avc1" | b"avc3" => 78usize,
-                    _ => 0,
-                };
-                if child_skip <= payload.len() {
-                    if let Some(config) = walk(payload, child_skip)? {
-                        return Ok(Some(config));
-                    }
-                }
-            }
-            rest = &after_header[payload_len..];
-        }
-        Ok(None)
-    }
-    walk(bytes, 0)
-}
-
-fn is_mp4_container(box_type: &[u8; 4]) -> bool {
-    matches!(
-        box_type,
-        b"moov" | b"trak" | b"mdia" | b"minf" | b"stbl" | b"stsd" | b"avc1" | b"avc3"
-    )
-}
-
-fn avc_parameter_set_prelude(config: &AvcDecoderConfig) -> Vec<u8> {
-    let mut prelude = Vec::new();
-    for parameter_set in &config.parameter_sets {
-        let length = u32::try_from(parameter_set.len()).unwrap_or(u32::MAX);
-        prelude.extend_from_slice(&length.to_be_bytes());
-        prelude.extend_from_slice(parameter_set);
-    }
-    prelude
-}
-
-fn avcc_to_annex_b(data: &[u8], length_size: u8) -> Result<Vec<u8>> {
-    let nal_units = parse_nal_units_from_avcc(data, length_size);
-    if nal_units.is_empty() || !nal_units.iter().any(|nal| nal.nal_unit_type.is_vcl()) {
-        return Err(Error::Probe(
-            "MP4 H.264 sample has no decodable VCL NAL units".into(),
-        ));
-    }
-    let mut annex_b = Vec::new();
-    for nal in nal_units {
-        append_annex_b_nal(&mut annex_b, &nal);
-    }
-    Ok(annex_b)
-}
-
-fn append_annex_b_nal(output: &mut Vec<u8>, nal: &NalUnit) {
-    output.extend_from_slice(&[0, 0, 0, 1]);
-    output.push((nal.nal_ref_idc << 5) | nal.nal_unit_type as u8);
-    output.extend_from_slice(&nal.rbsp);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tpt_app_media_qc_model::asset::AssetFingerprint;
     use tpt_app_media_qc_model::inspection::{ContainerInspection, ContainerValidity};
+    use tpt_kinetix_av1::{Av1Encoder, Av1EncoderConfig};
     use tpt_kinetix_core::timestamp::Timestamp;
-    use tpt_kinetix_h264::nal::{parse_nal_units_from_annexb, NalUnitType};
-    use tpt_kinetix_mux::{Mp4Muxer, Mp4MuxerConfig};
 
     fn decoded_frame(luma: &[u8], timestamp_ms: i64) -> VideoFrame {
         let mut data = luma.to_vec();
@@ -768,55 +882,229 @@ mod tests {
         assert_eq!(result.luma.unwrap().max, 80);
     }
 
-    fn raw_nal(nal: &NalUnit) -> Vec<u8> {
-        let mut data = vec![(nal.nal_ref_idc << 5) | nal.nal_unit_type as u8];
-        data.extend_from_slice(&nal.rbsp);
-        data
-    }
-
-    fn push_avcc(output: &mut Vec<u8>, nal: &[u8]) {
-        output.extend_from_slice(&(nal.len() as u32).to_be_bytes());
-        output.extend_from_slice(nal);
-    }
-
-    fn fixture_mp4() -> Vec<u8> {
-        let source = include_bytes!("../../../tests/fixtures/encoded/kinetix-mbaff-ip-cabac.h264");
-        let nals = parse_nal_units_from_annexb(source);
-        let sps = nals
-            .iter()
-            .find(|nal| nal.nal_unit_type == NalUnitType::Sps)
-            .unwrap();
-        let pps = nals
-            .iter()
-            .find(|nal| nal.nal_unit_type == NalUnitType::Pps)
-            .unwrap();
-        let mut muxer = Mp4Muxer::new(Mp4MuxerConfig {
+    /// Encodes `count` moving-gradient 64x64 frames to AV1 packets.
+    fn av1_packets(count: u8) -> Vec<Packet> {
+        let config = Av1EncoderConfig {
             width: 64,
             height: 64,
-            timescale: 30_000,
-            sps: raw_nal(sps),
-            pps: raw_nal(pps),
-        });
-        let mut first = true;
-        for nal in nals.iter().filter(|nal| nal.nal_unit_type.is_vcl()) {
-            let mut sample = Vec::new();
-            if first {
-                push_avcc(&mut sample, &raw_nal(sps));
-                push_avcc(&mut sample, &raw_nal(pps));
-                first = false;
+            bitrate: 0,
+            quantizer: 100,
+            speed: 10,
+            keyframe_interval: 4,
+        };
+        let mut encoder = Av1Encoder::new(&config).expect("create AV1 encoder");
+        let mut packets = Vec::new();
+        for index in 0..count {
+            let mut data = Vec::with_capacity(64 * 64 * 3 / 2);
+            for y in 0..64u32 {
+                for x in 0..64u32 {
+                    data.push(((x * 3 + y * 2 + index as u32 * 25) % 200 + 30) as u8);
+                }
             }
-            push_avcc(&mut sample, &raw_nal(nal));
-            muxer.write_sample(&sample, 1000, nal.nal_unit_type == NalUnitType::IdrSlice);
+            data.resize(64 * 64 * 3 / 2, 128);
+            let pts = Timestamp::new(index as i64 * 33, (1, 1000));
+            let frame = VideoFrame {
+                pts,
+                dts: pts,
+                data,
+                width: 64,
+                height: 64,
+                pixel_format: PixelFormat::Yuv420p,
+                is_key_frame: index == 0,
+            };
+            packets.extend(encoder.encode_frame(&frame).expect("encode frame"));
         }
-        muxer.finish()
+        packets.extend(encoder.flush().expect("flush encoder"));
+        assert!(!packets.is_empty(), "encoder produced no packets");
+        packets
     }
 
-    #[test]
-    fn kinetix_inspector_decodes_a_generated_mp4() {
+    fn ebml(id: &[u8], body: &[u8]) -> Vec<u8> {
+        let len = body.len() as u32;
+        let mut out = id.to_vec();
+        out.extend_from_slice(&[
+            0x10 | ((len >> 24) & 0x0F) as u8,
+            (len >> 16) as u8,
+            (len >> 8) as u8,
+            len as u8,
+        ]);
+        out.extend_from_slice(body);
+        out
+    }
+
+    /// Builds a one-track Matroska file whose video track carries `packets`.
+    fn mkv_file(codec_id: &str, packets: &[Packet]) -> Vec<u8> {
+        let mut track = Vec::new();
+        track.extend(ebml(&[0xD7], &[1])); // TrackNumber
+        track.extend(ebml(&[0x83], &[1])); // TrackType = video
+        track.extend(ebml(&[0x86], codec_id.as_bytes())); // CodecID
+        let tracks = ebml(&[0x16, 0x54, 0xAE, 0x6B], &ebml(&[0xAE], &track));
+
+        let mut cluster = ebml(&[0xE7], &[0]); // Timestamp
+        for (index, packet) in packets.iter().enumerate() {
+            let mut block = vec![0x81]; // track number 1
+            block.extend_from_slice(&((index as i16) * 33).to_be_bytes());
+            block.push(if index == 0 { 0x80 } else { 0x00 });
+            block.extend_from_slice(&packet.data);
+            cluster.extend(ebml(&[0xA3], &block));
+        }
+        let mut segment = tracks;
+        segment.extend(ebml(&[0x1F, 0x43, 0xB6, 0x75], &cluster));
+
+        let mut file = vec![0x1A, 0x45, 0xDF, 0xA3, 0x80]; // empty EBML header
+        file.extend(ebml(&[0x18, 0x53, 0x80, 0x67], &segment));
+        file
+    }
+
+    /// MPEG-2 CRC-32 (poly `0x04C11DB7`, MSB-first), as PSI sections require.
+    fn mpeg_crc32(bytes: &[u8]) -> u32 {
+        let mut crc = 0xFFFF_FFFFu32;
+        for byte in bytes {
+            crc ^= u32::from(*byte) << 24;
+            for _ in 0..8 {
+                crc = if crc & 0x8000_0000 != 0 {
+                    (crc << 1) ^ 0x04C1_1DB7
+                } else {
+                    crc << 1
+                };
+            }
+        }
+        crc
+    }
+
+    /// Builds a PSI section (PAT/PMT) with its CRC.
+    fn ts_section(table_id: u8, body: &[u8]) -> Vec<u8> {
+        let mut section = vec![table_id];
+        section.extend_from_slice(&(0xB000u16 | (body.len() + 4) as u16).to_be_bytes());
+        section.extend_from_slice(body);
+        section.extend_from_slice(&mpeg_crc32(&section).to_be_bytes());
+        section
+    }
+
+    /// Wraps one PSI section in a single TS packet on `pid`.
+    fn ts_psi_packet(pid: u16, section: &[u8]) -> Vec<u8> {
+        let mut packet = vec![
+            0x47,
+            0x40 | ((pid >> 8) as u8 & 0x1F),
+            pid as u8,
+            0x10,
+            0x00,
+        ];
+        packet.extend_from_slice(section);
+        packet.resize(188, 0xFF);
+        packet
+    }
+
+    /// PES-encapsulates `payload` (PTS only, DTS = PTS) and splits it into TS
+    /// packets on `pid`, the first carrying an adaptation field with PCR.
+    fn ts_pes_packets(pid: u16, stream_id: u8, pts: u64, payload: &[u8]) -> Vec<Vec<u8>> {
+        const TS_PACKET_LEN: usize = 188;
+        let header_len = 5u8; // PTS only
+        let es_len = payload.len() + 3 + header_len as usize;
+        let mut pes = vec![0x00, 0x00, 0x01, stream_id];
+        pes.extend_from_slice(&(es_len as u16).to_be_bytes());
+        pes.push(0x80); // no scrambling, no priority
+        pes.push(0x80); // PTS present
+        pes.push(header_len);
+        let value = pts & 0x1_FFFF_FFFF;
+        // 33-bit PTS, marker bits set (prefix '0011' = PTS only).
+        pes.push(0x31 | (((value >> 30) as u8 & 0x07) << 1));
+        pes.push((value >> 22) as u8);
+        pes.push(0x01 | (((value >> 15) as u8 & 0x7F) << 1));
+        pes.push((value >> 7) as u8);
+        pes.push(0x01 | ((value as u8 & 0x7F) << 1));
+        pes.extend_from_slice(payload);
+
+        let mut out = Vec::new();
+        let mut offset = 0;
+        let mut continuity = 0u8;
+        let mut first = true;
+        while offset < pes.len() {
+            let mut packet = vec![
+                0x47,
+                if first { 0x40 } else { 0x00 } | ((pid >> 8) as u8 & 0x1F),
+                pid as u8,
+            ];
+            let remaining = pes.len() - offset;
+            if first || remaining < TS_PACKET_LEN - 5 {
+                // Adaptation field: PCR only (0x10 flags), then stuffing.
+                let mut adaptation = vec![0x10u8];
+                let base = value;
+                adaptation.extend_from_slice(&[
+                    (base >> 25) as u8,
+                    (base >> 17) as u8,
+                    (base >> 9) as u8,
+                    (base >> 1) as u8,
+                    (((base & 0x1) as u8) << 7) | 0x7E,
+                    0x00,
+                ]);
+                let space = TS_PACKET_LEN - 5 - adaptation.len();
+                let take = remaining.min(space);
+                let stuffing = space - take;
+                packet.push(0x30 | continuity);
+                packet.push((adaptation.len() + stuffing) as u8);
+                packet.extend_from_slice(&adaptation);
+                packet.extend(std::iter::repeat_n(0xFF, stuffing));
+                packet.extend_from_slice(&pes[offset..offset + take]);
+                offset += take;
+            } else {
+                packet.push(0x10 | continuity);
+                let take = remaining.min(TS_PACKET_LEN - 4);
+                packet.extend_from_slice(&pes[offset..offset + take]);
+                offset += take;
+            }
+            debug_assert_eq!(packet.len(), TS_PACKET_LEN);
+            continuity = (continuity + 1) & 0x0F;
+            out.push(packet);
+            first = false;
+        }
+        out
+    }
+
+    /// Builds a single-program MPEG-TS whose video elementary stream carries
+    /// `packets`. `registration` is the four-character registration descriptor
+    /// that identifies the codec (`AV01` for AV1, `vp09` for VP9); pass an empty
+    /// slice to fall back to `stream_type`.
+    fn ts_file(stream_type: u8, registration: &[u8], packets: &[Packet]) -> Vec<u8> {
+        const PMT_PID: u16 = 0x1000;
+        const VIDEO_PID: u16 = 0x0100;
+
+        let pat_body = {
+            let mut body = vec![0x00, 0x01, 0xC1, 0x00, 0x00]; // tsid, version, section
+            body.extend_from_slice(&1u16.to_be_bytes()); // program 1
+            body.extend_from_slice(&(0xE000 | PMT_PID).to_be_bytes());
+            body
+        };
+        let mut es_info = Vec::new();
+        if !registration.is_empty() {
+            es_info.push(0x05); // registration_descriptor
+            es_info.push(0x04);
+            es_info.extend_from_slice(registration);
+        }
+        let pmt_body = {
+            let mut body = vec![0x00, 0x01, 0xC1, 0x00, 0x00];
+            body.extend_from_slice(&(0xE000 | VIDEO_PID).to_be_bytes()); // PCR PID
+            body.extend_from_slice(&(0xF000u16 | es_info.len() as u16).to_be_bytes());
+            body.extend_from_slice(&es_info);
+            body.push(stream_type);
+            body.extend_from_slice(&(0xE000 | VIDEO_PID).to_be_bytes());
+            body.extend_from_slice(&0xF000u16.to_be_bytes()); // ES info length
+            body
+        };
+
+        let mut file = ts_psi_packet(0x0000, &ts_section(0x00, &pat_body));
+        file.extend(ts_psi_packet(PMT_PID, &ts_section(0x02, &pmt_body)));
+        for (index, packet) in packets.iter().enumerate() {
+            let pts = 90_000u64 + 3_000 * index as u64;
+            file.extend(ts_pes_packets(VIDEO_PID, 0xE0, pts, &packet.data).concat());
+        }
+        file
+    }
+
+    fn inspect_bytes(name: &str, bytes: &[u8]) -> Inspection {
         let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("fixture.mp4");
-        let bytes = fixture_mp4();
-        std::fs::write(&path, &bytes).unwrap();
+        let path = directory.path().join(name);
+        std::fs::write(&path, bytes).unwrap();
         let asset = Asset {
             id: Default::default(),
             path,
@@ -842,21 +1130,170 @@ mod tests {
             }],
             ..Default::default()
         };
-
-        let decoded = KinetixVideoInspector::new()
+        KinetixVideoInspector::new()
             .inspect_decode(&asset, &metadata, InspectionLevel::Full)
-            .unwrap();
-        let video = decoded.video_for(0).unwrap();
+            .unwrap()
+    }
+
+    #[test]
+    fn decodes_av1_in_matroska_end_to_end() {
+        let decoded = inspect_bytes("clip.mkv", &mkv_file("V_AV1", &av1_packets(6)));
         assert_eq!(
-            video.decode_errors, 0,
-            "fixture must use a supported H.264 path"
+            decoded.diagnostics["video_decode"]["status"], "complete",
+            "{:?}",
+            decoded.diagnostics["video_decode"]
         );
+        let video = decoded.video_for(0).unwrap();
+        assert_eq!(video.decode_errors, 0);
         assert!(video.decoded_frame_count.unwrap_or(0) > 0);
         assert!(video.luma.is_some());
         assert_eq!(video.colorspace.as_deref(), Some("bt709"));
+        assert_eq!(decoded.diagnostics["video_decode"]["codec"], "AV1");
         assert_eq!(
             decoded.diagnostics["video_decode"]["backend"],
-            "tpt-kinetix-demux + tpt-kinetix-h264"
+            "tpt-kinetix-demux + tpt-kinetix-av1/vp9"
+        );
+    }
+
+    #[test]
+    fn h264_is_never_decoded_and_is_not_a_decode_error() {
+        let packets = [Packet {
+            pts: Timestamp::new(0, (1, 1000)),
+            dts: Timestamp::new(0, (1, 1000)),
+            data: vec![0, 0, 0, 1, 0x65, 0x88],
+            stream_index: 0,
+            is_key_frame: true,
+        }];
+        let decoded = inspect_bytes("clip.mkv", &mkv_file("V_MPEG4/ISO/AVC", &packets));
+        let video = decoded.video_for(0).unwrap();
+        assert_eq!(
+            video.decode_errors, 0,
+            "unsupported codec must not look corrupt"
+        );
+        assert_eq!(video.decoded_frame_count, Some(0));
+        let diagnostics = &decoded.diagnostics["video_decode"];
+        assert_eq!(diagnostics["status"], "incomplete");
+        assert_eq!(diagnostics["decode_error_recorded"], false);
+        assert!(diagnostics["reason"].as_str().unwrap().contains("H.264"));
+    }
+
+    #[test]
+    fn decodes_av1_in_mpeg_ts() {
+        // Broadcast/HLS path: AV1 arrives as a private-PES elementary stream
+        // identified by the `AV01` registration descriptor.
+        let decoded = inspect_bytes("clip.ts", &ts_file(0x06, b"AV01", &av1_packets(6)));
+        assert_eq!(
+            decoded.diagnostics["video_decode"]["status"], "complete",
+            "{:?}",
+            decoded.diagnostics["video_decode"]
+        );
+        let video = decoded.video_for(0).unwrap();
+        assert_eq!(video.decode_errors, 0);
+        assert!(video.decoded_frame_count.unwrap_or(0) > 0);
+        assert!(video.luma.is_some());
+        assert_eq!(decoded.diagnostics["video_decode"]["codec"], "AV1");
+    }
+
+    #[test]
+    fn h264_transport_stream_is_never_decoded_and_is_not_a_decode_error() {
+        let packets = [Packet {
+            pts: Timestamp::new(90_000, (1, 90_000)),
+            dts: Timestamp::new(90_000, (1, 90_000)),
+            data: vec![0x00, 0x00, 0x00, 0x01, 0x65, 0x88],
+            stream_index: 0x0100,
+            is_key_frame: true,
+        }];
+        // stream_type 0x1B = H.264, declared directly in the PMT.
+        let decoded = inspect_bytes("h264.ts", &ts_file(0x1B, b"", &packets));
+        assert_eq!(
+            decoded.video_for(0).unwrap().decode_errors,
+            0,
+            "an undecoded transport stream must not look corrupt"
+        );
+        assert_eq!(decoded.diagnostics["video_decode"]["status"], "incomplete");
+        assert_eq!(
+            decoded.diagnostics["video_decode"]["decode_error_recorded"],
+            false
+        );
+        assert!(decoded.diagnostics["video_decode"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("H.264"));
+    }
+
+    #[test]
+    fn mpeg_ts_routes_vp9_by_registration_descriptor() {
+        // `vp09` must be recognised as a VP9 video stream (and routed to the VP9
+        // decoder) rather than falling through to the unsupported-codec report.
+        let packets = [Packet {
+            pts: Timestamp::new(90_000, (1, 90_000)),
+            dts: Timestamp::new(90_000, (1, 90_000)),
+            data: vec![0x00, 0x00, 0x00, 0x01, 0xDE, 0xAD],
+            stream_index: 0x0100,
+            is_key_frame: true,
+        }];
+        let decoded = inspect_bytes("vp9.ts", &ts_file(0x06, b"vp09", &packets));
+        let diagnostics = &decoded.diagnostics["video_decode"];
+        assert_eq!(diagnostics["status"], "incomplete");
+        let reason = diagnostics["reason"].as_str().unwrap().to_string();
+        assert!(
+            reason.contains("VP9"),
+            "expected VP9 routing, got: {reason}"
+        );
+        assert!(
+            !reason.contains("supports AV1 and VP9 video only"),
+            "vp09 must not be treated as an unsupported codec: {reason}"
+        );
+    }
+
+    #[test]
+    fn decodes_vp9_in_mp4() {
+        let bytes = include_bytes!("../../../tests/fixtures/encoded/vp9-clip.mp4");
+        let decoded = inspect_bytes("vp9-clip.mp4", bytes);
+        assert_eq!(
+            decoded.diagnostics["video_decode"]["status"], "complete",
+            "{:?}",
+            decoded.diagnostics["video_decode"]
+        );
+        let video = decoded.video_for(0).unwrap();
+        assert_eq!(video.decode_errors, 0);
+        assert_eq!(video.decoded_frame_count, Some(3));
+        assert!(video.luma.is_some());
+        assert_eq!(video.colorspace.as_deref(), Some("bt709"));
+        assert_eq!(decoded.diagnostics["video_decode"]["codec"], "VP9");
+        assert_eq!(
+            decoded.diagnostics["video_decode"]["backend"],
+            "tpt-kinetix-demux + tpt-kinetix-av1/vp9"
+        );
+    }
+
+    #[test]
+    fn decodes_vp9_in_matroska() {
+        let bytes = include_bytes!("../../../tests/fixtures/encoded/vp9-clip.webm");
+        let decoded = inspect_bytes("vp9-clip.webm", bytes);
+        assert_eq!(
+            decoded.diagnostics["video_decode"]["status"], "complete",
+            "{:?}",
+            decoded.diagnostics["video_decode"]
+        );
+        let video = decoded.video_for(0).unwrap();
+        assert_eq!(video.decode_errors, 0);
+        assert_eq!(video.decoded_frame_count, Some(3));
+        assert!(video.luma.is_some());
+        assert_eq!(decoded.diagnostics["video_decode"]["codec"], "VP9");
+    }
+
+    #[test]
+    fn unsupported_container_is_not_a_decode_error() {
+        let decoded = inspect_bytes(
+            "clip.mxf",
+            &[0x06, 0x0E, 0x2B, 0x34, 0x02, 0x05, 0x01, 0x01],
+        );
+        assert_eq!(decoded.video_for(0).unwrap().decode_errors, 0);
+        assert_eq!(decoded.diagnostics["video_decode"]["status"], "incomplete");
+        assert_eq!(
+            decoded.diagnostics["video_decode"]["decode_error_recorded"],
+            false
         );
     }
 }

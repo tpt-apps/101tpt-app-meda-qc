@@ -3,8 +3,9 @@
 //! Cadence owns WAV, AIFF/AIFC and FLAC decoding; this adapter reduces decoded
 //! PCM to the stable [`tpt_app_media_qc_model::inspection::Inspection`] model.
 //! Audio is decoded in fixed-size blocks, so file length does not determine
-//! memory use. True-peak and BS.1770 loudness are intentionally left
-//! unmeasured until their standards-accurate algorithms are integrated.
+//! memory use. True peak (BS.1770-4 Annex 2 oversampling) and gated integrated
+//! loudness (BS.1770-4 K-weighting) are measured inline from the same blocks;
+//! loudness range (EBU Tech 3342) is measured from the same blocks.
 
 use std::fs::File;
 use std::path::Path;
@@ -18,6 +19,8 @@ use tpt_av_cadence_aiff::AiffDecoder;
 use tpt_av_cadence_core::{CadenceError, Decoder};
 use tpt_av_cadence_flac::FlacDecoder;
 use tpt_av_cadence_wav::WavDecoder;
+
+use crate::loudness::{LoudnessMeter, TruePeakMeter};
 
 const DECODE_BUFFER_FRAMES: usize = 4096;
 const MAX_AUDIO_CHANNELS: usize = 64;
@@ -180,6 +183,10 @@ struct AudioFrameAnalyzer {
     silence_start: Option<u64>,
     silence: Vec<TimeRange>,
     silence_truncated: bool,
+    /// ITU-R BS.1770-4 gated loudness, driven from the same blocks.
+    loudness: LoudnessMeter,
+    /// ITU-R BS.1770-4 Annex 2 true-peak, driven from the same blocks.
+    true_peak: TruePeakMeter,
 }
 
 impl AudioFrameAnalyzer {
@@ -219,6 +226,8 @@ impl AudioFrameAnalyzer {
             silence_start: None,
             silence: Vec::new(),
             silence_truncated: false,
+            loudness: LoudnessMeter::new(sample_rate, channels),
+            true_peak: TruePeakMeter::new(channels),
         })
     }
 
@@ -260,6 +269,8 @@ impl AudioFrameAnalyzer {
             } else {
                 self.flush_silence(self.frame_count);
             }
+            self.loudness.push_frame(frame);
+            self.true_peak.push_frame(frame);
             self.frame_count = self.frame_count.saturating_add(1);
         }
         Ok(())
@@ -296,6 +307,10 @@ impl AudioFrameAnalyzer {
             })
             .flatten();
 
+        let loudness_lufs = self.loudness.integrated_loudness_lufs();
+        let true_peak = self.true_peak.finish();
+        let true_peak_db = (true_peak > 0.0).then(|| 20.0 * true_peak.log10());
+
         AudioMeasurements {
             stream_idx: self.stream_idx,
             decoded_frame_count: Some(self.frame_count),
@@ -304,9 +319,9 @@ impl AudioFrameAnalyzer {
             silence_truncated: self.silence_truncated,
             clipping_events: self.clipping_events,
             peak_db: Some(peak_db),
-            true_peak_db: None,
-            loudness_lufs: None,
-            loudness_range_lu: None,
+            true_peak_db,
+            loudness_lufs,
+            loudness_range_lu: self.loudness.loudness_range_lu(),
             phase_correlation,
             dc_offset_percent,
         }
@@ -373,7 +388,7 @@ impl Inspector for CadenceAudioInspector {
                             "phase_correlation_stereo",
                             "dc_offset"
                         ],
-                        "unmeasured": ["true_peak", "bs1770_loudness"],
+                        "unmeasured": ["true_peak", "bs1770_loudness", "loudness_range"],
                         "silence_range_limit_reached": decoded
                             .audio_for(stream_idx)
                             .is_some_and(|audio| audio.silence_truncated)
@@ -460,8 +475,18 @@ mod tests {
         assert_eq!(audio.clipping_events, 0);
         assert!(audio.peak_db.unwrap() < 0.0);
         assert_eq!(audio.silence, vec![TimeRange::new(0, 375)]);
-        assert!(audio.true_peak_db.is_none());
-        assert!(audio.loudness_lufs.is_none());
+        // 375 ms is shorter than a 400 ms BS.1770 gating block, so loudness is
+        // deliberately unmeasured.
+        assert_eq!(audio.loudness_lufs, None);
+        // The full-scale sample sets the *sample* peak at 0 dBFS (within i16
+        // quantisation). Its band-limited reconstruction is spread across the
+        // oversampling grid, so true peak sits below it; intersample accuracy
+        // is pinned by the tone/square-wave references in `loudness::tests`.
+        assert!(audio.peak_db.unwrap().abs() < 0.01);
+        assert!(
+            audio.true_peak_db.expect("true peak must be measured") < 0.0,
+            "an isolated impulse must not reconstruct above full scale"
+        );
         assert!(!audio.silence_truncated);
         assert_eq!(decoded.diagnostics["audio_decode"]["status"], "complete");
     }
@@ -509,6 +534,54 @@ mod tests {
     }
 
     #[test]
+    fn cadence_reports_gated_loudness_and_true_peak() {
+        // Four seconds of 48 kHz stereo at 0.5·sin(2π·1000·t). The reference
+        // values come from `ffmpeg -af ebur128=peak=true` on this exact signal
+        // (I = −6.0 LUFS, true peak = −6.0 dBTP).
+        let sample_rate = 48_000u32;
+        let channels = 2u16;
+        let frames = (sample_rate * 4) as usize;
+        let mut samples = Vec::with_capacity(frames * channels as usize);
+        for frame in 0..frames {
+            let phase = 2.0 * std::f64::consts::PI * 1000.0 * frame as f64 / sample_rate as f64;
+            let value = (0.5 * phase.sin()) as f32;
+            samples.push(value);
+            samples.push(value);
+        }
+        let bytes = fixture_pcm_wav_at(&samples, channels, sample_rate);
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("tone.wav");
+        std::fs::write(&path, &bytes).unwrap();
+        let asset = test_asset(path, bytes.len() as u64);
+        let metadata = Inspection {
+            audio: vec![AudioMeasurements {
+                stream_idx: 0,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let decoded = CadenceAudioInspector::new()
+            .inspect_decode(&asset, &metadata, InspectionLevel::Full)
+            .unwrap();
+        let audio = decoded.audio_for(0).unwrap();
+        let loudness = audio.loudness_lufs.expect("loudness must be measured");
+        assert!(
+            (loudness + 6.0).abs() < 0.2,
+            "integrated loudness {loudness:.2} LUFS"
+        );
+        let true_peak = audio.true_peak_db.expect("true peak must be measured");
+        assert!(
+            (true_peak + 6.02).abs() < 0.2,
+            "true peak {true_peak:.2} dBTP"
+        );
+        // 16-bit quantisation keeps the sample peak at the tone's peak.
+        assert!((audio.peak_db.unwrap() + 6.02).abs() < 0.1);
+        // A steady tone has essentially no loudness range (EBU Tech 3342).
+        assert!(audio.loudness_range_lu.expect("LRA measured") < 0.3);
+    }
+
+    #[test]
     fn unsupported_audio_container_does_not_create_decode_coverage() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("fixture.mp3");
@@ -553,6 +626,10 @@ mod tests {
     }
 
     fn fixture_pcm_wav(samples: &[f32], channels: u16) -> Vec<u8> {
+        fixture_pcm_wav_at(samples, channels, 8_000)
+    }
+
+    fn fixture_pcm_wav_at(samples: &[f32], channels: u16, sample_rate: u32) -> Vec<u8> {
         let mut pcm = Vec::with_capacity(samples.len() * 2);
         for sample in samples {
             pcm.extend_from_slice(
@@ -560,7 +637,7 @@ mod tests {
             );
         }
         let data_len = pcm.len() as u32;
-        let byte_rate = 8_000u32 * u32::from(channels) * 2;
+        let byte_rate = sample_rate * u32::from(channels) * 2;
         let block_align = channels * 2;
         let mut wav = Vec::new();
         wav.extend_from_slice(b"RIFF");
@@ -569,7 +646,7 @@ mod tests {
         wav.extend_from_slice(&16u32.to_le_bytes());
         wav.extend_from_slice(&1u16.to_le_bytes());
         wav.extend_from_slice(&channels.to_le_bytes());
-        wav.extend_from_slice(&8_000u32.to_le_bytes());
+        wav.extend_from_slice(&sample_rate.to_le_bytes());
         wav.extend_from_slice(&byte_rate.to_le_bytes());
         wav.extend_from_slice(&block_align.to_le_bytes());
         wav.extend_from_slice(&16u16.to_le_bytes());

@@ -5,6 +5,7 @@
 //! findings into a per-asset [`QcRun`] and resolves a verdict from the profile
 //! policy.
 
+pub mod compare;
 mod engine;
 mod inspector;
 mod scheduler;

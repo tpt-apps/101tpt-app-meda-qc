@@ -22,8 +22,8 @@ tpt-av-cadence-aiff.workspace = true
 tpt-av-cadence-flac.workspace = true
 tpt-kinetix-core.workspace = true
 tpt-kinetix-demux.workspace = true
-tpt-kinetix-h264.workspace = true
+tpt-kinetix-av1.workspace = true
+tpt-kinetix-vp9.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-tpt-kinetix-mux.workspace = true

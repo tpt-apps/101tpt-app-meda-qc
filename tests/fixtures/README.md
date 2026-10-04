@@ -25,9 +25,12 @@ errors, black/freeze segment rules report `Inconclusive` even when no segment
 exceeds the limit (segment detection may be incomplete) — that is why
 `boundary-thresholds` carries `decode_errors: 0` while `video-defects` does not.
 
-Encoded-media coverage includes `encoded/kinetix-mbaff-ip-cabac.h264`, which
-is muxed into a temporary MP4 by the decode test and run through the pinned
-Kinetix demuxer/decoder. Generated mono and stereo WAV fixtures also exercise
+Encoded-media coverage includes `encoded/vp9-clip.mp4` and
+`encoded/vp9-clip.webm` (royalty-free VP9, generated with `libvpx-vp9` — see
+`ATTRIBUTION.md`), which run through the pinned Kinetix demuxers and VP9 decoder
+for both the MP4 and Matroska/WebM routes. AV1 coverage is generated in-test with
+`tpt-kinetix-av1`'s `Av1Encoder` and wrapped in a minimal Matroska file, so no
+AV1 media is checked in. Generated mono and stereo WAV fixtures also exercise
 the Cadence streaming decode adapter, including silence, sample peak, phase,
 DC offset and coverage reporting. Additional encoded fixtures (including HD/UHD
 performance media) can be added as foundation coverage grows; the runner

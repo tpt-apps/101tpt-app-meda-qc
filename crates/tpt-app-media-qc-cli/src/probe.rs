@@ -1,7 +1,7 @@
 //! ffprobe-backed metadata plus Kinetix/Cadence-backed decode ([spec § 10]).
 //!
 //! Metadata is still collected by the system `ffprobe` front-end. Full scans
-//! route video through `tpt-kinetix-demux` and `tpt-kinetix-h264`, and
+//! route AV1/VP9 video (MP4, Matroska/WebM) through `tpt-kinetix-demux`, and
 //! standalone audio through the Cadence readers; unsupported codecs and
 //! incomplete coverage remain explicit in the inspection model.
 
@@ -271,7 +271,7 @@ impl Default for HybridInspector {
 
 impl Inspector for HybridInspector {
     fn name(&self) -> &str {
-        "ffprobe + tpt-kinetix-h264 + tpt-cadence"
+        "ffprobe + tpt-kinetix-av1-vp9 + tpt-cadence"
     }
 
     fn inspect_metadata(&self, asset: &Asset) -> Result<Inspection> {

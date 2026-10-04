@@ -15,12 +15,14 @@ no mandatory network access are required.
 
 - **Content-based asset fingerprinting** — identity is SHA-256 of content, not
   path, so moved/replaced files are detected ([spec §6.1]).
-- **Stream/container inspection** — ffprobe-backed metadata plus a
-  Kinetix-backed H.264/MP4 decode pass and a Cadence-backed standalone audio
-  decode pass for WAV, AIFF/AIFC and FLAC. The video pass measures frame rate,
-  black/freeze/duplicate segments, corrupt-frame errors and luma statistics;
-  the audio pass measures silence, clipping, sample peak, stereo phase and DC
-  offset.
+- **Stream/container inspection** — ffprobe-backed metadata plus a Kinetix-backed
+  AV1/VP9 video decode pass (MP4/ISO-BMFF, Matroska/WebM and MPEG-TS) and a
+  Cadence-backed standalone audio decode pass for WAV, AIFF/AIFC and FLAC. The
+  video pass measures frame rate, black/freeze/duplicate segments, corrupt-frame
+  errors and luma statistics; the audio pass measures silence, clipping, sample
+  peak, stereo phase and DC offset. H.264 is deliberately **not** decoded (AVC
+  patent licensing): those assets keep full metadata/container QC and their
+  frame-decode rules report `Inconclusive`.
 - **Rule-based QC profiles** — human-readable, versioned, deterministic YAML profiles ([spec §9]).
 - **Container, video and audio rules** — readability, validity, duration/bitrate
   consistency, timecode/timebase/timestamp continuity, resolution, frame rate,
@@ -93,6 +95,10 @@ tpt-media-qc check --profile profiles/generic/generic.yaml --json out.json episo
 # Batch-analyse an incoming folder, writing one JSON report per asset
 tpt-media-qc batch --profile profiles/generic/generic.yaml --input ./incoming --output ./reports
 
+# Compare two deliveries (metadata, streams, duration, frame rate, resolution,
+# codec, audio layout, loudness); exit 0 = match, 1 = minor, 2 = major differences
+tpt-media-qc compare master_v1.mov master_v2.mov --json diff.json
+
 # List the rules a profile enables
 tpt-media-qc list-rules --profile profiles/generic/generic.yaml
 ```
@@ -101,12 +107,13 @@ Exit codes are stable per spec §16: `0` = PASS, `1` = WARN, `2` = FAIL,
 `3` = INCONCLUSIVE, `4` = CONFIGURATION_ERROR, `5` = INPUT_ERROR, `6` =
 INTERNAL_ERROR.
 
-Full scans use `ffprobe` for the metadata pass, the pinned TPT Kinetix H.264
-decoder for MP4/ISO-BMFF video, and pinned TPT Cadence readers for standalone
-WAV, AIFF/AIFC and FLAC audio. The current Kinetix demuxer is in-memory, so
-that video adapter refuses inputs over 512 MiB. Embedded MP4 audio, true-peak,
-BS.1770 loudness and non-H.264 video codecs remain explicitly unsupported or
-`Inconclusive` until their complete decode/measurement paths are integrated.
+Full scans use `ffprobe` for the metadata pass, the pinned TPT Kinetix AV1 and
+VP9 decoders for MP4/ISO-BMFF, Matroska/WebM and MPEG-TS video, and pinned TPT
+Cadence readers for standalone WAV, AIFF/AIFC and FLAC audio. The current Kinetix
+demuxers are in-memory, so that video adapter refuses inputs over 512 MiB.
+Embedded audio, true-peak, BS.1770 loudness and undecoded video codecs
+(H.264, HEVC, ProRes…) remain explicitly unsupported or `Inconclusive` until
+their complete decode/measurement paths are integrated.
 
 ## Repository layout
 

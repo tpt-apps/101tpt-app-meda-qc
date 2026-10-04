@@ -92,6 +92,35 @@ pub enum Command {
         quick: bool,
     },
 
+    /// Compare two media files: metadata, streams, duration, frame rate,
+    /// resolution, codec, audio layout and loudness (spec §15).
+    ///
+    /// Exit code 0 when the files match within tolerance, 1 when only minor
+    /// differences exist, 2 when any major difference exists.
+    Compare {
+        /// The reference file (for example `master_v1.mov`).
+        left: PathBuf,
+
+        /// The file compared against the reference.
+        right: PathBuf,
+
+        /// Metadata-only comparison; skip decode-based measurements.
+        #[arg(long)]
+        quick: bool,
+
+        /// Write the comparison as JSON to this path.
+        #[arg(long)]
+        json: Option<PathBuf>,
+
+        /// Duration tolerance in milliseconds.
+        #[arg(long, default_value_t = 40)]
+        duration_tolerance_ms: u64,
+
+        /// Loudness tolerance in LU.
+        #[arg(long, default_value_t = 0.5)]
+        loudness_tolerance_lu: f64,
+    },
+
     /// List the rules the given profile enables (or the full catalogue).
     ListRules {
         /// YAML profile file.

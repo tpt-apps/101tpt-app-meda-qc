@@ -42,6 +42,7 @@
       {
         "stream_idx": 0,
         "decoded_frame_count": 3000,
+        "flash": { "transitions_ms": [[10000, 10160, 10320, 10480, 10640, 10800], []] },
         "frame_rate_observed": "25/1",
         "decode_errors": 0,
         "black_frames": [{ "start_ms": 1000, "end_ms": 1500 }],

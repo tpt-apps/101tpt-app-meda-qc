@@ -53,7 +53,7 @@ application shell.
 | `tpt-app-media-qc-profile` | YAML profile parsing, validation, canonical model, deterministic profile hashing | core, model |
 | `tpt-app-media-qc-rules` | Rule framework (`QcRule` trait) and built-in rule catalogue | core, model, profile |
 | `tpt-app-media-qc-pipeline` | Inspection boundary (`Inspector`), `QcEngine`, aggregation, verdict, batch scheduler | core, model, rules, profile |
-| `tpt-app-media-qc-decode` | Kinetix MP4/ISO-BMFF demux + H.264 video and Cadence standalone-audio measurement adapters | core, model, pipeline, Kinetix, Cadence |
+| `tpt-app-media-qc-decode` | Kinetix MP4/ISO-BMFF, Matroska/WebM and MPEG-TS demux + AV1/VP9 video and Cadence standalone-audio measurement adapters | core, model, pipeline, Kinetix, Cadence |
 | `tpt-app-media-qc-report` | Immutable `Report` assembly + JSON/HTML/CSV/PDF export | core, model, pipeline, profile |
 | `tpt-app-media-qc-cli` | `tpt-media-qc` binary: `check`, `batch`, `info`, `list-rules`, stable exit codes | all application crates |
 | `tpt-app-media-qc-tauri` | Native Tauri 2 desktop shell: dashboard, local import/queue controls, asset/finding/evidence/timeline views and report export | model, profile, pipeline, report, CLI, Tauri plugins |
@@ -96,13 +96,18 @@ trait Inspector {
   to `ffprobe`.
 - `HybridInspector` (CLI crate) composes that metadata front-end with
   `KinetixVideoInspector` and `CadenceAudioInspector` for full scans. Kinetix
-  uses MP4 demuxing and H.264 reconstruction, then streams frames through
-  black/freeze/duplicate, corrupt-frame, luma and frame-rate measurements.
-  Cadence streams standalone WAV, AIFF/AIFC and FLAC PCM through silence,
-  clipping, sample-peak, stereo-phase and DC-offset measurements.
-- The pinned Kinetix MP4 demuxer is in-memory; `KinetixVideoInspector` applies
+  demuxes MP4/ISO-BMFF, Matroska/WebM and MPEG-TS and reconstructs AV1 and VP9,
+  then streams frames through black/freeze/duplicate, corrupt-frame, luma and
+  frame-rate measurements. Cadence streams standalone WAV, AIFF/AIFC and FLAC PCM
+  through silence, clipping, sample-peak, stereo-phase and DC-offset
+  measurements.
+- **Patent-safe decode:** no H.264/AVC decoder is linked or shipped — AVC patent
+  pools license decoders as well as encoders. H.264 assets keep full ffprobe
+  metadata/container QC while their frame-decode rules report `Inconclusive`.
+- The pinned Kinetix demuxers are in-memory; `KinetixVideoInspector` applies
   a 512 MiB input bound. Both adapters record unsupported or incomplete
-  coverage instead of claiming a pass; embedded MP4 audio, true peak and
+  coverage instead of claiming a pass; unsupported containers/codecs are reported
+  as unsupported (never as decode errors), and embedded MP4 audio, true peak and
   BS.1770 loudness are not yet measured.
 - `NoopInspector` produces an empty inspection for tests and for the
   metadata-only path when no probe binary is available.

@@ -34,7 +34,7 @@ measured on representative fixtures, not optimised blindly.
   bounded silence ranges; it never retains a whole audio file. If the silence
   range limit is reached, the rule reports `Inconclusive` rather than treating
   omitted ranges as clear.
-- **Foundation bound.** The pinned MP4 demuxer is in-memory; the adapter
+- **Foundation bound.** The pinned Kinetix demuxers are in-memory; the adapter
   refuses inputs over 512 MiB until a file-backed foundation demuxer is
   available.
 

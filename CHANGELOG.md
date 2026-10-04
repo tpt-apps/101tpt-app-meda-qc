@@ -8,6 +8,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `compare` command and `tpt_app_media_qc_pipeline::compare`: file-to-file
+  comparison of container metadata, stream counts, codec, resolution, frame
+  rate, scan order, colour space, audio layout, loudness/true peak and measured
+  defect counts, with tolerances and minor/major significance. Visual and
+  audio waveform differences are not compared.
+
+- `video.photosensitivity` rule: general-flash (photosensitive-epilepsy) screening
+  over decoded AV1/VP9 frames with a configurable flashes-per-second limit
+  (default 3). Follows the Harding/BT.1702 method (per-pixel relative luminance,
+  10° field area criterion, general and saturated-red flashes); spatial
+  patterns are not assessed and compliance is not claimed.
+
 - Cargo workspace with the crates `core`, `model`, `rules`, `pipeline`,
   `profile`, `report`, `cli`, `tauri` and `test`.
 - Content-based asset fingerprinting (SHA-256), independent of file path.
@@ -62,16 +74,35 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`tests/performance/baseline.md`) covering fingerprinting, profile parsing,
   rule building/execution, engine checks, fixture deserialization and
   report rendering (spec §20). Representative HD/UHD *media* benchmarks follow.
-- Kinetix integration through the pinned `tpt-kinetix-demux` and
-  `tpt-kinetix-h264` revisions: MP4/ISO-BMFF H.264 video is demuxed and decoded
-  into streaming black/freeze/duplicate/luma/frame-rate measurements. The
-  adapter enforces a 512 MiB input bound while the foundation demuxer is
-  in-memory, and reports unsupported/incomplete coverage explicitly.
+- Kinetix integration through the pinned `tpt-kinetix-demux`,
+  `tpt-kinetix-av1` and `tpt-kinetix-vp9` revisions: royalty-free AV1 and VP9
+  video in MP4/ISO-BMFF and Matroska/WebM is demuxed and decoded (strict,
+  pixel-exact decoders) into streaming black/freeze/duplicate/luma/frame-rate
+  measurements, including 10/12-bit and monochrome frames. The adapter
+  enforces a 512 MiB input bound while the foundation demuxers are in-memory,
+  and reports unsupported/incomplete coverage explicitly.
 - Cadence integration through the pinned `tpt-av-cadence-wav`,
   `tpt-av-cadence-aiff` and `tpt-av-cadence-flac` revisions: standalone audio
   files decode in bounded blocks into silence, clipping, sample-peak,
-  stereo-phase and DC-offset measurements. Standards-accurate true peak and
-  BS.1770 loudness remain explicitly unmeasured.
+  stereo-phase and DC-offset measurements. Standards-accurate true peak
+  (BS.1770-4 Annex 2 oversampling) and gated integrated loudness (BS.1770-4
+  K-weighting) are now measured too; loudness range (EBU Tech 3342: 3 s
+  short-term windows, −70 LUFS / −20 LU gates, 10th–95th percentile) is measured
+  as well; audio shorter than 3 s reports it as unmeasured.
+- **Standard-accurate audio levels:** true peak (BS.1770-4 Annex 2, 4×
+  oversampling through a polyphase reconstruction filter) and gated integrated
+  loudness (BS.1770-4 two-stage K-weighting, 400 ms blocks with the −70 LUFS
+  absolute and −10 LU relative gates) are measured from decoded PCM, so the
+  `audio.true_peak` and `audio.loudness` rules now evaluate real values instead
+  of reporting `Inconclusive`. Cross-checked against `ffmpeg -af ebur128`
+  reference readings in tests. 
+- MPEG-TS video decode for broadcast/HLS assets: Kinetix's `TsDemuxer`
+  (188-byte packets, PAT/PMT with registration descriptors) now feeds the same
+  AV1/VP9 decoders, so `.ts`/HLS segments get black/freeze/duplicate/luma/
+  frame-rate QC. Codec identity comes from the PMT registration descriptor
+  (`AV01` / `vp09`); H.264 elementary streams stay unsupported. Audio inside a
+  transport stream is demuxed but not decoded, so its silence/clipping/loudness
+  findings remain `Inconclusive`.
 - Native Tauri 2 desktop application: dashboard, local media/folder import,
   drag-and-drop, bounded job queue controls, asset inspector, finding evidence,
   timeline markers, and JSON/HTML/CSV/PDF report export.
@@ -115,10 +146,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
-- None yet.
+- H.264 video decoding (`tpt-kinetix-h264`) and its MP4 test fixture, to avoid
+  AVC patent-licensing exposure (patent pools cover decoders as well as
+  encoders). H.264, HEVC, ProRes and other undecoded video still receive full
+  `ffprobe` metadata/container QC; their frame-decode rules report
+  `Inconclusive` rather than guessing, and never a false `video.corrupt_frames`
+  failure. AAC was never decoded, so no audio behaviour changes.
 
 ### Fixed
 
+- `video.corrupt_frames` no longer fails an asset when nothing was decoded:
+  with zero decoded frames the rule reports `Inconclusive` ("video decode
+  produced no frames…") instead of counting the recorded decode errors against
+  the profile's event limit. Decode errors are only counted as corrupt frames
+  when at least one frame was actually reconstructed.
 - The optional local API now forces accepted loopback sockets into blocking mode
   before parsing requests, preventing Windows connection resets during parallel
   health/profile/job tests.

@@ -684,11 +684,36 @@ mod tests {
         drop(server);
     }
 
+    /// A minimal but *valid* 16-bit mono PCM WAV: 44-byte canonical header plus
+    /// eight samples of silence. The local API job runs the real engine, whose
+    /// metadata pass shells out to `ffprobe`, so the fixture must be parseable
+    /// media — a bare `RIFF` magic prefix is rejected by current FFmpeg builds.
+    fn minimal_wav() -> Vec<u8> {
+        const SAMPLES: u32 = 8;
+        let data_len = SAMPLES * 2;
+        let mut wav = Vec::with_capacity(44 + data_len as usize);
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + data_len).to_le_bytes());
+        wav.extend_from_slice(b"WAVE");
+        wav.extend_from_slice(b"fmt ");
+        wav.extend_from_slice(&16u32.to_le_bytes()); // PCM fmt chunk size
+        wav.extend_from_slice(&1u16.to_le_bytes()); // format = PCM
+        wav.extend_from_slice(&1u16.to_le_bytes()); // channels
+        wav.extend_from_slice(&8_000u32.to_le_bytes()); // sample rate
+        wav.extend_from_slice(&16_000u32.to_le_bytes()); // byte rate
+        wav.extend_from_slice(&2u16.to_le_bytes()); // block align
+        wav.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&data_len.to_le_bytes());
+        wav.resize(44 + data_len as usize, 0);
+        wav
+    }
+
     #[test]
     fn api_runs_a_local_job_and_exposes_its_result() {
         let directory = tempfile::tempdir().unwrap();
         let media = directory.path().join("api-sample.wav");
-        std::fs::write(&media, b"RIFF").unwrap();
+        std::fs::write(&media, minimal_wav()).unwrap();
         let api = LocalApi::bind("127.0.0.1:0".parse().unwrap()).unwrap();
         let address = api.local_addr().unwrap();
         let server = api.serve();

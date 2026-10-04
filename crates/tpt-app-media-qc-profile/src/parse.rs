@@ -11,9 +11,10 @@ use crate::model::{
     AspectRatioRule, AudioRules, BitDepthRule, ChannelLayoutRule, ColorSpaceRule, ContainerRules,
     CountThresholdRule, DbThresholdRule, DcOffsetRule, DurationThresholdRule, ExpectValueRule,
     FieldOrderExpectation, FrameRateRule, LoudnessRule, LoudnessStandard, LumaRangeRule,
-    MinBitrateRule, PhaseRule, Policy, Profile, Ratio, Resolution, ResolutionRule, RuleSetConfig,
-    SampleRateRule, ScanExpectation, ScanFormatRule, StreamPresenceRule, SubtitleRules,
-    TimestampContinuityRule, ToleranceRule, VideoRules, VoiceRules,
+    MinBitrateRule, PhaseRule, PhotosensitivityRule, Policy, Profile, Ratio, Resolution,
+    ResolutionRule, RuleSetConfig, SampleRateRule, ScanExpectation, ScanFormatRule,
+    StreamPresenceRule, SubtitleRules, TimestampContinuityRule, ToleranceRule, VideoRules,
+    VoiceRules,
 };
 use serde_yaml::{Mapping, Value};
 use tpt_app_media_qc_model::severity::Severity;
@@ -280,6 +281,7 @@ fn parse_video(map: &Mapping) -> Result<VideoRules, ProfileError> {
             "luma_range",
             "color_space",
             "scan_format",
+            "photosensitivity",
         ]
         .contains(&k.as_str())
         {
@@ -298,6 +300,7 @@ fn parse_video(map: &Mapping) -> Result<VideoRules, ProfileError> {
         luma_range: parse_luma_range(map)?,
         color_space: parse_color_space(map)?,
         scan_format: parse_scan_format(map)?,
+        photosensitivity: parse_photosensitivity(map)?,
     })
 }
 
@@ -452,6 +455,27 @@ fn parse_luma_range(map: &Mapping) -> Result<Option<LumaRangeRule>, ProfileError
     };
     Ok(Some(LumaRangeRule {
         max_out_of_legal,
+        severity: spec.severity,
+    }))
+}
+
+fn parse_photosensitivity(map: &Mapping) -> Result<Option<PhotosensitivityRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "photosensitivity") else {
+        return Ok(None);
+    };
+    let path = "rules.video.photosensitivity";
+    let max_flashes_per_second = match spec.config {
+        Some(m) => optional_f64(m, "max_flashes_per_second", path)?.unwrap_or(3.0),
+        None => 3.0,
+    };
+    if !max_flashes_per_second.is_finite() || max_flashes_per_second < 0.0 {
+        return Err(err(
+            path,
+            "max_flashes_per_second must be finite and non-negative",
+        ));
+    }
+    Ok(Some(PhotosensitivityRule {
+        max_flashes_per_second,
         severity: spec.severity,
     }))
 }

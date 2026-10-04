@@ -63,6 +63,8 @@ pub fn per_rule_config_hash(profile: &Profile, rule_id: &str) -> Option<String> 
         "video.corrupt_frames" => hash(&v.corrupt_frames),
         "video.luma_range" => hash(&v.luma_range),
         "video.color_space" => hash(&v.color_space),
+        "video.scan_format" => hash(&v.scan_format),
+        "video.photosensitivity" => hash(&v.photosensitivity),
         "audio.sample_rate" => hash(&a.sample_rate),
         "audio.bit_depth" => hash(&a.bit_depth),
         "audio.channel_layout" => hash(&a.channel_layout),

@@ -31,6 +31,7 @@
     "video.frame_rate": "pass",
     "video.freeze_frames": "pass",
     "video.luma_range": "pass",
+    "video.photosensitivity": "pass",
     "video.resolution": "pass",
     "video.scan_format": "pass"
   },

@@ -8,7 +8,8 @@
 //!   a probe would have produced for it). Rules consume measurements, not raw
 //!   media bytes ([spec § 3.5]), so pinning the measurement set directly
 //!   exercises the full rule engine without requiring encoded media. The suite
-//!   also includes encoded H.264 and streaming WAV decode coverage; additional
+//!   also includes encoded AV1 (generated in-test, in Matroska), VP9
+//!   (MP4 and Matroska/WebM fixtures) and streaming WAV decode coverage; additional
 //!   encoded fixtures can be added as foundation coverage grows. The golden
 //!   runner is agnostic — any [`Inspector`] can feed it.
 //! - `tests/golden/` — expected-result manifests ([spec § 24.2],

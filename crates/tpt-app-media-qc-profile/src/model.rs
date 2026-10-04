@@ -137,6 +137,7 @@ pub struct VideoRules {
     pub luma_range: Option<LumaRangeRule>,
     pub color_space: Option<ColorSpaceRule>,
     pub scan_format: Option<ScanFormatRule>,
+    pub photosensitivity: Option<PhotosensitivityRule>,
 }
 
 /// Exact expected resolution.
@@ -209,6 +210,20 @@ pub struct LumaRangeRule {
     pub max_out_of_legal: f64,
     #[serde(default)]
     pub severity: Severity,
+}
+
+/// Photosensitive-epilepsy general-flash rule.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PhotosensitivityRule {
+    /// Maximum permitted flashes (opposing transition pairs) in any one second.
+    #[serde(default = "default_max_flashes_per_second")]
+    pub max_flashes_per_second: f64,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+pub(crate) fn default_max_flashes_per_second() -> f64 {
+    3.0
 }
 
 /// Expected colour-space metadata tag (e.g. `bt709`, `bt2020nc`).

@@ -12,8 +12,8 @@ use tpt_app_media_qc_model::severity::Severity;
 use tpt_app_media_qc_model::value::Value;
 use tpt_app_media_qc_profile::model::{
     AspectRatioRule, ColorSpaceRule, CountThresholdRule, DurationThresholdRule,
-    FieldOrderExpectation, FrameRateRule, LumaRangeRule, Resolution, ResolutionRule,
-    ScanExpectation, ScanFormatRule, VideoRules,
+    FieldOrderExpectation, FrameRateRule, LumaRangeRule, PhotosensitivityRule, Resolution,
+    ResolutionRule, ScanExpectation, ScanFormatRule, VideoRules,
 };
 
 pub const RULE_IDS: &[&str] = &[
@@ -27,6 +27,7 @@ pub const RULE_IDS: &[&str] = &[
     "video.corrupt_frames",
     "video.luma_range",
     "video.scan_format",
+    "video.photosensitivity",
 ];
 
 pub fn build(profile: &tpt_app_media_qc_profile::model::Profile, out: &mut Vec<Box<dyn QcRule>>) {
@@ -60,6 +61,9 @@ pub fn build(profile: &tpt_app_media_qc_profile::model::Profile, out: &mut Vec<B
     }
     if let Some(cfg) = v.scan_format {
         out.push(Box::new(ScanFormatRuleImpl { cfg }));
+    }
+    if let Some(cfg) = v.photosensitivity {
+        out.push(Box::new(PhotosensitivityRuleImpl { cfg }));
     }
 }
 
@@ -678,15 +682,23 @@ impl QcRule for CorruptFramesRule {
                 "video was not decoded, so corrupt-frame detection is unavailable",
             ));
         };
-        let measured = (measurement.decoded_frame_count.unwrap_or(0) > 0
-            || measurement.decode_errors > 0)
-            .then_some(measurement.decode_errors);
+        if measurement.decoded_frame_count.unwrap_or(0) == 0 {
+            // Decode errors recorded without a single decoded frame describe the
+            // decode attempt, not corrupt frames in the asset (spec § 8.2). A
+            // codec the adapter does not decode (H.264, HEVC, ProRes…) must never
+            // be reported as corrupt media, so this stays inconclusive.
+            return RuleResult::from_finding(inconclusive(
+                &self.id(),
+                self.cfg.severity,
+                "video decode produced no frames, so corrupt-frame detection is unavailable",
+            ));
+        }
         count_rule(
             &self.id(),
             "corrupt-frame",
             self.cfg.severity,
             self.cfg.max_events,
-            measured,
+            Some(measurement.decode_errors),
         )
     }
 }
@@ -766,12 +778,128 @@ impl QcRule for LumaRangeRuleImpl {
     }
 }
 
+// ---------------------------------------------------------------------------
+// photosensitivity (general flash)
+// ---------------------------------------------------------------------------
+
+struct PhotosensitivityRuleImpl {
+    cfg: PhotosensitivityRule,
+}
+
+/// Merged windows (ms) in which more than `limit` flashes occur within any one
+/// second, for one region's transition timestamps. A flash is a pair of
+/// opposing transitions, so the transition budget is `2 × limit`.
+fn flash_hazard_windows(transitions: &[u64], limit: f64) -> Vec<(u64, u64, f64)> {
+    let mut windows: Vec<(u64, u64, f64)> = Vec::new();
+    let mut start = 0usize;
+    for end in 0..transitions.len() {
+        while transitions[end] - transitions[start] >= 1000 {
+            start += 1;
+        }
+        let flashes = (end - start + 1) as f64 / 2.0;
+        if flashes > limit {
+            let (from, to) = (transitions[start], transitions[end]);
+            match windows.last_mut() {
+                Some(last) if from <= last.1 => {
+                    last.1 = to;
+                    last.2 = last.2.max(flashes);
+                }
+                _ => windows.push((from, to, flashes)),
+            }
+        }
+    }
+    windows
+}
+
+impl QcRule for PhotosensitivityRuleImpl {
+    fn id(&self) -> RuleId {
+        RuleId::new("video.photosensitivity")
+    }
+    fn description(&self) -> RuleDescription {
+        RuleDescription {
+            name: "Photosensitivity (general flash)",
+            summary: "No more than the permitted flashes per second (Harding/BT.1702-style screen; not a compliance claim).",
+            version: "0.1",
+        }
+    }
+    fn capabilities(&self) -> Capabilities {
+        Capabilities {
+            required_streams: &[StreamKind::Video],
+            decode: DecodeRequirement::FullFrame,
+            incremental: false,
+            gpu: false,
+            cost: CostClass::FullDecode,
+        }
+    }
+    fn run(&self, ctx: &RuleContext<'_>) -> RuleResult {
+        let id = self.id();
+        let severity = self.cfg.severity;
+        let Some(measurement) = video_measurement(ctx) else {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                "video was not decoded, so flashing could not be measured",
+            ));
+        };
+        if measurement.decoded_frame_count.unwrap_or(0) == 0 {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                "video decode produced no frames, so flashing could not be measured",
+            ));
+        }
+        let Some(flash) = &measurement.flash else {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                "flash analysis was not performed",
+            ));
+        };
+        let limit = self.cfg.max_flashes_per_second;
+        // Each flash class (general, red) is judged on its own; windows within a
+        // class are already merged.
+        let merged: Vec<(&str, u64, u64, f64)> = flash
+            .transitions_ms
+            .iter()
+            .zip(tpt_app_media_qc_model::inspection::FLASH_CHANNEL_NAMES)
+            .flat_map(|(transitions, name)| {
+                flash_hazard_windows(transitions, limit)
+                    .into_iter()
+                    .map(move |(from, to, flashes)| (name, from, to, flashes))
+            })
+            .collect();
+        if merged.is_empty() {
+            if measurement.decode_errors > 0 {
+                return RuleResult::from_finding(inconclusive(
+                    &id,
+                    severity,
+                    "decode had errors, so flash detection may be incomplete",
+                ));
+            }
+            return RuleResult::pass();
+        }
+        RuleResult::findings(segment_failures(
+            &id,
+            severity,
+            merged.into_iter().map(|(name, from, to, flashes)| {
+                (
+                    tpt_app_media_qc_model::finding::TimeRange::new(from, to.max(from + 1)),
+                    format!(
+                        "{name}: up to {flashes:.1} flashes in one second exceeds the limit of {limit:.1}"
+                    ),
+                )
+            }),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::testutil::bundled_asset;
     use tpt_app_media_qc_model::finding::TimeRange;
     use tpt_app_media_qc_model::inspection::{Inspection, LumaStats, VideoMeasurements};
+    use tpt_app_media_qc_model::severity::VerdictDecision;
     use tpt_app_media_qc_profile::model::Ratio;
 
     fn ctx_with(video: Vec<VideoMeasurements>) -> RuleContext<'static> {
@@ -1008,5 +1136,98 @@ mod tests {
         assert!(r.findings.iter().any(|f| {
             f.status == tpt_app_media_qc_model::severity::VerdictDecision::Inconclusive
         }));
+    }
+
+    // -- corrupt_frames -----------------------------------------------------
+
+    fn corrupt_rule(max_events: u64) -> CorruptFramesRule {
+        CorruptFramesRule {
+            cfg: CountThresholdRule {
+                max_events,
+                severity: Severity::Error,
+            },
+        }
+    }
+
+    #[test]
+    fn corrupt_frames_without_decoded_frames_is_inconclusive_not_fail() {
+        // An asset whose codec the adapter does not decode (H.264, HEVC, …)
+        // yields zero decoded frames. Recorded decode errors must not be
+        // reported as corrupt media against a zero-event profile limit.
+        let rule = corrupt_rule(0);
+        let mut m = measurement();
+        m.decoded_frame_count = Some(0);
+        m.decode_errors = 1;
+        let r = rule.execute(&ctx_with(vec![m]));
+        assert_eq!(
+            r.findings[0].status,
+            tpt_app_media_qc_model::severity::VerdictDecision::Inconclusive
+        );
+    }
+
+    #[test]
+    fn corrupt_frames_fails_when_decoded_frames_carry_decode_errors() {
+        let rule = corrupt_rule(0);
+        let mut m = measurement();
+        m.decoded_frame_count = Some(120);
+        m.decode_errors = 2;
+        let r = rule.execute(&ctx_with(vec![m]));
+        assert_eq!(
+            r.findings[0].status,
+            tpt_app_media_qc_model::severity::VerdictDecision::Fail
+        );
+    }
+
+    #[test]
+    fn corrupt_frames_passes_when_decoded_frames_are_clean() {
+        let rule = corrupt_rule(0);
+        let mut m = measurement();
+        m.decoded_frame_count = Some(120);
+        assert!(rule.execute(&ctx_with(vec![m])).is_pass());
+    }
+
+    fn flash_ctx(transitions: Vec<u64>) -> RuleContext<'static> {
+        let mut m = measurement();
+        m.decoded_frame_count = Some(100);
+        m.flash = Some(tpt_app_media_qc_model::inspection::FlashMeasurements {
+            transitions_ms: vec![transitions, vec![]],
+        });
+        ctx_with(vec![m])
+    }
+
+    fn photosensitivity() -> PhotosensitivityRuleImpl {
+        PhotosensitivityRuleImpl {
+            cfg: PhotosensitivityRule {
+                max_flashes_per_second: 3.0,
+                severity: Severity::Error,
+            },
+        }
+    }
+
+    #[test]
+    fn photosensitivity_passes_within_three_flashes_per_second() {
+        // 6 transitions in under a second = 3 flashes.
+        let ctx = flash_ctx(vec![0, 100, 200, 300, 400, 500, 1500, 1600]);
+        assert!(photosensitivity()
+            .run(&ctx)
+            .findings
+            .iter()
+            .all(|f| f.status != VerdictDecision::Fail));
+    }
+
+    #[test]
+    fn photosensitivity_fails_above_the_limit_and_attaches_range() {
+        let ctx = flash_ctx(vec![0, 100, 200, 300, 400, 500, 600, 700]);
+        let result = photosensitivity().run(&ctx);
+        assert_eq!(result.findings.len(), 1);
+        assert_eq!(result.findings[0].status, VerdictDecision::Fail);
+    }
+
+    #[test]
+    fn photosensitivity_without_flash_analysis_is_inconclusive() {
+        let mut m = measurement();
+        m.decoded_frame_count = Some(10);
+        let result = photosensitivity().run(&ctx_with(vec![m]));
+        assert_eq!(result.findings[0].status, VerdictDecision::Inconclusive);
     }
 }

@@ -66,6 +66,9 @@ rules:
     scan_format:
       scan: progressive
       severity: error
+    photosensitivity:
+      max_flashes_per_second: 3
+      severity: error
 
   audio:
     sample_rate:

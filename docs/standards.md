@@ -75,9 +75,23 @@ measured values and the configured thresholds, not conformance.
 
 Measurement implementation notes:
 
-- Loudness uses BS.1770-4-style gating (integrated, momentary, short-term) as
-  realised by `tpt-dsp` once integrated.
-- True peak is estimated with adequate oversampling per BS.1770-4 Annex.
+- Integrated loudness is measured with the BS.1770-4 two-stage K-weighting
+  filter over 400 ms gating blocks stepping every 100 ms, with the absolute
+  (−70 LUFS) and relative (−10 LU) gates of §5, in
+  `crates/tpt-app-media-qc-decode/src/loudness.rs`. EBU R128, ATSC A/85 and
+  plain BS.1770 all specify this measurement; they differ in *target*, which the
+  profile sets. A file with no complete 400 ms block, or one entirely below the
+  absolute gate, reports no loudness rather than a compliant value.
+- True peak is measured by 4× oversampling through a polyphase
+  Kaiser-windowed sinc reconstruction filter (the BS.1770-4 Annex 2 minimum), so
+  intersample overshoot is visible. The meter reads the peak of the band-limited
+  reconstruction, which for an isolated impulse sits *below* the sample peak.
+- `video.photosensitivity` follows the Harding / ITU-R BT.1702 method: per-pixel relative luminance (YCbCr to RGB with BT.709, or BT.601 for SD, studio range, 2.2 gamma), pixel transitions of at least 0.1 with the darker state below 0.8, a screen-level transition when those pixels cover 25 % of the 10° visual field (341×256 of 1024×768, ≈ 2.8 % of the picture), and a saturated-red test (R/(R+G+B) ≥ 0.8, change in (R−G−B)·320 of at least 20). General and red flashes are judged separately against the flashes-per-second limit. Approximations: analysis runs on a ≤128×96 sampled grid, the visual field is a fixed picture fraction rather than a viewing-distance calculation, frame rate is not compensated, full-range/BT.2020/HDR sources are treated as studio-range BT.709, and spatial-pattern hazards are not assessed. It is a pre-screen, not a certified PSE test.
+- Loudness range (EBU Tech 3342) uses 3 s short-term windows, a −70 LUFS
+  absolute gate, a −20 LU relative gate and the 10th–95th percentile spread;
+  audio shorter than 3 s leaves `loudness_range_lu` unmeasured.
+- The measurement code is cross-checked in tests against `ffmpeg -af ebur128`
+  reference readings for tone, mono/stereo and gated signals.
 - Phase and DC-offset thresholds are heuristic defaults (profile-configurable)
   rather than normative requirements.
 

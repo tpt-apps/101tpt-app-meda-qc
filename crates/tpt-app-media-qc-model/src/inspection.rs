@@ -103,6 +103,27 @@ pub struct VideoMeasurements {
     /// the probe front-end did not report a field order.
     #[serde(default)]
     pub field_order: Option<crate::asset::FieldOrder>,
+    /// General-flash transitions for photosensitive-epilepsy (PSE) analysis.
+    /// `None` when the decode pass did not run flash analysis.
+    #[serde(default)]
+    pub flash: Option<FlashMeasurements>,
+}
+
+/// Flash classes analysed: index 0 is the general flash, index 1 the
+/// saturated-red flash.
+pub const FLASH_CHANNELS: usize = 2;
+
+/// Display names for the flash classes, indexed like [`FlashMeasurements`].
+pub const FLASH_CHANNEL_NAMES: [&str; FLASH_CHANNELS] = ["general flash", "red flash"];
+
+/// Screen-level flash transitions (Harding / ITU-R BT.1702-style): moments
+/// where a significant screen area changes in the opposite direction to the
+/// previous change.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct FlashMeasurements {
+    /// Transition timestamps in milliseconds, one list per flash class (see
+    /// [`FLASH_CHANNEL_NAMES`]).
+    pub transitions_ms: Vec<Vec<u64>>,
 }
 
 /// Luma statistics over sampled frames ([spec § 8.3] brightness/luma range).

@@ -47,8 +47,9 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
 1. [x] Establish Cargo workspace and application shell
 2. [x] Integrate `tpt-kinetix` and enumerate media capabilities — pinned Kinetix
       demux/decode crates are wired through the decode crate; current full-decode
-      coverage is MP4/ISO-BMFF + H.264, with other formats explicitly reported
-      as unsupported/incomplete
+      coverage is MP4/ISO-BMFF, Matroska/WebM and MPEG-TS with AV1/VP9 video
+      (royalty-free; no H.264 decoder ships), with other formats explicitly
+      reported as unsupported/incomplete
 3. [x] Implement asset fingerprinting (content-based, not path-based — spec §6.1)
 4. [x] Implement stream/container inspection (probe boundary + `FfprobeInspector` front-end)
 5. [x] Implement the QC domain model (`Asset`, `Stream`, `QcFinding`, `Evidence` — spec §6)
@@ -56,10 +57,10 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
 7. [x] Implement metadata QC rules (container checks — spec §8.1: readability, validity,
       malformed metadata, stream count/duration consistency, bitrate, timecode, timebase,
       timestamp continuity, unexpected/missing streams)
-8. [x] Implement video decode pipeline (via Kinetix) — MP4/ISO-BMFF H.264
-      packets are decoded and reduced to streaming black/freeze/duplicate,
-      corrupt-frame, luma and frame-rate measurements; other codecs remain
-      capability-gated
+8. [x] Implement video decode pipeline (via Kinetix) — MP4/ISO-BMFF,
+      Matroska/WebM and MPEG-TS AV1/VP9 packets are decoded and reduced to
+      streaming black/freeze/duplicate, corrupt-frame, luma and frame-rate
+      measurements; other codecs remain capability-gated
 9. [x] Implement basic video QC rules (metadata/measurement-driven; decode coverage
     is explicit and unsupported measurements report Inconclusive):
    - [x] corrupt/dropped frame detection (detection pathway defined)
@@ -105,13 +106,16 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
 19. [x] Implement PDF reporting
 20. [x] Implement CLI (`check`, `batch`, `info`, `list-rules` commands; stable exit-code
       contract — spec §16; full scans compose `ffprobe` metadata with the
-      Kinetix MP4/H.264 video adapter and Cadence standalone-audio adapter)
+      Kinetix AV1/VP9 video adapter (MP4, Matroska/WebM and MPEG-TS) and Cadence
+      standalone-audio adapter)
 21. [x] Implement watch folders (spec §13: pass/warn/fail routing, fully local; CLI
       `watch` command)
 22. [x] Add golden-media test suite covering every MVP rule (spec §24.2) — deterministic
       *measurement* fixtures (`tests/fixtures/*.json`: `Asset` + canned `Inspection`) run
-      through the real engine via a fixture `Inspector`; one encoded H.264/MP4
-      fixture also exercises the Kinetix decode adapter. Golden manifests in
+      through the real engine via a fixture `Inspector`; encoded fixtures also
+      exercise the Kinetix decode adapter (AV1 generated in-test via
+      `Av1Encoder`, VP9 in MP4 and Matroska/WebM under `tests/fixtures/encoded/`).
+      Golden manifests in
       `tests/golden` pin verdict + per-rule status for every built-in rule;
       `MEDIA_QC_UPDATE_GOLDEN=1` regenerates.
 23. [x] Add fuzzing for parsers, profile parser, result parser, CLI args, report
@@ -186,14 +190,44 @@ Applies continuously across all phases, not a one-time gate.
 
 ---
 
+## Patent-safe video decode — replace H.264 with AV1 + VP9
+
+H.264 patent pools license decoders as well as encoders, so the app must not ship an
+H.264 decoder. AAC is never decoded (and stays out of scope), so nothing to remove there. H.264/AAC files
+keep full ffprobe metadata/container QC; frame-decode rules go Inconclusive for them.
+AV1/VP9 in Kinetix are royalty-free; the old pin (`a43959c`) reported `pixel_exact: false`
+but upstream HEAD (`1a8623c`, 2026-10-02) reports `pixel_exact: true` for both, so the pin
+was bumped and both decoders run strict.
+
+- [x] Dependencies: drop `tpt-kinetix-h264` and `tpt-kinetix-mux` (root `Cargo.toml`, decode crate); add `tpt-kinetix-av1` and `tpt-kinetix-vp9`; bump Kinetix pin to `1a8623c`
+- [x] Decode crate: delete H.264 code (`H264Decoder`, avcC/avc1/avc3 parsing, SPS/PPS prelude, AnnexB conversion)
+- [x] Decode crate: route by track codec (`CodecId::Av1` / `CodecId::Vp9`); both decoders strict (an unfaithful/placeholder frame → `NotPixelExact` → Unsupported)
+- [x] Decode crate: add MKV/WebM via `MkvDemuxer` (codec ids `V_AV1` / `V_VP9`) alongside MP4
+- [x] Decode crate: unsupported container/codec (H.264, HEVC, ProRes, MXF…) returns `Unsupported`, never `Failed`
+- [x] Fix false `video.corrupt_frames` failure on files that simply can't be decoded; regression tests added (decode crate and `rules/src/video.rs`)
+- [x] CLI: update `HybridInspector` backend string and `probe.rs` docs (`ffprobe + tpt-kinetix-av1-vp9 + tpt-cadence`)
+- [x] Tests: remove the H.264 fixture and its `ATTRIBUTION.md` entry; add AV1 (Kinetix `Av1Encoder` → Matroska), VP9 (MP4 and WebM fixtures), H.264-is-unsupported and unsupported-container tests
+- [x] ~~Report AV1/VP9 measurements as approximate~~ — dropped: decoders are pixel-exact at the new pin
+- [x] Frame analysis handles the newer Kinetix pixel formats (monochrome, 10/12-bit) by scaling luma to 8 bits
+- [x] Docs: `README.md`, `CHANGELOG.md`, `docs/supported-formats.md`, `docs/architecture.md`, `docs/definition-of-done.md`, `docs/performance.md`, `GUMROAD.md` (adds ffprobe-bundling patent caveat), fixture `README.md`/`ATTRIBUTION.md`
+- [x] Update existing Phase 1 items 2, 8, 20 and 22 (MP4/H.264 mentions) to reflect the swap
+- [x] Distribution check: release workflow / Tauri config do not bundle ffmpeg/ffprobe (CI only installs it for tests); caveat recorded in `GUMROAD.md`
+- [x] Verify: `cargo build`/`cargo test --workspace` green, no `h264`/`kinetix-mux` left in `Cargo.lock` / `fuzz/Cargo.lock`, `cargo fmt --all --check` clean, clippy clean with `-D warnings`, and the CLI exercised end to end on real media — AV1 MP4 (frames decoded, freeze segment measured), VP9 MP4 + WebM (frames decoded), H.264 MP4 (full metadata/container QC, frame-decode rules `Inconclusive`, `video.corrupt_frames` never fails) and WAV (Cadence audio decode). The local-API test's 4-byte `RIFF` stub was replaced with a valid minimal WAV so the suite is green on current FFmpeg builds.
+- [x] MPEG-TS video decode via Kinetix's `TsDemuxer` (188-byte packets; codec identity from the PMT registration descriptor `AV01`/`vp09`): AV1 decodes end to end, VP9 is routed to the VP9 decoder, and H.264 elementary streams stay `Unsupported` with no decode error recorded. Audio inside a transport stream is demuxed but not decoded, so its audio findings remain `Inconclusive`.
+- [x] Standards-accurate audio levels: true peak (BS.1770-4 Annex 2, 4× oversampling through a polyphase reconstruction filter) and gated integrated loudness (BS.1770-4 K-weighting, 400 ms blocks, −70 LUFS absolute and −10 LU relative gates) are now measured in the Cadence adapter, cross-checked against `ffmpeg -af ebur128` reference readings. Loudness range (EBU Tech 3342: 3 s short-term windows, −70 LUFS / −20 LU gates, 10th–95th percentile) is now measured too
+- [x] EBU Tech 3342 loudness range
+- [ ] Optional follow-up: embedded-audio decode via Kinetix/Cadence (Opus elementary streams inside MP4/MKV/TS) and surfacing momentary/short-term max loudness in reports (meter methods exist)
+
+---
+
 ## Phase 2 — Post-MVP (spec §27)
 
 - [ ] HDR analysis
-- [ ] PSE (photosensitive epilepsy) risk analysis
+- [x] PSE (photosensitive epilepsy) general-flash analysis (`video.photosensitivity`: Harding/BT.1702-style per-pixel general + red flash; spatial-pattern check not implemented; golden fixtures added)
 - [ ] Advanced compression artefact detection
 - [ ] Dead pixel detection
 - [ ] Subtitle/caption validation (presence, language, timing, overlaps, invalid durations, malformed data, character limits, duration mismatch — spec §8.7)
-- [ ] File comparison mode (spec §15: metadata, streams, duration, frame rate, resolution, codec, audio layout, loudness, visual/audio differences)
+- [x] File comparison mode (spec §15) — `tpt-media-qc compare`: metadata, streams, duration, frame rate, resolution, codec, audio layout, loudness and measured defect counts; pixel/waveform (visual/audio) diffing not implemented
 - [ ] Custom rule builder
 - [ ] Richer report templates
 - [ ] GPU acceleration
