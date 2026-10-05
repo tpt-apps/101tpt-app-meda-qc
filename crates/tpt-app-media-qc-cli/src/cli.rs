@@ -22,6 +22,11 @@ fn parse_template(s: &str) -> Result<ReportTemplate, String> {
     long_about = "TPT Media QC performs rule-based quality control of media files against\nversioned, deterministic profiles. Exit codes are stable per spec §16."
 )]
 pub struct Cli {
+    /// Directory of installed rule plugins (also `TPT_MEDIA_QC_PLUGIN_DIR`).
+    /// Only read when a profile uses `rules.plugins`.
+    #[arg(long, global = true, value_name = "DIR")]
+    pub plugin_dir: Option<PathBuf>,
+
     #[command(subcommand)]
     pub command: Command,
 }

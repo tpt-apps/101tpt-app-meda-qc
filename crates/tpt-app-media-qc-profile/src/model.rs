@@ -40,6 +40,48 @@ pub struct RuleSetConfig {
     /// User-defined declarative rules (`rules.custom`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub custom: Vec<crate::custom::CustomRule>,
+    /// Third-party rules supplied by installed plugins (`rules.plugins`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plugins: Vec<PluginRuleConfig>,
+}
+
+/// Rule id prefixes owned by the built-in catalogue; plugins may not use them.
+pub const RESERVED_RULE_PREFIXES: &[&str] =
+    &["container", "video", "audio", "subtitle", "voice", "custom"];
+
+/// Use of a rule provided by an installed plugin.
+///
+/// A profile only *names* the rule. Which executable provides it is decided by
+/// the operator's plugin directory, never by the profile, so a shared profile
+/// cannot make the tool run an arbitrary program.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PluginRuleConfig {
+    /// Rule id, `<plugin>.<name>`, as declared in the plugin's manifest.
+    pub rule: String,
+    /// Severity given to the findings the rule reports.
+    #[serde(default)]
+    pub severity: Severity,
+    /// Rule-specific settings passed to the plugin unchanged.
+    #[serde(default)]
+    pub config: serde_json::Value,
+}
+
+/// Whether `id` is a well-formed third-party rule id.
+pub fn valid_plugin_rule_id(id: &str) -> bool {
+    let Some((plugin, name)) = id.split_once('.') else {
+        return false;
+    };
+    let ok = |s: &str, dots: bool| {
+        !s.is_empty()
+            && s.chars().all(|c| {
+                c.is_ascii_lowercase()
+                    || c.is_ascii_digit()
+                    || c == '_'
+                    || c == '-'
+                    || (dots && c == '.')
+            })
+    };
+    ok(plugin, false) && ok(name, true) && !RESERVED_RULE_PREFIXES.contains(&plugin)
 }
 
 // ---------------------------------------------------------------------------

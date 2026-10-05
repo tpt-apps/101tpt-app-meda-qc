@@ -1551,6 +1551,7 @@ dependencies = [
  "tpt-app-media-qc-decode",
  "tpt-app-media-qc-model",
  "tpt-app-media-qc-pipeline",
+ "tpt-app-media-qc-plugin",
  "tpt-app-media-qc-profile",
  "tpt-app-media-qc-report",
  "tpt-app-media-qc-rules",
@@ -1601,6 +1602,8 @@ dependencies = [
  "tempfile",
  "tpt-app-media-qc-cli",
  "tpt-app-media-qc-model",
+ "tpt-app-media-qc-plugin",
+ "tpt-app-media-qc-plugin-sdk",
  "tpt-app-media-qc-profile",
  "tpt-app-media-qc-report",
 ]
@@ -1629,6 +1632,29 @@ dependencies = [
  "tpt-app-media-qc-profile",
  "tpt-app-media-qc-rules",
  "uuid",
+]
+
+[[package]]
+name = "tpt-app-media-qc-plugin"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tpt-app-media-qc-core",
+ "tpt-app-media-qc-model",
+ "tpt-app-media-qc-plugin-sdk",
+ "tpt-app-media-qc-profile",
+ "tpt-app-media-qc-rules",
+]
+
+[[package]]
+name = "tpt-app-media-qc-plugin-sdk"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tpt-app-media-qc-model",
 ]
 
 [[package]]

@@ -65,6 +65,18 @@ impl QcEngine {
         }
     }
 
+    /// Like [`QcEngine::new`], with rules from outside the built-in catalogue
+    /// (for example plugin rules) appended after it.
+    pub fn with_extra_rules(
+        profile: Arc<Profile>,
+        inspector: Arc<dyn Inspector>,
+        extra: Vec<Box<dyn QcRule>>,
+    ) -> Self {
+        let mut engine = Self::new(profile, inspector);
+        engine.rules.extend(extra);
+        engine
+    }
+
     /// Shortcut for metadata-only checks.
     pub fn check_metadata_only(&self, asset: &Asset) -> Result<QcRun> {
         self.check(asset, InspectionLevel::MetadataOnly)

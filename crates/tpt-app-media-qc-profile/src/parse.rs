@@ -23,6 +23,7 @@ use crate::model::{
     SubtitleTimingRule, TimestampContinuityRule, ToleranceRule, TranscriptRule, VideoRules,
     VoiceRules, VoiceSilenceRule,
 };
+use crate::model::{valid_plugin_rule_id, PluginRuleConfig, RESERVED_RULE_PREFIXES};
 use serde_yaml::{Mapping, Value};
 use tpt_app_media_qc_model::severity::Severity;
 use tpt_app_media_qc_model::Rational;
@@ -98,7 +99,17 @@ fn parse_value(root: &Value) -> Result<Profile, ProfileError> {
 fn parse_rules(map: &Mapping) -> Result<RuleSetConfig, ProfileError> {
     for k in map.keys() {
         let k = as_key(k);
-        if !["container", "video", "audio", "subtitle", "voice", "custom"].contains(&k.as_str()) {
+        if ![
+            "container",
+            "video",
+            "audio",
+            "subtitle",
+            "voice",
+            "custom",
+            "plugins",
+        ]
+        .contains(&k.as_str())
+        {
             return Err(err("rules", format!("unknown rule group '{k}'")));
         }
     }
@@ -110,6 +121,7 @@ fn parse_rules(map: &Mapping) -> Result<RuleSetConfig, ProfileError> {
         subtitle: parse_subtitle(&mapping_at(map, "subtitle")?)?,
         voice: parse_voice(&mapping_at(map, "voice")?)?,
         custom: parse_custom(map.get(Value::String("custom".into())))?,
+        plugins: parse_plugins(map.get(Value::String("plugins".into())))?,
     })
 }
 
@@ -1281,6 +1293,80 @@ fn parse_transcript(map: &Mapping) -> Result<Option<TranscriptRule>, ProfileErro
         max_unexpected_words: optional_u64(m, "max_unexpected_words", path)?.unwrap_or(0),
         severity,
     }))
+}
+
+// ---------------------------------------------------------------------------
+// Plugin rules
+// ---------------------------------------------------------------------------
+
+const MAX_PLUGIN_RULES: usize = 128;
+const MAX_PLUGIN_CONFIG_BYTES: usize = 64 * 1024;
+
+fn parse_plugins(v: Option<&Value>) -> Result<Vec<PluginRuleConfig>, ProfileError> {
+    let seq = match v {
+        None | Some(Value::Null) => return Ok(Vec::new()),
+        Some(Value::Sequence(s)) => s,
+        Some(other) => {
+            return Err(err(
+                "rules.plugins",
+                format!("expected a list, got {}", ty(other)),
+            ))
+        }
+    };
+    if seq.len() > MAX_PLUGIN_RULES {
+        return Err(err(
+            "rules.plugins",
+            format!("at most {MAX_PLUGIN_RULES} plugin rules are allowed"),
+        ));
+    }
+    let mut out: Vec<PluginRuleConfig> = Vec::with_capacity(seq.len());
+    for (i, item) in seq.iter().enumerate() {
+        let path = format!("rules.plugins[{i}]");
+        let m = as_mapping(item, &path)?;
+        reject_unknown_keys(m, &path, &["rule", "severity", "config"])?;
+        let rule = required_string(m, "rule", &path)?;
+        if !valid_plugin_rule_id(&rule) {
+            return Err(err(
+                &format!("{path}.rule"),
+                format!(
+                    "'{rule}' must look like '<plugin>.<name>' and may not start with a \
+                     built-in prefix ({})",
+                    RESERVED_RULE_PREFIXES.join(", ")
+                ),
+            ));
+        }
+        if out.iter().any(|p| p.rule == rule) {
+            return Err(err(
+                &format!("{path}.rule"),
+                format!("rule '{rule}' is listed twice"),
+            ));
+        }
+        let severity = match m.get(Value::String("severity".into())) {
+            Some(v) => severity_from_value(v, &format!("{path}.severity"))?,
+            None => Severity::Error,
+        };
+        let config = match m.get(Value::String("config".into())) {
+            Some(v) => serde_json::to_value(v).map_err(|e| {
+                err(
+                    &format!("{path}.config"),
+                    format!("cannot be represented as JSON: {e}"),
+                )
+            })?,
+            None => serde_json::Value::Null,
+        };
+        if config.to_string().len() > MAX_PLUGIN_CONFIG_BYTES {
+            return Err(err(
+                &format!("{path}.config"),
+                format!("larger than {MAX_PLUGIN_CONFIG_BYTES} bytes"),
+            ));
+        }
+        out.push(PluginRuleConfig {
+            rule,
+            severity,
+            config,
+        });
+    }
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------

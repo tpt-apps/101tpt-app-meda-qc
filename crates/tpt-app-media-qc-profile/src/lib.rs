@@ -13,13 +13,14 @@ pub mod parse;
 pub use custom::{CustomOp, CustomOperand, CustomRule, CustomScope, CustomTarget};
 pub use hash::{per_rule_config_hash, profile_sha256};
 pub use model::{
-    AudioRules, BlockinessRule, BlurRule, ChannelLayoutRule, ContainerRules, CountThresholdRule,
-    DbThresholdRule, DeadPixelRule, DurationThresholdRule, ExpectValueRule, FrameRateRule,
-    LoudnessRule, LoudnessStandard, MinBitrateRule, NoiseRule, Policy, Profile, Resolution,
-    ResolutionRule, RuleSetConfig, SpeakerChangeRule, SpeakerCountRule, SpeechExpectation,
-    SpeechRule, SubtitleContentRule, SubtitleDurationRule, SubtitleLanguageRule,
-    SubtitlePresenceRule, SubtitleRules, SubtitleTimingRule, TimestampContinuityRule,
-    ToleranceRule, TranscriptRule, VideoRules, VoiceRules, VoiceSilenceRule,
+    valid_plugin_rule_id, AudioRules, BlockinessRule, BlurRule, ChannelLayoutRule, ContainerRules,
+    CountThresholdRule, DbThresholdRule, DeadPixelRule, DurationThresholdRule, ExpectValueRule,
+    FrameRateRule, LoudnessRule, LoudnessStandard, MinBitrateRule, NoiseRule, PluginRuleConfig,
+    Policy, Profile, Resolution, ResolutionRule, RuleSetConfig, SpeakerChangeRule,
+    SpeakerCountRule, SpeechExpectation, SpeechRule, SubtitleContentRule, SubtitleDurationRule,
+    SubtitleLanguageRule, SubtitlePresenceRule, SubtitleRules, SubtitleTimingRule,
+    TimestampContinuityRule, ToleranceRule, TranscriptRule, VideoRules, VoiceRules,
+    VoiceSilenceRule, RESERVED_RULE_PREFIXES,
 };
 pub use parse::{parse_str, ProfileError};
 

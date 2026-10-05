@@ -167,7 +167,7 @@ Applies continuously across all phases, not a one-time gate.
   - [x] Strict path validation and safe temporary-file handling (canonical media
         inputs; validated export paths; RAII temporary files and staged report
         replacement)
-  - [x] Media parsers fuzz tested (six targets; bounded campaigns run on every
+  - [x] Media parsers fuzz tested (seven targets; bounded campaigns run on every
         push/PR in CI on Linux — libFuzzer does not link on Windows/MSVC;
         long-running scheduled campaigns remain optional)
 - [ ] **Standards architecture (spec §25)**
@@ -248,11 +248,11 @@ was bumped and both decoders run strict.
 
 ## Phase 4 — Post-MVP (spec §27)
 
-- [ ] Plugin SDK
-- [ ] Third-party rules
-- [ ] Facility management features
-- [ ] Distributed local workers
-- [ ] Optional LAN processing
+- [x] Plugin SDK — out-of-process JSON protocol (v1) over stdin/stdout; `tpt-app-media-qc-plugin-sdk` (typed request/response, `serve`), manifest `plugin.json`, reference plugin `qc-example-plugin`. Docs: `docs/plugin-sdk.md`. Plugins are not sandboxed beyond timeout/size/environment limits
+- [x] Third-party rules — `rules.plugins` in profiles names rule ids from installed plugins; `tpt-app-media-qc-plugin` host discovers plugins, validates manifests (commands confined to the plugin folder), runs them with a timeout, 4 MiB response cap and cleared environment; failures become `Inconclusive`; host owns rule id and severity; results never cached. Integration-tested with real processes incl. hang, crash, oversized and hostile output
+- [ ] Facility management features — **deliberately not built**: spec §29/§32 say not to build Facility-tier features until customers demonstrably need them
+- [ ] Distributed local workers — **deliberately not built** (Facility tier, spec §29/§32; no customer evidence yet)
+- [ ] Optional LAN processing — **deliberately not built** (Facility tier, spec §29/§32; no customer evidence yet, and it would add a network attack surface to an offline-first product)
 
 ---
 

@@ -5,7 +5,7 @@
 //! optional per-asset report. All processing is fully local.
 
 use std::path::{Path, PathBuf};
-use std::sync::{mpsc, Arc};
+use std::sync::mpsc;
 use std::time::Duration;
 
 use notify::{Event, EventKind, RecursiveMode, Watcher};
@@ -64,7 +64,10 @@ pub fn run_watch(config: WatchConfig, profile: Profile, quick: bool) -> i32 {
     } else {
         InspectionLevel::Full
     };
-    let engine = QcEngine::new(Arc::new(profile.clone()), inspector);
+    let engine = match crate::app::make_engine(profile.clone(), inspector) {
+        Ok(e) => e,
+        Err(code) => return code,
+    };
 
     process_existing(&config, &engine, &profile, level);
 

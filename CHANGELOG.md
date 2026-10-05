@@ -8,6 +8,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Plugin SDK and third-party rules (spec §27): plugins are separate programs
+  that exchange JSON over stdin/stdout. New crates
+  `tpt-app-media-qc-plugin-sdk` (protocol types, `serve` helper) and
+  `tpt-app-media-qc-plugin` (manifest validation, discovery, contained
+  execution). Profiles gain `rules.plugins`, which names rule ids only; the
+  executable comes from the operator's plugin directory (`--plugin-dir` or
+  `TPT_MEDIA_QC_PLUGIN_DIR`). Runs are limited by a timeout, a response size
+  cap and a cleared environment, and every plugin failure becomes an
+  `Inconclusive` finding. `QcEngine::with_extra_rules` accepts extra rules.
+  See `docs/plugin-sdk.md`. Not sandboxed: install only trusted plugins.
+
 - Voice checks (spec §8.8, optional): `rules.voice` with `speech`, `silence`,
   `speakers`, `speaker_changes` and `transcript`. Speech and speaker analysis
   uses `tpt-voice`'s weight-free voice-activity detection and speaker

@@ -32,6 +32,7 @@ tpt-app-media-qc-rules = { path = "../tpt-app-media-qc-rules" }
 tpt-app-media-qc-pipeline = { path = "../tpt-app-media-qc-pipeline" }
 tpt-app-media-qc-report = { path = "../tpt-app-media-qc-report" }
 tpt-app-media-qc-decode = { path = "../tpt-app-media-qc-decode" }
+tpt-app-media-qc-plugin = { path = "../tpt-app-media-qc-plugin" }
 
 [features]
 # Speech detection and speaker clustering for `rules.voice` (spec 8.8).

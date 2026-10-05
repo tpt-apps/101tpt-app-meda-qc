@@ -14,6 +14,7 @@ use tpt_app_media_qc_model::report::AnalysisId;
 use tpt_app_media_qc_model::severity::VerdictDecision;
 use tpt_app_media_qc_pipeline::compare::{compare, CompareTolerances, DifferenceKind};
 use tpt_app_media_qc_pipeline::{arc, InspectionLevel, Inspector, NoopInspector, QcEngine};
+use tpt_app_media_qc_plugin::PluginRegistry;
 use tpt_app_media_qc_profile::model::Profile;
 use tpt_app_media_qc_profile::{parse_str, profile_sha256};
 use tpt_app_media_qc_report::{
@@ -31,7 +32,60 @@ use crate::exit::{
 };
 
 /// Run the parsed CLI and return the process exit code.
+/// Plugin directory from `--plugin-dir`, set once by [`run`].
+static PLUGIN_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// The configured plugin directory: `--plugin-dir`, else the environment.
+fn plugin_dir() -> Option<PathBuf> {
+    PLUGIN_DIR.get().cloned().or_else(|| {
+        std::env::var_os("TPT_MEDIA_QC_PLUGIN_DIR")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    })
+}
+
+/// Build the QC engine for `profile`, adding any plugin rules it uses.
+///
+/// Plugins are only looked for when the profile asks for them, so a profile
+/// without `rules.plugins` never touches the plugin directory.
+pub(crate) fn build_engine(
+    profile: Profile,
+    inspector: Arc<dyn Inspector>,
+) -> Result<QcEngine, String> {
+    if profile.rules.plugins.is_empty() {
+        return Ok(QcEngine::new(Arc::new(profile), inspector));
+    }
+    let Some(dir) = plugin_dir() else {
+        return Err(
+            "the profile uses plugin rules but no plugin directory is configured \
+             (use --plugin-dir or TPT_MEDIA_QC_PLUGIN_DIR)"
+                .into(),
+        );
+    };
+    let registry = PluginRegistry::discover(&dir).map_err(|e| e.to_string())?;
+    for warning in &registry.warnings {
+        eprintln!("warning: {warning}");
+    }
+    let extra = registry.build_rules(&profile).map_err(|e| e.to_string())?;
+    Ok(QcEngine::with_extra_rules(
+        Arc::new(profile),
+        inspector,
+        extra,
+    ))
+}
+
+/// [`build_engine`] for commands that report errors as exit codes.
+pub(crate) fn make_engine(
+    profile: Profile,
+    inspector: Arc<dyn Inspector>,
+) -> Result<QcEngine, i32> {
+    build_engine(profile, inspector).map_err(|e| err_exit(e, EXIT_PROFILE))
+}
+
 pub fn run(cli: Cli) -> i32 {
+    if let Some(dir) = &cli.plugin_dir {
+        let _ = PLUGIN_DIR.set(dir.clone());
+    }
     match cli.command {
         Command::Check {
             file,
@@ -259,7 +313,7 @@ pub fn run_qc(
     } else {
         InspectionLevel::Full
     };
-    let engine = QcEngine::new(Arc::new(profile), inspector);
+    let engine = build_engine(profile, inspector)?;
     engine
         .check(&asset, level)
         .map_err(|error| format!("QC execution failed: {error}"))
@@ -407,7 +461,10 @@ fn run_check(
         Err(code) => return code,
     };
 
-    let engine = QcEngine::new(Arc::new(profile.clone()), inspector);
+    let engine = match make_engine(profile.clone(), inspector) {
+        Ok(e) => e,
+        Err(code) => return code,
+    };
     let run = match engine.check(&asset, level) {
         Ok(r) => r,
         Err(e) => {
@@ -552,7 +609,10 @@ fn run_batch(
     } else {
         InspectionLevel::Full
     };
-    let engine = QcEngine::new(Arc::new(profile.clone()), inspector);
+    let engine = match make_engine(profile.clone(), inspector) {
+        Ok(e) => e,
+        Err(code) => return code,
+    };
 
     let mut exit = exit_code_for_verdict(VerdictDecision::Pass);
     for path in &paths {
@@ -822,7 +882,10 @@ fn run_info(file: PathBuf, profile_path: Option<PathBuf>, quick: bool) -> i32 {
         Ok(a) => a,
         Err(code) => return code,
     };
-    let engine = QcEngine::new(Arc::new(profile), inspector);
+    let engine = match make_engine(profile, inspector) {
+        Ok(e) => e,
+        Err(code) => return code,
+    };
     let run = match engine.check(&asset, level) {
         Ok(r) => r,
         Err(e) => {
@@ -939,6 +1002,34 @@ fn run_list_rules(profile_path: Option<PathBuf>) -> i32 {
         Ok(profile) => {
             for id in known_rule_ids() {
                 println!("{id}");
+            }
+            if let Some(dir) = plugin_dir() {
+                match PluginRegistry::discover(&dir) {
+                    Ok(registry) => {
+                        println!();
+                        println!("installed plugins ({}):", dir.display());
+                        if registry.plugins().is_empty() {
+                            println!("(none)");
+                        }
+                        for plugin in registry.plugins() {
+                            println!("{} {} - {}", plugin.id, plugin.version, plugin.name);
+                            for rule in &plugin.rules {
+                                println!("  {rule}");
+                            }
+                        }
+                        for warning in &registry.warnings {
+                            eprintln!("warning: {warning}");
+                        }
+                    }
+                    Err(e) => eprintln!("warning: {e}"),
+                }
+            }
+            if !profile.rules.plugins.is_empty() {
+                println!();
+                println!("plugin rules in this profile:");
+                for rule in &profile.rules.plugins {
+                    println!("{}", rule.rule);
+                }
             }
             if !profile.rules.custom.is_empty() {
                 println!();

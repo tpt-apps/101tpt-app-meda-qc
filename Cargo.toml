@@ -9,6 +9,8 @@ members = [
     "crates/tpt-app-media-qc-report",
     "crates/tpt-app-media-qc-store",
     "crates/tpt-app-media-qc-decode",
+    "crates/tpt-app-media-qc-plugin-sdk",
+    "crates/tpt-app-media-qc-plugin",
     "crates/tpt-app-media-qc-cli",
     "crates/tpt-app-media-qc-tauri",
     "crates/tpt-app-media-qc-test",
