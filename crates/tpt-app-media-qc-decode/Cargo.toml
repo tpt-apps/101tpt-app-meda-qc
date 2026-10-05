@@ -7,6 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme = "README.md"
+keywords = ["media", "decode", "av1", "vp9", "audio"]
+categories = ["multimedia", "multimedia::video"]
 
 [lints]
 workspace = true

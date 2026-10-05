@@ -3,6 +3,16 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use tpt_app_media_qc_report::ReportTemplate;
+
+fn parse_template(s: &str) -> Result<ReportTemplate, String> {
+    ReportTemplate::parse(s).ok_or_else(|| {
+        format!(
+            "unknown report template '{s}' (expected one of: {})",
+            ReportTemplate::ALL.map(|t| t.as_str()).join(", ")
+        )
+    })
+}
 
 #[derive(Parser, Debug)]
 #[command(
@@ -46,6 +56,11 @@ pub enum Command {
         /// Write the CSV findings to this path.
         #[arg(long)]
         csv: Option<PathBuf>,
+
+        /// Report layout for the HTML, PDF and CSV outputs: detailed
+        /// (default), summary, executive or audit. JSON is always complete.
+        #[arg(long, value_name = "NAME", default_value = "detailed", value_parser = parse_template)]
+        report_template: ReportTemplate,
 
         /// Suppress per-finding output (summary + verdict only).
         #[arg(long)]
@@ -177,6 +192,7 @@ mod tests {
             html,
             pdf,
             csv,
+            report_template,
             quiet,
         } = cli.command
         else {
@@ -187,6 +203,7 @@ mod tests {
         assert!(!quick);
         assert!(json.is_none() && html.is_none() && pdf.is_none() && csv.is_none());
         assert!(!quiet);
+        assert_eq!(report_template, ReportTemplate::Detailed);
     }
 
     #[test]
@@ -207,6 +224,8 @@ mod tests {
             "--csv",
             "r.csv",
             "--quiet",
+            "--report-template",
+            "audit",
         ])
         .unwrap();
         let Command::Check {
@@ -217,6 +236,7 @@ mod tests {
             html,
             pdf,
             csv,
+            report_template,
             quiet,
         } = cli.command
         else {
@@ -225,6 +245,7 @@ mod tests {
         assert_eq!(file, PathBuf::from("x.mov"));
         assert_eq!(profile.as_deref(), Some(std::path::Path::new("p.yaml")));
         assert!(quick && quiet);
+        assert_eq!(report_template, ReportTemplate::Audit);
         assert_eq!(json.as_deref(), Some(std::path::Path::new("r.json")));
         assert_eq!(html.as_deref(), Some(std::path::Path::new("r.html")));
         assert_eq!(pdf.as_deref(), Some(std::path::Path::new("r.pdf")));
@@ -332,5 +353,19 @@ mod tests {
     #[test]
     fn missing_subcommand_is_an_error() {
         assert!(Cli::try_parse_from(["tpt-media-qc"]).is_err());
+    }
+
+    #[test]
+    fn rejects_unknown_report_template() {
+        let err = Cli::try_parse_from([
+            "tpt-media-qc",
+            "check",
+            "x.mp4",
+            "--report-template",
+            "fancy",
+        ])
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("unknown report template"), "{err}");
     }
 }

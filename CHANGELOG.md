@@ -8,6 +8,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Custom rule builder: `rules.custom` in a profile declares user-defined
+  metadata rules (`id: custom.<name>`, `scope`, `metric`, `op`, `value`,
+  optional `streams`, `tolerance`, `severity`, `message`) over a closed metric
+  catalogue for the container, video, audio and subtitle streams. The parser
+  rejects unknown metrics, operators, keys, type mismatches and duplicate ids;
+  missing metrics report `Inconclusive`; each rule has its own cache
+  configuration hash. See `docs/profile-format.md` and
+  `profiles/examples/custom-rules.yaml`.
+
+- Report templates: `detailed`, `summary`, `executive` and `audit` layouts for
+  the HTML, PDF and CSV exports (`check --report-template`, a picker in the
+  desktop inspector). The JSON report and verdict are unaffected.
+
 - `compare` command and `tpt_app_media_qc_pipeline::compare`: file-to-file
   comparison of container metadata, stream counts, codec, resolution, frame
   rate, scan order, colour space, audio layout, loudness/true peak and measured

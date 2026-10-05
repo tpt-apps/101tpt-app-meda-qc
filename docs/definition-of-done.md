@@ -26,13 +26,13 @@ alone. Re-run this audit before declaring the MVP complete (todo item 28).
 | 16 | Reproducible from fingerprint + profile + versions | Done | Cache keys and report integrity fields: asset SHA-256, profile SHA-256, app version, ruleset version (`docs/report-format.md`, `docs/performance.md`). |
 | 17 | No internet connection required | Done | Offline-first; no telemetry, no cloud upload (spec §22). |
 | 18 | Clean-machine installation tested | **External** | Requires a pristine machine per OS with the produced bundles; blockers are signing (optional) and `ffprobe` availability (`GUMROAD.md`). |
-| 19 | Performance benchmarked on representative HD/UHD | **Partial** | `qc-bench` micro-benchmarks with committed baseline (`tests/performance/baseline.md`); representative *media* benchmarks grow with decode coverage (AV1/VP9 decode benchmarks are follow-up work; other codecs capability-gated). |
+| 19 | Performance benchmarked on representative HD/UHD | **Partial** | `qc-bench` micro-benchmarks with committed baseline (`tests/performance/baseline.md`); representative *media* benchmarks grow with decode coverage AV1 HD/UHD decode + analysis benchmarked with the `decode_bench` example on synthetic content; VP9 measured on libvpx test clips; real high-bitrate masters and peak RSS pending; other codecs capability-gated. |
 
 ## Remaining before MVP completion
 
 1. External: signing/notarization decisions and artifacts (item 1) — `GUMROAD.md`.
 2. External: clean-machine validation (item 18) and the private beta with real
    professional media (todo item 27).
-3. Partial: representative HD/UHD media benchmarks as decode coverage widens (item 19).
+3. Partial: AV1 and VP9 HD/UHD benchmarks exist (synthetic content); real masters and peak RSS remain (item 19).
 4. Ongoing: regression fixture for every production bug found from the beta
    onward (spec §24.5).

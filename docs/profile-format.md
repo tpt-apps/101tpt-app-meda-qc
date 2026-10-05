@@ -167,6 +167,47 @@ voice:
   {}                     # reserved
 ```
 
+## 7a. Custom rules (`rules.custom`)
+
+User-defined rules compare one metadata metric with a threshold, so a
+facility can encode a delivery requirement without a code change. A worked
+profile is in [`profiles/examples/custom-rules.yaml`](../profiles/examples/custom-rules.yaml).
+
+```yaml
+rules:
+  custom:
+    - id: custom.min_video_bitrate    # required; must be custom.<snake_case>
+      scope: video                    # container | video | audio | subtitle
+      streams: all                    # all (default) | primary; not for container
+      metric: bitrate
+      op: ">="                        # == != < <= > >= in not_in
+      value: 5000000                  # a list for in / not_in
+      tolerance: 0                    # numeric == / != only
+      severity: error                 # default error
+      message: Delivery requires at least 5 Mb/s video   # optional
+```
+
+| Scope | Metrics |
+|-------|---------|
+| `container` | `duration_seconds`, `size_bytes`, `stream_count`, `video_stream_count`, `audio_stream_count`, `subtitle_stream_count` |
+| every stream scope | `codec`, `codec_profile`, `language`, `bitrate`, `duration_seconds`, `metadata.<key>` (per-stream container tag) |
+| `video` | `width`, `height`, `frame_rate`, `pixel_format`, `field_order` |
+| `audio` | `channels`, `channel_layout`, `sample_rate`, `bit_depth` |
+
+Behaviour:
+
+- The profile parser rejects unknown metrics, operators and keys, duplicate
+  ids, ordering operators on text metrics and type mismatches (quote
+  numeric-looking text such as `"264"`). At most 256 custom rules per profile.
+- Text comparison is case-insensitive. A rule that holds produces no finding.
+- A metric the stream does not report yields `Inconclusive`, never a guessed
+  pass or fail. A scope with no streams of that kind passes (use
+  `container.stream_presence` to require streams).
+- Each failing stream yields one finding carrying the measured value, the
+  expected comparison and the stream index. Custom rules are metadata-only.
+- Each rule has its own configuration hash, so editing one custom rule only
+  invalidates that rule's cached results.
+
 ## 8. Policy
 
 ```yaml

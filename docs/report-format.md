@@ -78,6 +78,25 @@ report crate's `render_html`; with `WriteHtmlOptions { embed_json: true }` the
 full JSON report is embedded in the page so a browser viewer can be built
 later. The CLI writes it with `--html`.
 
+### Templates
+
+`render_html`, `render_pdf` and `write_csv` take a `ReportTemplate` that
+selects which parts of the report a human-facing rendering shows. The report
+itself, its verdict and its integrity fields never change, and JSON is always
+complete.
+
+| Template | Contents |
+|----------|----------|
+| `detailed` (default) | Header, integrity fields and every finding |
+| `summary` | Header and only findings that need attention (not `pass`) |
+| `executive` | Verdict, counts and a per-rule "Issues by rule" roll-up (worst status, count, message of the worst finding); no per-finding table |
+| `audit` | `detailed` plus the roll-up and the full integrity and host block (asset and full profile hashes, application and ruleset versions, OS/architecture/CPU count) |
+
+CSV is row data, so `summary` and `executive` drop passing rows and
+`detailed` and `audit` keep every row. The CLI selects a template with
+`check --report-template <name>`; the desktop inspector has a template picker
+next to the export buttons.
+
 ## 4. CSV
 
 Findings flattened to rows (`rule_id`, `status`, `severity`, message, stream,
@@ -103,6 +122,7 @@ is a free-text field on the `Report` model, editable at review time.
 
 ```sh
 tpt-media-qc check --profile client-a.yaml --json r.json --html r.html --csv r.csv episode-01.mov
+tpt-media-qc check --report-template executive --pdf summary.pdf episode-01.mov
 tpt-media-qc batch --profile client-a.yaml --input ./incoming --output ./reports
 ```
 

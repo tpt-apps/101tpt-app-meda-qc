@@ -126,8 +126,9 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
       micro-benchmark harness (`cargo run -p tpt-app-media-qc-test --release --bin
       qc-bench`): fingerprinting, profile parse, rule build/run, engine check, fixture
       deserialize, report build + JSON/HTML/PDF render; baseline committed to
-      `tests/performance/baseline.md`. Representative HD/UHD *media* benchmarks follow
-      the decode stack
+      `tests/performance/baseline.md`. AV1 HD/UHD decode + analysis
+      benchmarked by `cargo run -p tpt-app-media-qc-decode --release --example
+      decode_bench` (synthetic AV1; VP9 from libvpx test clips; real masters and peak RSS pending — pass a file to the example)
 25. [x] Harden error handling — isolated per-job failure state, corrupt asset must not
       terminate batch (spec §21; batch continues past per-asset errors)
 26. [ ] Package Windows release — CI builds/tests on push across
@@ -228,8 +229,8 @@ was bumped and both decoders run strict.
 - [x] Dead pixel detection (spec § 8.4) — `video.dead_pixels` rule over decoded AV1/VP9 frames: per-cell luma comparison across the decode flags dead (never brightens in bright frames), stuck (never darkens in dark frames) and flicker (reaches both extremes) cells. Contrast-gated judging avoids false positives on letterbox bars/static content; ≥3 bright and ≥3 dark frames required before any verdict. Flagged cells are grouped into 4-connected clusters (largest first, capped at 64) reported in source pixels, with the largest cluster attached to the finding. Profile keys `max_pixels`/`max_clusters`/`include_flicker`/`fail_on_limited_resolution`; capped at ~4.2 M cells/frame with stride-sampling above that. Chroma/subpixel defects and comparisons against a published display-defect standard not implemented
 - [x] Subtitle/caption validation (spec §8.7) — five metadata-driven rules: `subtitle.presence` (min/max tracks), `subtitle.language` (required ISO 639 codes, loose matching so `en` satisfies `eng`), `subtitle.timing` (cue overlaps, invalid durations, inter-cue gaps, cue dwell time), `subtitle.content` (malformed/empty payloads, characters per line, lines per cue) and `subtitle.duration_match` (coverage vs. video duration). Cue timing comes from packet headers and cue text from the packet payload, so no picture or sample is decoded. Text-dependent checks are limited to text-based codecs (`subrip`/`srt`/`ass`/`ssa`/`webvtt`/`text`/`microdvd`/`mpl2`/`subviewer`) and report `Inconclusive` for bitmap/structured formats; character counts strip SRT/ASS/WebVTT markup. Cue analysis capped at 100 000 cues/stream. Golden fixtures updated. Reading-rate/minimum-dwell-time standards and sidecar (`.srt`/`.vtt`) comparison not implemented
 - [x] File comparison mode (spec §15) — `tpt-media-qc compare`: metadata, streams, duration, frame rate, resolution, codec, audio layout, loudness and measured defect counts; pixel/waveform (visual/audio) diffing not implemented
-- [ ] Custom rule builder
-- [ ] Richer report templates
+- [x] Custom rule builder (spec §27) — `rules.custom` declarative metadata rules (container/video/audio/subtitle scopes, closed metric catalogue, `== != < <= > >= in not_in`, tolerance, per-rule severity/message); strict parser validation, `Inconclusive` on missing metrics, per-rule cache hash, `profiles/examples/custom-rules.yaml`. Rules over decoded measurements (loudness, black-frame counts, …) and expression/boolean composition are not implemented
+- [x] Richer report templates — `detailed` / `summary` / `executive` / `audit` for HTML, PDF and CSV (`check --report-template`, desktop template picker); JSON stays complete. User-authored/branded templates (logo, custom sections) not implemented
 - [ ] GPU acceleration
 
 ---

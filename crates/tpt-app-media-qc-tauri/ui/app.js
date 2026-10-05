@@ -350,7 +350,7 @@ function renderInspector() {
   const measurements = measurementCards(result);
   const findings = result.report.findings;
   const findingRows = findings.map((finding, index) => `<div class="finding-row ${index === state.selectedFinding ? "selected" : ""}" data-finding="${index}"><span class="status ${escapeHtml(finding.status)}">${escapeHtml(finding.status)}</span><div><strong>${escapeHtml(finding.rule_id)}</strong><span>${escapeHtml(finding.message)}</span></div><span class="finding-time">${finding.time_range ? formatTimecode(finding.time_range.start_ms) : "—"}</span></div>`).join("");
-  content.innerHTML = `<div class="inspector-hero"><div class="inspector-title"><p class="eyebrow">${escapeHtml(result.profile_name)} · ANALYSIS ${escapeHtml(result.report.analysis_id)}</p><h2>${escapeHtml(fileName(asset.path))}</h2><p>${escapeHtml(asset.path)}</p></div><div class="inspector-actions"><button class="button secondary" data-export="pdf">Export PDF</button><button class="button ghost" data-export="json">JSON</button><button class="button ghost" data-export="html">HTML</button></div></div>
+  content.innerHTML = `<div class="inspector-hero"><div class="inspector-title"><p class="eyebrow">${escapeHtml(result.profile_name)} · ANALYSIS ${escapeHtml(result.report.analysis_id)}</p><h2>${escapeHtml(fileName(asset.path))}</h2><p>${escapeHtml(asset.path)}</p></div><div class="inspector-actions"><select id="reportTemplate" aria-label="Report template" title="Report template for PDF and HTML exports"><option value="detailed">Detailed</option><option value="summary">Summary</option><option value="executive">Executive</option><option value="audit">Audit</option></select><button class="button secondary" data-export="pdf">Export PDF</button><button class="button ghost" data-export="json">JSON</button><button class="button ghost" data-export="html">HTML</button></div></div>
     <div class="inspector-grid"><div class="inspector-main">
       <article class="panel"><header class="section-title"><div><p class="eyebrow">ASSET</p><h3>File information</h3></div></header><div class="info-grid">${info.map(([label, value]) => `<div class="info-cell"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join("")}</div></article>
       <article class="panel"><header class="section-title"><div><p class="eyebrow">STREAMS</p><h3>Codec and stream metadata</h3></div><span class="diagnostic">${asset.streams.length} stream${asset.streams.length === 1 ? "" : "s"}</span></header><div class="stream-list">${streams || `<div class="evidence-empty">No stream metadata returned.</div>`}</div></article>
@@ -376,7 +376,8 @@ async function exportReport(format) {
     const extension = format === "html" ? "html" : format;
     const selected = await dialog.save({ defaultPath: `${fileName(job.path)}.tpt-qc.${extension}`, filters: [{ name: format.toUpperCase(), extensions: [extension] }] });
     if (!selected) return;
-    const path = await invoke("export_report", { run: job.result, path: selected, format });
+    const template = document.querySelector("#reportTemplate")?.value || "detailed";
+    const path = await invoke("export_report", { run: job.result, path: selected, format, template });
     await invoke("open_path", { path });
     toast(`${format.toUpperCase()} report exported.`, "info");
   } catch (error) {

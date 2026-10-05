@@ -13,6 +13,7 @@ use tpt_app_media_qc_core::error::Result;
 use tpt_app_media_qc_model::report::Report;
 
 use crate::output::{commit_file, staged_file};
+use crate::template::{rule_rollup, ReportTemplate};
 
 const PAGE_WIDTH: f64 = 595.0;
 const PAGE_HEIGHT: f64 = 842.0;
@@ -23,10 +24,13 @@ const SMALL_SIZE: f64 = 8.0;
 
 /// Rendering options for the PDF exporter.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct WritePdfOptions {}
+pub struct WritePdfOptions {
+    /// Which view of the report to render.
+    pub template: ReportTemplate,
+}
 
 /// Render a readable PDF report.
-pub fn render_pdf(path: &Path, report: &Report, _options: WritePdfOptions) -> Result<()> {
+pub fn render_pdf(path: &Path, report: &Report, options: WritePdfOptions) -> Result<()> {
     let mut doc = Document::with_version("1.5");
     let pages_id = doc.new_object_id();
 
@@ -48,7 +52,7 @@ pub fn render_pdf(path: &Path, report: &Report, _options: WritePdfOptions) -> Re
     });
 
     let mut layout = Layout::new();
-    build_document(&mut layout, report);
+    build_document(&mut layout, report, options.template);
     let pages = layout.finish();
 
     let mut kids = Vec::new();
@@ -208,10 +212,15 @@ impl Col {
     }
 }
 
-fn build_document(layout: &mut Layout, report: &Report) {
+fn build_document(layout: &mut Layout, report: &Report, template: ReportTemplate) {
     let counts = report.status_counts();
 
-    layout.text(MARGIN, Font::Bold, 15.0, "TPT Media QC — QC Report");
+    layout.text(
+        MARGIN,
+        Font::Bold,
+        15.0,
+        &format!("TPT Media QC — {}", template.title()),
+    );
     layout.text(
         MARGIN,
         Font::Regular,
@@ -233,65 +242,134 @@ fn build_document(layout: &mut Layout, report: &Report) {
     );
     layout.gap(4.0);
 
-    layout.text(MARGIN, Font::Bold, BODY_SIZE, "Integrity");
-    layout.text(
-        MARGIN,
-        Font::Regular,
-        SMALL_SIZE,
-        &format!("Analysis ID:  {}", report.analysis_id.0),
-    );
-    layout.text(
-        MARGIN,
-        Font::Regular,
-        SMALL_SIZE,
-        &format!("Asset SHA-256: {}", report.integrity.asset_sha256),
-    );
-    layout.text(
-        MARGIN,
-        Font::Regular,
-        SMALL_SIZE,
-        &format!("Profile SHA-256: {}", report.integrity.profile_sha256),
-    );
-    layout.text(
-        MARGIN,
-        Font::Regular,
-        SMALL_SIZE,
-        &format!(
-            "App {} {} (ruleset {}) — created {}",
-            report.app.name,
-            report.app.version,
-            report.app.ruleset_version,
-            report.created_at.to_rfc3339()
-        ),
-    );
-    layout.gap(2.0);
+    if template.shows_integrity() {
+        layout.text(MARGIN, Font::Bold, BODY_SIZE, "Integrity");
+        layout.text(
+            MARGIN,
+            Font::Regular,
+            SMALL_SIZE,
+            &format!("Analysis ID:  {}", report.analysis_id.0),
+        );
+        layout.text(
+            MARGIN,
+            Font::Regular,
+            SMALL_SIZE,
+            &format!("Asset SHA-256: {}", report.integrity.asset_sha256),
+        );
+        layout.text(
+            MARGIN,
+            Font::Regular,
+            SMALL_SIZE,
+            &format!("Profile SHA-256: {}", report.integrity.profile_sha256),
+        );
+        layout.text(
+            MARGIN,
+            Font::Regular,
+            SMALL_SIZE,
+            &format!(
+                "App {} {} (ruleset {}) — created {}",
+                report.app.name,
+                report.app.version,
+                report.app.ruleset_version,
+                report.created_at.to_rfc3339()
+            ),
+        );
+        layout.gap(2.0);
 
-    layout.text(
-        MARGIN,
-        Font::Regular,
-        SMALL_SIZE,
-        &format!(
-            "Profile: {} v{} — host {} ({}) — {} bytes",
-            report.profile.name,
-            report.profile.version,
-            report.host.os,
-            report.host.arch,
-            report.asset_size_bytes
-        ),
-    );
+        layout.text(
+            MARGIN,
+            Font::Regular,
+            SMALL_SIZE,
+            &format!(
+                "Profile: {} v{} — host {} ({}) — {} bytes",
+                report.profile.name,
+                report.profile.version,
+                report.host.os,
+                report.host.arch,
+                report.asset_size_bytes
+            ),
+        );
+
+        if template.shows_host() {
+            layout.text(
+                MARGIN,
+                Font::Regular,
+                SMALL_SIZE,
+                &format!(
+                    "Host: {} / {} / {} CPUs — ruleset {}",
+                    report.host.os,
+                    report.host.arch,
+                    report.host.cpu_count,
+                    report.integrity.ruleset_version
+                ),
+            );
+        }
+    } else {
+        layout.text(
+            MARGIN,
+            Font::Regular,
+            SMALL_SIZE,
+            &format!(
+                "Profile: {} v{} — created {}",
+                report.profile.name,
+                report.profile.version,
+                report.created_at.to_rfc3339()
+            ),
+        );
+    }
+
+    if template.shows_rollup() {
+        layout.gap(6.0);
+        layout.text(MARGIN, Font::Bold, 12.0, "Issues by rule");
+        layout.gap(2.0);
+        let rows = rule_rollup(report);
+        if rows.is_empty() {
+            layout.text(MARGIN, Font::Regular, BODY_SIZE, "No issues.");
+        }
+        let cols = rollup_columns();
+        if !rows.is_empty() {
+            layout.flush_if_needed(1);
+            for (i, header) in ["Rule", "Status", "Count", "Detail"].iter().enumerate() {
+                layout.text(cols[i].x, Font::Bold, BODY_SIZE, header);
+            }
+        }
+        for row in rows {
+            let cells: Vec<Vec<String>> = vec![
+                wrapped(&row.rule_id, &cols[0]),
+                vec![row.status.as_str().to_string()],
+                vec![row.findings.to_string()],
+                wrapped(&row.message, &cols[3]),
+            ];
+            let rows_used = cells.iter().map(|c| c.len()).max().unwrap_or(1);
+            layout.flush_if_needed(rows_used);
+            for line in 0..rows_used {
+                for (i, cell) in cells.iter().enumerate() {
+                    let text = cell.get(line).map(String::as_str).unwrap_or("");
+                    if !text.is_empty() {
+                        layout.text(cols[i].x, Font::Regular, BODY_SIZE, text);
+                    }
+                }
+            }
+        }
+    }
+
+    if !template.lists_findings() {
+        return;
+    }
 
     layout.gap(6.0);
     layout.text(MARGIN, Font::Bold, 12.0, "Findings");
     layout.gap(2.0);
 
-    if report.findings.is_empty() {
+    let findings = template.findings(report);
+    if findings.is_empty() {
         layout.text(MARGIN, Font::Regular, BODY_SIZE, "No findings.");
         return;
     }
 
     let cols = columns();
     table_header(layout, &cols);
-    for f in &report.findings {
+    for f in findings {
         let stream = f.stream_idx.map(|s| s.to_string()).unwrap_or_default();
         let time = f
             .time_range
@@ -342,6 +420,15 @@ fn table_header(layout: &mut Layout, cols: &[Col]) {
     {
         layout.text(cols[i].x, Font::Bold, BODY_SIZE, header);
     }
+}
+
+fn rollup_columns() -> Vec<Col> {
+    vec![
+        Col::new(MARGIN, 150.0),
+        Col::new(MARGIN + 150.0, 70.0),
+        Col::new(MARGIN + 220.0, 45.0),
+        Col::new(MARGIN + 265.0, PAGE_WIDTH - MARGIN - (MARGIN + 265.0)),
+    ]
 }
 
 fn columns() -> Vec<Col> {
@@ -487,7 +574,7 @@ mod tests {
         let run = engine.check_metadata_only(&asset).unwrap();
         let report = crate::build_report(&run, AnalysisId::default(), &profile);
 
-        render_pdf(&path, &report, WritePdfOptions {}).unwrap();
+        render_pdf(&path, &report, WritePdfOptions::default()).unwrap();
         let bytes = fs::read(&path).unwrap();
         assert!(bytes.starts_with(b"%PDF-"), "must start with PDF header");
         assert!(

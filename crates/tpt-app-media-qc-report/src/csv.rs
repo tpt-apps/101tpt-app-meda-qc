@@ -7,11 +7,15 @@ use tpt_app_media_qc_core::error::Result;
 use tpt_app_media_qc_model::report::Report;
 
 use crate::output::{commit_writer, staged_writer};
+use crate::template::ReportTemplate;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WriteCsvOptions {
     /// Emit a header row (default true).
     pub header: bool,
+    /// Which findings to include: `Summary` and `Executive` drop passing
+    /// rows, `Detailed` and `Audit` keep every row.
+    pub template: ReportTemplate,
 }
 
 /// Write one CSV row per finding.
@@ -24,7 +28,13 @@ pub fn write_csv(path: &Path, report: &Report, options: WriteCsvOptions) -> Resu
         )?;
     }
 
-    for f in &report.findings {
+    let attention_only = matches!(
+        options.template,
+        ReportTemplate::Summary | ReportTemplate::Executive
+    );
+    for f in report.findings.iter().filter(|f| {
+        !attention_only || f.status != tpt_app_media_qc_model::severity::VerdictDecision::Pass
+    }) {
         write_csv_row(
             &mut out,
             CsvRow {
@@ -137,7 +147,15 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path: PathBuf = dir.path().join("out.csv");
         let (report, _) = run();
-        write_csv(&path, &report, WriteCsvOptions { header: true }).unwrap();
+        write_csv(
+            &path,
+            &report,
+            WriteCsvOptions {
+                header: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         let text = fs::read_to_string(&path).unwrap();
         assert!(text.starts_with("asset,rule,status"));
         assert!(text.contains("inconclusive"));

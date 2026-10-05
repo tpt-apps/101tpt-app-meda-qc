@@ -17,8 +17,8 @@ use tpt_app_media_qc_pipeline::{arc, InspectionLevel, Inspector, NoopInspector, 
 use tpt_app_media_qc_profile::model::Profile;
 use tpt_app_media_qc_profile::{parse_str, profile_sha256};
 use tpt_app_media_qc_report::{
-    build_report, render_html, render_pdf, write_csv, write_json_report, WriteCsvOptions,
-    WriteHtmlOptions, WritePdfOptions,
+    build_report, render_html, render_pdf, write_csv, write_json_report, ReportTemplate,
+    WriteCsvOptions, WriteHtmlOptions, WritePdfOptions,
 };
 use tpt_app_media_qc_rules::known_rule_ids;
 
@@ -41,8 +41,19 @@ pub fn run(cli: Cli) -> i32 {
             html,
             pdf,
             csv,
+            report_template,
             quiet,
-        } => run_check(file, profile, quick, json, html, pdf, csv, quiet),
+        } => run_check(
+            file,
+            profile,
+            quick,
+            json,
+            html,
+            pdf,
+            csv,
+            report_template,
+            quiet,
+        ),
         Command::Batch {
             files,
             input,
@@ -283,6 +294,7 @@ pub(crate) fn write_reports(
     html: Option<&Path>,
     pdf: Option<&Path>,
     csv: Option<&Path>,
+    template: ReportTemplate,
 ) -> Result<(), i32> {
     let report = build_report(run, AnalysisId::default(), profile);
     if let Some(p) = json {
@@ -294,7 +306,14 @@ pub(crate) fn write_reports(
         }
     }
     if let Some(p) = html {
-        if let Err(e) = render_html(p, &report, WriteHtmlOptions { embed_json: true }) {
+        if let Err(e) = render_html(
+            p,
+            &report,
+            WriteHtmlOptions {
+                embed_json: true,
+                template,
+            },
+        ) {
             return Err(err_exit(
                 format!("could not write HTML report: {e}"),
                 EXIT_ERROR,
@@ -302,7 +321,7 @@ pub(crate) fn write_reports(
         }
     }
     if let Some(p) = pdf {
-        if let Err(e) = render_pdf(p, &report, WritePdfOptions {}) {
+        if let Err(e) = render_pdf(p, &report, WritePdfOptions { template }) {
             return Err(err_exit(
                 format!("could not write PDF report: {e}"),
                 EXIT_ERROR,
@@ -310,7 +329,14 @@ pub(crate) fn write_reports(
         }
     }
     if let Some(p) = csv {
-        if let Err(e) = write_csv(p, &report, WriteCsvOptions { header: true }) {
+        if let Err(e) = write_csv(
+            p,
+            &report,
+            WriteCsvOptions {
+                header: true,
+                template,
+            },
+        ) {
             return Err(err_exit(
                 format!("could not write CSV report: {e}"),
                 EXIT_ERROR,
@@ -333,6 +359,7 @@ fn run_check(
     html: Option<PathBuf>,
     pdf: Option<PathBuf>,
     csv: Option<PathBuf>,
+    report_template: ReportTemplate,
     quiet: bool,
 ) -> i32 {
     if !file.is_file() {
@@ -384,6 +411,7 @@ fn run_check(
         html.as_deref(),
         pdf.as_deref(),
         csv.as_deref(),
+        report_template,
     ) {
         return code;
     }
@@ -521,9 +549,17 @@ fn run_batch(
                         "{}.json",
                         path.file_stem().and_then(|s| s.to_str()).unwrap_or("asset")
                     );
-                    write_reports(&run, &profile, Some(&dir.join(name)), None, None, None)
-                        .map_err(|_| ())
-                        .ok();
+                    write_reports(
+                        &run,
+                        &profile,
+                        Some(&dir.join(name)),
+                        None,
+                        None,
+                        None,
+                        ReportTemplate::default(),
+                    )
+                    .map_err(|_| ())
+                    .ok();
                 }
                 if fail_fast && run.verdict == VerdictDecision::Fail {
                     eprintln!("batch: failing fast after '{}'", path.display());
@@ -760,6 +796,13 @@ fn run_list_rules(profile_path: Option<PathBuf>) -> i32 {
         Ok(profile) => {
             for id in known_rule_ids() {
                 println!("{id}");
+            }
+            if !profile.rules.custom.is_empty() {
+                println!();
+                println!("custom rules in this profile:");
+                for rule in &profile.rules.custom {
+                    println!("{}", rule.id);
+                }
             }
             println!();
             println!(

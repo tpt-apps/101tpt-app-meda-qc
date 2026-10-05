@@ -23,8 +23,8 @@ use tpt_app_media_qc_pipeline::QcRun;
 use tpt_app_media_qc_profile::model::Profile;
 use tpt_app_media_qc_profile::parse_str;
 use tpt_app_media_qc_report::{
-    build_report, render_html, render_pdf, write_csv, write_json_report, WriteCsvOptions,
-    WriteHtmlOptions, WritePdfOptions,
+    build_report, render_html, render_pdf, write_csv, write_json_report, ReportTemplate,
+    WriteCsvOptions, WriteHtmlOptions, WritePdfOptions,
 };
 
 mod local_api;
@@ -195,7 +195,17 @@ fn expand_media_paths(paths: Vec<String>, recursive: bool) -> Result<Vec<String>
 }
 
 #[tauri::command]
-fn export_report(run: DesktopRun, path: String, format: String) -> Result<String, String> {
+fn export_report(
+    run: DesktopRun,
+    path: String,
+    format: String,
+    template: Option<String>,
+) -> Result<String, String> {
+    let template = match template.as_deref() {
+        None | Some("") => ReportTemplate::default(),
+        Some(name) => ReportTemplate::parse(name)
+            .ok_or_else(|| format!("unknown report template '{name}'"))?,
+    };
     let format = format.to_ascii_lowercase();
     let extension = match format.as_str() {
         "json" | "html" | "pdf" | "csv" => &format,
@@ -207,12 +217,26 @@ fn export_report(run: DesktopRun, path: String, format: String) -> Result<String
     match format.as_str() {
         "json" => write_json_report(&output, &run.report)
             .map_err(|error| format!("could not write JSON report: {error}"))?,
-        "html" => render_html(&output, &run.report, WriteHtmlOptions { embed_json: true })
-            .map_err(|error| format!("could not write HTML report: {error}"))?,
-        "pdf" => render_pdf(&output, &run.report, WritePdfOptions {})
+        "html" => render_html(
+            &output,
+            &run.report,
+            WriteHtmlOptions {
+                embed_json: true,
+                template,
+            },
+        )
+        .map_err(|error| format!("could not write HTML report: {error}"))?,
+        "pdf" => render_pdf(&output, &run.report, WritePdfOptions { template })
             .map_err(|error| format!("could not write PDF report: {error}"))?,
-        "csv" => write_csv(&output, &run.report, WriteCsvOptions { header: true })
-            .map_err(|error| format!("could not write CSV report: {error}"))?,
+        "csv" => write_csv(
+            &output,
+            &run.report,
+            WriteCsvOptions {
+                header: true,
+                template,
+            },
+        )
+        .map_err(|error| format!("could not write CSV report: {error}"))?,
         _ => unreachable!("format was validated above"),
     }
     Ok(output.to_string_lossy().into_owned())

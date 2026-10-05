@@ -7,6 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme = "README.md"
+keywords = ["media", "qc", "fingerprint", "validation", "offline"]
+categories = ["data-structures", "multimedia"]
 
 [lints]
 workspace = true

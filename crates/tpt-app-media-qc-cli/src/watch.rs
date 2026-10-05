@@ -15,6 +15,7 @@ use tpt_app_media_qc_profile::model::Profile;
 
 use crate::app::{build_asset, is_media_file, make_inspector, write_reports};
 use crate::exit::{EXIT_ERROR, EXIT_NO_INSPECTOR, EXIT_PATH};
+use tpt_app_media_qc_report::ReportTemplate;
 
 /// Configuration for a watch-folder session (spec § 13 example).
 pub struct WatchConfig {
@@ -203,7 +204,15 @@ fn process_one(
     if let Some(rd) = &config.report {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("asset");
         let name = format!("{stem}-{}.json", &run.asset.fingerprint.sha256[..16]);
-        if let Err(e) = write_reports(&run, profile, Some(&rd.join(name)), None, None, None) {
+        if let Err(e) = write_reports(
+            &run,
+            profile,
+            Some(&rd.join(name)),
+            None,
+            None,
+            None,
+            ReportTemplate::default(),
+        ) {
             eprintln!(
                 "watch: could not write report for '{}': {e}",
                 path.display()

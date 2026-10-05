@@ -156,12 +156,15 @@ fn main() {
         render_html(
             &html_path,
             &report_for(),
-            WriteHtmlOptions { embed_json: true },
+            WriteHtmlOptions {
+                embed_json: true,
+                ..Default::default()
+            },
         )
         .unwrap();
     }));
     results.push(bench("report_render_pdf", 20, 7, 0, || {
-        render_pdf(&pdf_path, &report_for(), WritePdfOptions {}).unwrap();
+        render_pdf(&pdf_path, &report_for(), WritePdfOptions::default()).unwrap();
     }));
     let _ = write_json_report(&json_path, &report_for());
 

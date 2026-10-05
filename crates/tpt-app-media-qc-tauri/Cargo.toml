@@ -7,6 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+readme = "README.md"
+keywords = ["media", "qc", "desktop", "tauri", "offline"]
+categories = ["gui", "multimedia"]
 
 [lib]
 name = "tpt_app_media_qc_tauri"

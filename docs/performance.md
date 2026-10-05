@@ -53,8 +53,10 @@ fixtures. It measures:
 
 Throughput numbers are recorded in the repository when representative
 fixtures exist. The pinned Kinetix and Cadence adapters are integrated and
-covered by encoded/generated media tests; HD/UHD media benchmarks and
-peak-RSS measurements remain follow-up work.
+covered by encoded/generated media tests. AV1 HD/UHD decode + analysis
+throughput is measured by the `decode_bench` example (see
+`tests/performance/baseline.md`); VP9 was measured with libvpx-encoded clips; real masters (pass a
+file to `decode_bench`) and peak-RSS measurements remain follow-up work.
 
 ## 4. Concurrency model
 

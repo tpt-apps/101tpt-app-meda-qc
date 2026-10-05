@@ -90,9 +90,25 @@ fn clean_fixture_renders_every_report_format() {
     let pdf_path = directory.path().join("report.pdf");
 
     write_json_report(&json_path, &report).expect("json export");
-    render_html(&html_path, &report, WriteHtmlOptions { embed_json: true }).expect("html export");
-    write_csv(&csv_path, &report, WriteCsvOptions { header: true }).expect("csv export");
-    render_pdf(&pdf_path, &report, WritePdfOptions {}).expect("pdf export");
+    render_html(
+        &html_path,
+        &report,
+        WriteHtmlOptions {
+            embed_json: true,
+            ..Default::default()
+        },
+    )
+    .expect("html export");
+    write_csv(
+        &csv_path,
+        &report,
+        WriteCsvOptions {
+            header: true,
+            ..Default::default()
+        },
+    )
+    .expect("csv export");
+    render_pdf(&pdf_path, &report, WritePdfOptions::default()).expect("pdf export");
 
     // Every renderer must have produced non-empty output.
     for path in [&json_path, &html_path, &csv_path, &pdf_path] {
