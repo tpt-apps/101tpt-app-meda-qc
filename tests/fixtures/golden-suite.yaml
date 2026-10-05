@@ -76,6 +76,17 @@ rules:
       max_pixels: 0
       max_clusters: 0
       severity: error
+    blockiness:
+      max_ratio: 1.6
+      max_frame_ratio: 3.0
+      severity: error
+    blur:
+      min_sharpness: 0.004
+      severity: error
+    noise:
+      max_sigma: 2.0
+      min_evidence_share: 1.0
+      severity: error
 
   audio:
     sample_rate:

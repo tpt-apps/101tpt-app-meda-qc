@@ -150,6 +150,35 @@ Measurement implementation notes:
   `resolution_limited`, which a profile can treat as `Inconclusive`). Only the
   decoded picture is examined — defects already baked into the source file are
   indistinguishable from genuine sensor defects after encoding.
+- Perceptual metrics (`video.blockiness`, `video.blur`, `video.noise`, spec § 8.4)
+  are **no-reference**: all three come from the decoded luma plane with no source
+  or reference frame.
+  - *Blockiness* is the classic Wang/Bovik ratio — mean gradient **across**
+    8-pixel transform-block boundaries ÷ mean gradient **inside** blocks, taken
+    horizontally and vertically and averaged. ~1.0 means block structure is
+    indistinguishable from picture detail. Frames whose mean interior gradient
+    is below 0.5 codes carry no evidence and are excluded; `min_evidence_share`
+    then decides whether the remaining frames justify a verdict, so flat content
+    reports `Inconclusive` rather than a clean pass.
+  - *Blur* is the mean absolute Laplacian normalised by `4 × 255`. It is checked
+    against a **minimum** and is inherently content-dependent: a soft-focus or
+    deliberately shallow-depth-of-field shot is legitimately soft.
+  - *Noise* is the RMS deviation from a 5×5 box-smoothed copy, measured only
+    where that smoothed picture is still flat (3×3 spread ≤ 3 codes). Smoothing
+    first matters: judging flatness on raw pixels would classify a heavily noisy
+    area as "not flat" and under-report exactly the noise an operator needs to
+    see.
+  - Empirically calibrated on AV1 encodes of detailed synthetic content at
+    640×360: blockiness rises 1.41 → 1.43 → 1.54 and sharpness falls
+    0.00486 → 0.00474 → 0.00399 as CRF goes 10 → 28 → 45, confirming the metrics
+    track compression damage rather than scene content. Noise stayed near 1.1
+    codes across the same range, since heavier quantisation smooths noise away.
+  - Limits: the 8-pixel block size assumes 4:2:0 (4:4:4 content is measured on
+    its true structure, which will read differently), only the luma plane is
+    examined, pictures above ~2.5 M cells are box-averaged (at most a factor of
+    four) before measuring, and the remaining §8.4 artefacts — ringing, banding
+    and image corruption — are not yet implemented. No compliance with a
+    published image-quality standard is claimed.
 - Phase and DC-offset thresholds are heuristic defaults (profile-configurable)
   rather than normative requirements.
 - Subtitle cue timing (spec §8.7) comes from packet headers, not a decode pass,
@@ -169,8 +198,8 @@ Measurement implementation notes:
   `Subtitle*Rule`).
 - Measurement fields: `tpt-app-media-qc-model::inspection`
   (`AudioMeasurements`, `HdrMetadata`, `DeadPixelStats`, `SubtitleMeasurements`).
-- Measurement algorithms: `tpt-app-media-qc-decode::deadpixels`, `::pse`,
-  `::loudness` (`crates/tpt-app-media-qc-decode/src/`).
+- Measurement algorithms: `tpt-app-media-qc-decode::deadpixels`, `::perception`,
+  `::pse`, `::loudness` (`crates/tpt-app-media-qc-decode/src/`).
 - Rule evaluation: `tpt-app-media-qc-rules::audio`, `tpt-app-media-qc-rules::video`,
   `tpt-app-media-qc-rules::subtitle`.
 - Bundled example profiles: [`profiles/`](../profiles/).

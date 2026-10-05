@@ -6,16 +6,21 @@
 //! (`black_frames: warning`) or a mapping with a `severity` field plus
 //! rule-specific keys.
 
+use crate::custom::{
+    metric_kind, metric_names, valid_id, CustomOp, CustomOperand, CustomRule, CustomScope,
+    CustomTarget, MetricKind,
+};
 use crate::model::{
     default_aspect_tolerance, default_frame_rate_tolerance, default_max_streams, default_min_phase,
-    AspectRatioRule, AudioRules, BitDepthRule, ChannelLayoutRule, ColorSpaceRule, ContainerRules,
-    CountThresholdRule, DbThresholdRule, DcOffsetRule, DeadPixelRule, DurationThresholdRule,
-    ExpectValueRule, FieldOrderExpectation, FrameRateRule, HdrMode, HdrRule, LoudnessRule,
-    LoudnessStandard, LumaRangeRule, MinBitrateRule, PhaseRule, PhotosensitivityRule, Policy,
-    Profile, Ratio, Resolution, ResolutionRule, RuleSetConfig, SampleRateRule, ScanExpectation,
-    ScanFormatRule, StreamPresenceRule, SubtitleContentRule, SubtitleDurationRule,
-    SubtitleLanguageRule, SubtitlePresenceRule, SubtitleRules, SubtitleTimingRule,
-    TimestampContinuityRule, ToleranceRule, VideoRules, VoiceRules,
+    AspectRatioRule, AudioRules, BitDepthRule, BlockinessRule, BlurRule, ChannelLayoutRule,
+    ColorSpaceRule, ContainerRules, CountThresholdRule, DbThresholdRule, DcOffsetRule,
+    DeadPixelRule, DurationThresholdRule, ExpectValueRule, FieldOrderExpectation, FrameRateRule,
+    HdrMode, HdrRule, LoudnessRule, LoudnessStandard, LumaRangeRule, MinBitrateRule, NoiseRule,
+    PhaseRule, PhotosensitivityRule, Policy, Profile, Ratio, Resolution, ResolutionRule,
+    RuleSetConfig, SampleRateRule, ScanExpectation, ScanFormatRule, StreamPresenceRule,
+    SubtitleContentRule, SubtitleDurationRule, SubtitleLanguageRule, SubtitlePresenceRule,
+    SubtitleRules, SubtitleTimingRule, TimestampContinuityRule, ToleranceRule, VideoRules,
+    VoiceRules,
 };
 use serde_yaml::{Mapping, Value};
 use tpt_app_media_qc_model::severity::Severity;
@@ -92,7 +97,7 @@ fn parse_value(root: &Value) -> Result<Profile, ProfileError> {
 fn parse_rules(map: &Mapping) -> Result<RuleSetConfig, ProfileError> {
     for k in map.keys() {
         let k = as_key(k);
-        if !["container", "video", "audio", "subtitle", "voice"].contains(&k.as_str()) {
+        if !["container", "video", "audio", "subtitle", "voice", "custom"].contains(&k.as_str()) {
             return Err(err("rules", format!("unknown rule group '{k}'")));
         }
     }
@@ -103,6 +108,7 @@ fn parse_rules(map: &Mapping) -> Result<RuleSetConfig, ProfileError> {
         audio: parse_audio(&mapping_at(map, "audio")?)?,
         subtitle: parse_subtitle(&mapping_at(map, "subtitle")?)?,
         voice: VoiceRules::default(),
+        custom: parse_custom(map.get(Value::String("custom".into())))?,
     })
 }
 
@@ -285,6 +291,9 @@ fn parse_video(map: &Mapping) -> Result<VideoRules, ProfileError> {
             "photosensitivity",
             "hdr",
             "dead_pixels",
+            "blockiness",
+            "blur",
+            "noise",
         ]
         .contains(&k.as_str())
         {
@@ -306,6 +315,9 @@ fn parse_video(map: &Mapping) -> Result<VideoRules, ProfileError> {
         photosensitivity: parse_photosensitivity(map)?,
         hdr: parse_hdr(map)?,
         dead_pixels: parse_dead_pixels(map)?,
+        blockiness: parse_blockiness(map)?,
+        blur: parse_blur(map)?,
+        noise: parse_noise(map)?,
     })
 }
 
@@ -544,6 +556,79 @@ fn parse_dead_pixels(map: &Mapping) -> Result<Option<DeadPixelRule>, ProfileErro
         fail_on_limited_resolution: bool_key(m, "fail_on_limited_resolution")?.unwrap_or(false),
         severity: spec.severity,
     }))
+}
+
+fn parse_blockiness(map: &Mapping) -> Result<Option<BlockinessRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "blockiness") else {
+        return Ok(None);
+    };
+    let path = "rules.video.blockiness";
+    let Some(m) = spec.config else {
+        return Err(err(path, "blockiness rule requires 'max_ratio'"));
+    };
+    reject_unknown_video_keys(
+        m,
+        path,
+        &[
+            "max_ratio",
+            "max_frame_ratio",
+            "min_evidence_share",
+            "severity",
+        ],
+    )?;
+    let share = optional_f64(m, "min_evidence_share", path)?.unwrap_or_else(default_evidence_share);
+    if !(0.0..=1.0).contains(&share) {
+        return Err(err(path, "min_evidence_share must be between 0 and 1"));
+    }
+    Ok(Some(BlockinessRule {
+        max_ratio: required_f64(m, "max_ratio", path)?,
+        max_frame_ratio: optional_f64(m, "max_frame_ratio", path)?,
+        min_evidence_share: share,
+        severity: spec.severity,
+    }))
+}
+
+fn parse_blur(map: &Mapping) -> Result<Option<BlurRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "blur") else {
+        return Ok(None);
+    };
+    let path = "rules.video.blur";
+    let Some(m) = spec.config else {
+        return Err(err(path, "blur rule requires 'min_sharpness'"));
+    };
+    reject_unknown_video_keys(m, path, &["min_sharpness", "severity"])?;
+    Ok(Some(BlurRule {
+        min_sharpness: required_f64(m, "min_sharpness", path)?,
+        severity: spec.severity,
+    }))
+}
+
+fn parse_noise(map: &Mapping) -> Result<Option<NoiseRule>, ProfileError> {
+    let Some(spec) = rule_spec(map, "noise") else {
+        return Ok(None);
+    };
+    let path = "rules.video.noise";
+    let Some(m) = spec.config else {
+        return Err(err(path, "noise rule requires 'max_sigma'"));
+    };
+    reject_unknown_video_keys(m, path, &["max_sigma", "min_evidence_share", "severity"])?;
+    let share = optional_f64(m, "min_evidence_share", path)?.unwrap_or_else(default_full_share);
+    if !(0.0..=1.0).contains(&share) {
+        return Err(err(path, "min_evidence_share must be between 0 and 1"));
+    }
+    Ok(Some(NoiseRule {
+        max_sigma: required_f64(m, "max_sigma", path)?,
+        min_evidence_share: share,
+        severity: spec.severity,
+    }))
+}
+
+fn default_evidence_share() -> f64 {
+    0.5
+}
+
+fn default_full_share() -> f64 {
+    1.0
 }
 
 fn reject_unknown_video_keys(
@@ -1052,6 +1137,208 @@ fn reject_unknown_keys(m: &Mapping, path: &str, allowed: &[&str]) -> Result<(), 
         }
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Custom rules
+// ---------------------------------------------------------------------------
+
+/// Upper bound on user rules per profile, to keep reports and caches sane.
+const MAX_CUSTOM_RULES: usize = 256;
+
+fn parse_custom(v: Option<&Value>) -> Result<Vec<CustomRule>, ProfileError> {
+    let seq = match v {
+        None | Some(Value::Null) => return Ok(Vec::new()),
+        Some(Value::Sequence(s)) => s,
+        Some(other) => {
+            return Err(err(
+                "rules.custom",
+                format!("expected a list of rules, got {}", ty(other)),
+            ))
+        }
+    };
+    if seq.len() > MAX_CUSTOM_RULES {
+        return Err(err(
+            "rules.custom",
+            format!("at most {MAX_CUSTOM_RULES} custom rules are allowed"),
+        ));
+    }
+    let mut rules: Vec<CustomRule> = Vec::with_capacity(seq.len());
+    for (i, item) in seq.iter().enumerate() {
+        let rule = parse_custom_rule(item, &format!("rules.custom[{i}]"))?;
+        if rules.iter().any(|r| r.id == rule.id) {
+            return Err(err(
+                &format!("rules.custom[{i}].id"),
+                format!("duplicate custom rule id '{}'", rule.id),
+            ));
+        }
+        rules.push(rule);
+    }
+    Ok(rules)
+}
+
+fn parse_custom_rule(v: &Value, path: &str) -> Result<CustomRule, ProfileError> {
+    let m = as_mapping(v, path)?;
+    reject_unknown_keys(
+        m,
+        path,
+        &[
+            "id",
+            "scope",
+            "streams",
+            "metric",
+            "op",
+            "value",
+            "tolerance",
+            "severity",
+            "message",
+        ],
+    )?;
+
+    let id = required_string(m, "id", path)?;
+    if !valid_id(&id) {
+        return Err(err(
+            &format!("{path}.id"),
+            format!("'{id}' must look like 'custom.snake_case_name'"),
+        ));
+    }
+
+    let scope_str = required_string(m, "scope", path)?;
+    let scope = CustomScope::parse(&scope_str).ok_or_else(|| {
+        err(
+            &format!("{path}.scope"),
+            format!("unknown scope '{scope_str}' (container, video, audio, subtitle)"),
+        )
+    })?;
+
+    let streams = match optional_string(m, "streams", path)?.as_deref() {
+        None | Some("all") => CustomTarget::All,
+        Some("primary") => CustomTarget::Primary,
+        Some(other) => {
+            return Err(err(
+                &format!("{path}.streams"),
+                format!("unknown stream selection '{other}' (all, primary)"),
+            ))
+        }
+    };
+    if scope == CustomScope::Container && m.contains_key(Value::String("streams".into())) {
+        return Err(err(
+            &format!("{path}.streams"),
+            "'streams' does not apply to container rules",
+        ));
+    }
+
+    let metric = required_string(m, "metric", path)?;
+    let kind = metric_kind(scope, &metric).ok_or_else(|| {
+        err(
+            &format!("{path}.metric"),
+            format!(
+                "unknown {} metric '{metric}' (available: {})",
+                scope.as_str(),
+                metric_names(scope).join(", ")
+            ),
+        )
+    })?;
+
+    let op_str = required_string(m, "op", path)?;
+    let op = CustomOp::parse(&op_str).ok_or_else(|| {
+        err(
+            &format!("{path}.op"),
+            format!("unknown operator '{op_str}' (==, !=, <, <=, >, >=, in, not_in)"),
+        )
+    })?;
+
+    let value_path = format!("{path}.value");
+    let raw = m
+        .get(Value::String("value".into()))
+        .ok_or_else(|| err(path, "missing 'value'"))?;
+    let operands: Vec<CustomOperand> = match raw {
+        Value::Sequence(items) => items
+            .iter()
+            .map(|i| custom_operand(i, &value_path))
+            .collect::<Result<_, _>>()?,
+        scalar => vec![custom_operand(scalar, &value_path)?],
+    };
+    if operands.is_empty() {
+        return Err(err(&value_path, "at least one value is required"));
+    }
+    if !op.is_set() && operands.len() != 1 {
+        return Err(err(
+            &value_path,
+            format!("operator '{}' takes exactly one value", op.symbol()),
+        ));
+    }
+    if op.is_ordering() && kind == MetricKind::Text {
+        return Err(err(
+            &format!("{path}.op"),
+            format!("operator '{}' needs a numeric metric", op.symbol()),
+        ));
+    }
+    for o in &operands {
+        match (kind, o) {
+            (MetricKind::Number, CustomOperand::Text(t)) => {
+                return Err(err(
+                    &value_path,
+                    format!("metric '{metric}' is numeric but value '{t}' is text"),
+                ))
+            }
+            (MetricKind::Text, CustomOperand::Number(n)) => {
+                return Err(err(
+                    &value_path,
+                    format!("metric '{metric}' is text but value {n} is a number; quote it"),
+                ))
+            }
+            _ => {}
+        }
+    }
+
+    let tolerance = optional_f64(m, "tolerance", path)?.unwrap_or(0.0);
+    if !tolerance.is_finite() || tolerance < 0.0 {
+        return Err(err(
+            &format!("{path}.tolerance"),
+            "tolerance must be a non-negative number",
+        ));
+    }
+    if tolerance > 0.0 && (kind == MetricKind::Text || op.is_ordering() || op.is_set()) {
+        return Err(err(
+            &format!("{path}.tolerance"),
+            "tolerance only applies to numeric '==' and '!='",
+        ));
+    }
+
+    let severity = match m.get(Value::String("severity".into())) {
+        Some(v) => severity_from_value(v, &format!("{path}.severity"))?,
+        None => Severity::Error,
+    };
+    let message = optional_string(m, "message", path)?;
+
+    Ok(CustomRule {
+        id,
+        scope,
+        streams,
+        metric,
+        op,
+        value: operands,
+        tolerance,
+        severity,
+        message,
+    })
+}
+
+fn custom_operand(v: &Value, path: &str) -> Result<CustomOperand, ProfileError> {
+    match v {
+        Value::Number(n) => n
+            .as_f64()
+            .filter(|f| f.is_finite())
+            .map(CustomOperand::Number)
+            .ok_or_else(|| err(path, "number is not finite")),
+        Value::String(s) => Ok(CustomOperand::Text(s.clone())),
+        Value::Bool(b) => Ok(CustomOperand::Text(b.to_string())),
+        other => Err(err(
+            path,
+            format!("expected a number or string, got {}", ty(other)),
+        )),
+    }
 }
 
 // ---------------------------------------------------------------------------

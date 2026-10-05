@@ -44,7 +44,9 @@ Rules consume **measurements**, not raw media bytes (spec §3.5). The
   (field order) and HDR/colorimetry signalling (`HdrMetadata`: transfer,
   primaries, matrix, sample range, ST 2086 mastering display, MaxCLL/MaxFALL),
   plus stuck-pixel analysis (`DeadPixelStats`: dead/stuck/flickering cell counts,
-  clustered defect locations and whether coverage was stride-limited).
+  clustered defect locations and whether coverage was stride-limited) and
+  no-reference perceptual metrics (`PerceptualStats`: blockiness ratio and
+  worst frame, sharpness, and flat-area noise with their evidence counts).
 - `AudioMeasurements` — decoded sample-frame coverage, decode errors, bounded
   silence segments and truncation state, clipping events, peak (dBFS), true peak
   (dBTP), integrated loudness (LUFS), loudness range, phase correlation and DC

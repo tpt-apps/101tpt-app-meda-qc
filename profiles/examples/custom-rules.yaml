@@ -1,0 +1,35 @@
+# Example of user-defined rules (`rules.custom`). Each rule compares one
+# metadata metric with a threshold. See docs/profile-format.md.
+name: custom-rules-example
+version: 1
+rules:
+  container:
+    readable: error
+  custom:
+    - id: custom.min_video_bitrate
+      scope: video
+      metric: bitrate
+      op: ">="
+      value: 5000000
+      severity: error
+      message: Delivery requires at least 5 Mb/s video
+    - id: custom.approved_video_codecs
+      scope: video
+      streams: primary
+      metric: codec
+      op: in
+      value: [av1, vp9]
+      severity: warning
+    - id: custom.stereo_audio
+      scope: audio
+      metric: channels
+      op: "=="
+      value: 2
+    - id: custom.max_duration
+      scope: container
+      metric: duration_seconds
+      op: "<="
+      value: 3600
+      severity: warning
+policy:
+  fail_on: error

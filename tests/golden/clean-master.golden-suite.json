@@ -30,6 +30,8 @@
     "subtitle.timing": "pass",
     "video.aspect_ratio": "pass",
     "video.black_frames": "pass",
+    "video.blockiness": "pass",
+    "video.blur": "pass",
     "video.color_space": "pass",
     "video.corrupt_frames": "pass",
     "video.dead_pixels": "pass",
@@ -38,6 +40,7 @@
     "video.freeze_frames": "pass",
     "video.hdr": "pass",
     "video.luma_range": "pass",
+    "video.noise": "pass",
     "video.photosensitivity": "pass",
     "video.resolution": "pass",
     "video.scan_format": "pass"

@@ -14,6 +14,7 @@
 mod audio;
 mod deadpixels;
 mod loudness;
+mod perception;
 mod pse;
 
 pub use audio::{AudioAnalyzerConfig, CadenceAudioInspector};
@@ -593,6 +594,7 @@ pub struct VideoFrameAnalyzer {
     duplicate_ranges: Vec<TimeRange>,
     flash: pse::FlashDetector,
     dead_pixels: deadpixels::DeadPixelDetector,
+    perception: perception::PerceptionAnalyzer,
 }
 
 impl VideoFrameAnalyzer {
@@ -617,6 +619,7 @@ impl VideoFrameAnalyzer {
             duplicate_ranges: Vec::new(),
             flash: pse::FlashDetector::default(),
             dead_pixels: deadpixels::DeadPixelDetector::new(deadpixels::DeadPixelConfig::default()),
+            perception: perception::PerceptionAnalyzer::default(),
         }
     }
 
@@ -654,6 +657,20 @@ impl VideoFrameAnalyzer {
             deadpixels::DeadPixelDetector::reduce(frame.width, frame.height, luma_values(&frame)?)
         {
             self.dead_pixels.push(reduced);
+        }
+        // Perceptual metrics need the same luma plane again, box-averaged down
+        // to the analysis grid. Only worth doing for pictures large enough to
+        // compare block boundaries against block interiors.
+        if frame.width >= 16 && frame.height >= 16 {
+            let stride = perception::analysis_stride(frame.width, frame.height);
+            if let Some(plane) = perception::PerceptionAnalyzer::reduce(
+                frame.width,
+                frame.height,
+                stride,
+                luma_values(&frame)?,
+            ) {
+                self.perception.push(plane);
+            }
         }
         let end_ms = timestamp_ms.saturating_add(duration_ms);
         let mean = luma.stats.mean();
@@ -741,6 +758,7 @@ impl VideoFrameAnalyzer {
             flash: Some(self.flash.finish()),
             hdr: None,
             dead_pixels: self.dead_pixels.finish(),
+            perceptual: self.perception.finish(),
         }
     }
 }

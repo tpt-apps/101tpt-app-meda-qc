@@ -30,6 +30,8 @@
     "subtitle.timing": "fail",
     "video.aspect_ratio": "fail",
     "video.black_frames": "fail",
+    "video.blockiness": "fail",
+    "video.blur": "fail",
     "video.color_space": "fail",
     "video.corrupt_frames": "fail",
     "video.dead_pixels": "fail",
@@ -38,6 +40,7 @@
     "video.freeze_frames": "fail",
     "video.hdr": "fail",
     "video.luma_range": "fail",
+    "video.noise": "fail",
     "video.photosensitivity": "fail",
     "video.resolution": "fail",
     "video.scan_format": "fail"

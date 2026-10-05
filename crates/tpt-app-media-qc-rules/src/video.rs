@@ -11,9 +11,10 @@ use tpt_app_media_qc_model::finding::RuleId;
 use tpt_app_media_qc_model::severity::Severity;
 use tpt_app_media_qc_model::value::Value;
 use tpt_app_media_qc_profile::model::{
-    AspectRatioRule, ColorSpaceRule, CountThresholdRule, DeadPixelRule, DurationThresholdRule,
-    FieldOrderExpectation, FrameRateRule, HdrMode, HdrRule, LumaRangeRule, PhotosensitivityRule,
-    Resolution, ResolutionRule, ScanExpectation, ScanFormatRule, VideoRules,
+    AspectRatioRule, BlockinessRule, BlurRule, ColorSpaceRule, CountThresholdRule, DeadPixelRule,
+    DurationThresholdRule, FieldOrderExpectation, FrameRateRule, HdrMode, HdrRule, LumaRangeRule,
+    NoiseRule, PhotosensitivityRule, Resolution, ResolutionRule, ScanExpectation, ScanFormatRule,
+    VideoRules,
 };
 
 pub const RULE_IDS: &[&str] = &[
@@ -30,6 +31,9 @@ pub const RULE_IDS: &[&str] = &[
     "video.photosensitivity",
     "video.hdr",
     "video.dead_pixels",
+    "video.blockiness",
+    "video.blur",
+    "video.noise",
 ];
 
 pub fn build(profile: &tpt_app_media_qc_profile::model::Profile, out: &mut Vec<Box<dyn QcRule>>) {
@@ -72,6 +76,15 @@ pub fn build(profile: &tpt_app_media_qc_profile::model::Profile, out: &mut Vec<B
     }
     if let Some(cfg) = v.dead_pixels {
         out.push(Box::new(DeadPixelRuleImpl { cfg }));
+    }
+    if let Some(cfg) = v.blockiness {
+        out.push(Box::new(BlockinessRuleImpl { cfg }));
+    }
+    if let Some(cfg) = v.blur {
+        out.push(Box::new(BlurRuleImpl { cfg }));
+    }
+    if let Some(cfg) = v.noise {
+        out.push(Box::new(NoiseRuleImpl { cfg }));
     }
 }
 
@@ -1070,6 +1083,225 @@ impl QcRule for DeadPixelRuleImpl {
 }
 
 // ---------------------------------------------------------------------------
+// blockiness / blur / noise (no-reference perceptual metrics, spec § 8.4)
+// ---------------------------------------------------------------------------
+
+/// Shared preamble: fetch the perceptual measurement or explain why it is absent.
+fn perceptual<'a>(
+    ctx: &'a RuleContext<'_>,
+    id: &RuleId,
+    severity: Severity,
+) -> Result<&'a tpt_app_media_qc_model::inspection::PerceptualStats, RuleResult> {
+    let Some(measurement) = video_measurement(ctx) else {
+        return Err(RuleResult::from_finding(inconclusive(
+            id,
+            severity,
+            "video was not measured (no decoded video data)",
+        )));
+    };
+    let Some(stats) = measurement.perceptual.as_ref() else {
+        return Err(RuleResult::from_finding(inconclusive(
+            id,
+            severity,
+            "perceptual metrics did not run, so this check could not be evaluated",
+        )));
+    };
+    if stats.frames_sampled == 0 {
+        return Err(RuleResult::from_finding(inconclusive(
+            id,
+            severity,
+            "no decoded frames were available to measure",
+        )));
+    }
+    Ok(stats)
+}
+
+/// Share of sampled frames that actually carried usable evidence.
+fn evidence_share(measured_frames: u32, frames_sampled: u64) -> f64 {
+    if frames_sampled == 0 {
+        0.0
+    } else {
+        f64::from(measured_frames) / frames_sampled as f64
+    }
+}
+
+struct BlockinessRuleImpl {
+    cfg: BlockinessRule,
+}
+
+impl QcRule for BlockinessRuleImpl {
+    fn id(&self) -> RuleId {
+        RuleId::new("video.blockiness")
+    }
+    fn description(&self) -> RuleDescription {
+        RuleDescription {
+            name: "Blockiness",
+            summary: "Gradient across transform-block boundaries stays in line with gradient inside blocks.",
+            version: "0.1",
+        }
+    }
+    fn capabilities(&self) -> Capabilities {
+        decode_capabilities()
+    }
+    fn run(&self, ctx: &RuleContext<'_>) -> RuleResult {
+        let id = self.id();
+        let severity = self.cfg.severity;
+        let stats = match perceptual(ctx, &id, severity) {
+            Ok(stats) => stats,
+            Err(result) => return result,
+        };
+        let share = evidence_share(stats.blockiness_frames, stats.frames_sampled);
+        // Flat content legitimately produces no evidence, so a clean ratio over
+        // too few frames is not a pass.
+        if share < self.cfg.min_evidence_share {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                format!(
+                    "only {} of {} decoded frames carried enough picture detail to measure blockiness",
+                    stats.blockiness_frames, stats.frames_sampled
+                ),
+            ));
+        }
+        let Some(ratio) = stats.blockiness else {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                "no frame carried enough picture detail to measure blockiness",
+            ));
+        };
+
+        let mut findings = Vec::new();
+        if ratio > self.cfg.max_ratio {
+            findings.push(fail(
+                &id,
+                severity,
+                format!("block boundary gradient is {ratio:.3}x the gradient inside blocks"),
+                Some(Value::Float(ratio)),
+                Some(Value::Float(self.cfg.max_ratio)),
+            ));
+        }
+        if let Some(limit) = self.cfg.max_frame_ratio {
+            if let Some(worst) = stats.blockiness_max {
+                if worst > limit {
+                    findings.push(fail(
+                        &id,
+                        severity,
+                        format!("worst frame shows blocking at {worst:.3}x"),
+                        Some(Value::Float(worst)),
+                        Some(Value::Float(limit)),
+                    ));
+                }
+            }
+        }
+        RuleResult::findings(findings)
+    }
+}
+
+struct BlurRuleImpl {
+    cfg: BlurRule,
+}
+
+impl QcRule for BlurRuleImpl {
+    fn id(&self) -> RuleId {
+        RuleId::new("video.blur")
+    }
+    fn description(&self) -> RuleDescription {
+        RuleDescription {
+            name: "Blur",
+            summary: "High-frequency detail is present; the picture is not over-smoothed.",
+            version: "0.1",
+        }
+    }
+    fn capabilities(&self) -> Capabilities {
+        decode_capabilities()
+    }
+    fn run(&self, ctx: &RuleContext<'_>) -> RuleResult {
+        let id = self.id();
+        let severity = self.cfg.severity;
+        let stats = match perceptual(ctx, &id, severity) {
+            Ok(stats) => stats,
+            Err(result) => return result,
+        };
+        let Some(sharpness) = stats.blur else {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                "picture sharpness could not be measured",
+            ));
+        };
+        if sharpness < self.cfg.min_sharpness {
+            return RuleResult::from_finding(fail(
+                &id,
+                severity,
+                format!(
+                    "picture is soft: sharpness {sharpness:.5} is below the configured minimum"
+                ),
+                Some(Value::Float(sharpness)),
+                Some(Value::Float(self.cfg.min_sharpness)),
+            ));
+        }
+        RuleResult::pass()
+    }
+}
+
+struct NoiseRuleImpl {
+    cfg: NoiseRule,
+}
+
+impl QcRule for NoiseRuleImpl {
+    fn id(&self) -> RuleId {
+        RuleId::new("video.noise")
+    }
+    fn description(&self) -> RuleDescription {
+        RuleDescription {
+            name: "Noise",
+            summary: "Flat areas are clean: luma variation is within the configured limit.",
+            version: "0.1",
+        }
+    }
+    fn capabilities(&self) -> Capabilities {
+        decode_capabilities()
+    }
+    fn run(&self, ctx: &RuleContext<'_>) -> RuleResult {
+        let id = self.id();
+        let severity = self.cfg.severity;
+        let stats = match perceptual(ctx, &id, severity) {
+            Ok(stats) => stats,
+            Err(result) => return result,
+        };
+        let share = evidence_share(stats.flat_frames, stats.frames_sampled);
+        if share < self.cfg.min_evidence_share {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                format!(
+                    "only {} of {} decoded frames had enough flat area to estimate noise",
+                    stats.flat_frames, stats.frames_sampled
+                ),
+            ));
+        }
+        let Some(sigma) = stats.noise else {
+            return RuleResult::from_finding(inconclusive(
+                &id,
+                severity,
+                "noise could not be estimated: no flat area in the picture",
+            ));
+        };
+        if sigma > self.cfg.max_sigma {
+            return RuleResult::from_finding(fail(
+                &id,
+                severity,
+                format!("flat areas show {sigma:.2} luma codes of noise"),
+                Some(Value::Float(sigma)),
+                Some(Value::Float(self.cfg.max_sigma)),
+            ));
+        }
+        RuleResult::pass()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // photosensitivity (general flash)
 // ---------------------------------------------------------------------------
 
@@ -1191,7 +1423,7 @@ mod tests {
     use tpt_app_media_qc_model::finding::TimeRange;
     use tpt_app_media_qc_model::inspection::{
         DeadPixelCluster, DeadPixelKind, DeadPixelStats, HdrMetadata, Inspection, LumaStats,
-        VideoMeasurements,
+        PerceptualStats, VideoMeasurements,
     };
     use tpt_app_media_qc_model::severity::VerdictDecision;
     use tpt_app_media_qc_profile::model::Ratio;
@@ -1787,5 +2019,168 @@ mod tests {
         };
         let result = dead_pixel_rule(default_dead_pixel_cfg()).run(&dead_pixel_ctx(Some(stats)));
         assert_eq!(result.findings[0].status, VerdictDecision::Inconclusive);
+    }
+
+    fn perceptual_ctx(stats: Option<PerceptualStats>) -> RuleContext<'static> {
+        let mut m = measurement();
+        m.decoded_frame_count = Some(200);
+        m.perceptual = stats;
+        ctx_with(vec![m])
+    }
+
+    fn clean_perceptual() -> PerceptualStats {
+        PerceptualStats {
+            frames_sampled: 200,
+            blockiness: Some(1.1),
+            blockiness_max: Some(1.3),
+            blockiness_frames: 200,
+            blur: Some(0.02),
+            noise: Some(0.5),
+            flat_frames: 200,
+            resolution_limited: false,
+        }
+    }
+
+    fn blockiness_rule() -> BlockinessRuleImpl {
+        BlockinessRuleImpl {
+            cfg: BlockinessRule {
+                max_ratio: 1.6,
+                max_frame_ratio: Some(3.0),
+                min_evidence_share: 0.5,
+                severity: Severity::Warning,
+            },
+        }
+    }
+
+    fn blur_rule() -> BlurRuleImpl {
+        BlurRuleImpl {
+            cfg: BlurRule {
+                min_sharpness: 0.004,
+                severity: Severity::Warning,
+            },
+        }
+    }
+
+    fn noise_rule() -> NoiseRuleImpl {
+        NoiseRuleImpl {
+            cfg: NoiseRule {
+                max_sigma: 2.0,
+                min_evidence_share: 1.0,
+                severity: Severity::Warning,
+            },
+        }
+    }
+
+    #[test]
+    fn clean_perceptual_metrics_pass_every_rule() {
+        let ctx = perceptual_ctx(Some(clean_perceptual()));
+        for rule in [
+            &blockiness_rule() as &dyn QcRule,
+            &blur_rule(),
+            &noise_rule(),
+        ] {
+            let msgs = fail_messages(&rule.run(&ctx));
+            assert!(msgs.is_empty(), "{}: {msgs:?}", rule.id());
+        }
+    }
+
+    #[test]
+    fn perceptual_rules_are_inconclusive_without_a_decode() {
+        for rule in [
+            &blockiness_rule() as &dyn QcRule,
+            &blur_rule(),
+            &noise_rule(),
+        ] {
+            let result = rule.run(&perceptual_ctx(None));
+            assert_eq!(result.findings[0].status, VerdictDecision::Inconclusive);
+        }
+    }
+
+    #[test]
+    fn blockiness_over_the_limit_fails_with_measured_and_expected() {
+        let stats = PerceptualStats {
+            blockiness: Some(2.4),
+            ..clean_perceptual()
+        };
+        let messages = fail_messages(&blockiness_rule().run(&perceptual_ctx(Some(stats))));
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        assert!(messages[0].contains("2.400x"), "{messages:?}");
+    }
+
+    #[test]
+    fn blockiness_worst_frame_limit_fires_even_when_the_mean_passes() {
+        let stats = PerceptualStats {
+            blockiness: Some(1.2),
+            blockiness_max: Some(5.5),
+            ..clean_perceptual()
+        };
+        let messages = fail_messages(&blockiness_rule().run(&perceptual_ctx(Some(stats))));
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        assert!(messages[0].contains("worst frame"), "{messages:?}");
+    }
+
+    #[test]
+    fn blockiness_needs_enough_evidence_before_reporting_a_pass() {
+        // Flat content: only 4 of 200 frames carried picture detail.
+        let stats = PerceptualStats {
+            blockiness: Some(1.0),
+            blockiness_max: Some(1.0),
+            blockiness_frames: 4,
+            ..clean_perceptual()
+        };
+        let result = blockiness_rule().run(&perceptual_ctx(Some(stats)));
+        assert_eq!(result.findings[0].status, VerdictDecision::Inconclusive);
+        assert!(result.findings[0].message.contains("enough picture detail"));
+    }
+
+    #[test]
+    fn blur_below_the_minimum_fails() {
+        let stats = PerceptualStats {
+            blur: Some(0.001),
+            ..clean_perceptual()
+        };
+        let messages = fail_messages(&blur_rule().run(&perceptual_ctx(Some(stats))));
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        assert!(messages[0].contains("picture is soft"), "{messages:?}");
+    }
+
+    #[test]
+    fn noise_over_the_limit_fails() {
+        let stats = PerceptualStats {
+            noise: Some(7.5),
+            ..clean_perceptual()
+        };
+        let messages = fail_messages(&noise_rule().run(&perceptual_ctx(Some(stats))));
+        assert_eq!(messages.len(), 1, "{messages:?}");
+        assert!(messages[0].contains("7.50 luma codes"), "{messages:?}");
+    }
+
+    #[test]
+    fn noise_needs_flat_area_before_reporting_a_pass() {
+        let stats = PerceptualStats {
+            noise: Some(0.2),
+            flat_frames: 10,
+            ..clean_perceptual()
+        };
+        let result = noise_rule().run(&perceptual_ctx(Some(stats)));
+        assert_eq!(result.findings[0].status, VerdictDecision::Inconclusive);
+        assert!(result.findings[0].message.contains("flat area"));
+    }
+
+    #[test]
+    fn an_analysis_that_saw_no_frames_is_inconclusive_for_all_three() {
+        let stats = PerceptualStats {
+            frames_sampled: 0,
+            ..clean_perceptual()
+        };
+        let ctx = perceptual_ctx(Some(stats));
+        for rule in [
+            &blockiness_rule() as &dyn QcRule,
+            &blur_rule(),
+            &noise_rule(),
+        ] {
+            let result = rule.run(&ctx);
+            assert_eq!(result.findings[0].status, VerdictDecision::Inconclusive);
+        }
     }
 }

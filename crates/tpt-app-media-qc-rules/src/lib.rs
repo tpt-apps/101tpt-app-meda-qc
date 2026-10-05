@@ -12,6 +12,7 @@
 
 mod audio;
 mod container;
+mod custom;
 mod subtitle;
 #[cfg(test)]
 mod testutil;
@@ -38,6 +39,7 @@ pub fn build_rules(profile: &tpt_app_media_qc_profile::model::Profile) -> Vec<Bo
     video::build(profile, &mut rules);
     audio::build(profile, &mut rules);
     subtitle::build(profile, &mut rules);
+    custom::build(profile, &mut rules);
     rules
 }
 

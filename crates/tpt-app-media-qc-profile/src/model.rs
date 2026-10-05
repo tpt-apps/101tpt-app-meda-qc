@@ -37,6 +37,9 @@ pub struct RuleSetConfig {
     pub audio: AudioRules,
     pub subtitle: SubtitleRules,
     pub voice: VoiceRules,
+    /// User-defined declarative rules (`rules.custom`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub custom: Vec<crate::custom::CustomRule>,
 }
 
 // ---------------------------------------------------------------------------
@@ -140,6 +143,55 @@ pub struct VideoRules {
     pub photosensitivity: Option<PhotosensitivityRule>,
     pub hdr: Option<HdrRule>,
     pub dead_pixels: Option<DeadPixelRule>,
+    pub blockiness: Option<BlockinessRule>,
+    pub blur: Option<BlurRule>,
+    pub noise: Option<NoiseRule>,
+}
+
+/// Visible transform-block structure ([spec § 8.4]).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BlockinessRule {
+    /// Highest acceptable mean boundary-to-interior gradient ratio.
+    pub max_ratio: f64,
+    /// Highest acceptable worst-frame ratio, for localised blocking.
+    #[serde(default)]
+    pub max_frame_ratio: Option<f64>,
+    /// Minimum share of frames that must carry evidence (`0.0`–`1.0`).
+    /// Flat content legitimately produces no evidence; below this the rule
+    /// reports `Inconclusive` rather than a clean pass.
+    #[serde(default = "default_evidence_share")]
+    pub min_evidence_share: f64,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+/// Over-smoothed / under-sharp content ([spec § 8.4]).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BlurRule {
+    /// Lowest acceptable mean absolute Laplacian (normalised ~0..1).
+    pub min_sharpness: f64,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+/// Noise and dirt in flat areas ([spec § 8.4]).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct NoiseRule {
+    /// Highest acceptable luma standard deviation, in codes.
+    pub max_sigma: f64,
+    /// Minimum share of frames with enough flat area to measure.
+    #[serde(default = "default_full_share")]
+    pub min_evidence_share: f64,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+fn default_evidence_share() -> f64 {
+    0.5
+}
+
+fn default_full_share() -> f64 {
+    1.0
 }
 
 /// Stuck/dead/flickering pixel limits ([spec § 8.4]).

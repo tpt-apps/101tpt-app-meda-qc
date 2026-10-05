@@ -53,6 +53,7 @@
         "flash": { "transitions_ms": [[30000, 30100, 30200, 30300, 30400, 30500, 30600, 30700], [50000, 50100]] },
         "hdr": { "transfer": "smpte2084", "primaries": "bt2020", "matrix": "bt2020nc", "range": "tv", "max_cll": 1000, "max_fall": 1200 },
         "dead_pixels": { "frames_sampled": 250, "cells_examined": 1920, "resolution_limited": false, "dark_cells": 4, "bright_cells": 1, "flicker_cells": 2, "clusters": [ { "x": 400, "y": 300, "width": 2, "height": 2, "cells": 2, "kind": "dead" }, { "x": 900, "y": 700, "width": 1, "height": 1, "cells": 1, "kind": "dead" }, { "x": 120, "y": 950, "width": 1, "height": 1, "cells": 1, "kind": "stuck" }, { "x": 1500, "y": 500, "width": 2, "height": 1, "cells": 2, "kind": "flicker" } ] },
+        "perceptual": { "frames_sampled": 250, "blockiness": 2.35, "blockiness_max": 6.2, "blockiness_frames": 250, "blur": 0.0011, "noise": 8.4, "flat_frames": 250, "resolution_limited": false },
         "frame_rate_observed": "24000/1001",
         "decode_errors": 7,
         "black_frames": [{ "start_ms": 3000, "end_ms": 6000 }],

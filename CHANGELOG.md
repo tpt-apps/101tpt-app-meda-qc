@@ -60,6 +60,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stride-samples above that. Luma-only heuristics — no chroma/subpixel defect
   detection and no claim of compliance with a published standard.
 
+- Perceptual image-quality metrics (spec § 8.4): three new no-reference rules —
+  `video.blockiness`, `video.blur` and `video.noise` — measured over decoded
+  AV1/VP9 frames and recorded in `PerceptualStats`. Blockiness is the classic
+  boundary-to-interior gradient ratio at 8-pixel transform blocks; frames too
+  flat to carry evidence are excluded and `min_evidence_share` decides whether a
+  verdict is justified, so flat content reports `Inconclusive` rather than a
+  clean pass. Blur is normalised mean absolute Laplacian against a minimum, and
+  noise is the RMS deviation in flat regions — measured against a *smoothed*
+  copy so heavily noisy areas are not mistaken for detail and under-reported.
+  Calibrated against AV1 encodes at CRF 10/28/45, where blockiness rises
+  1.41 → 1.54 and sharpness falls 0.00486 → 0.00399, confirming the metrics track
+  compression damage. Pictures above ~2.5 M cells are box-averaged before
+  measuring. Luma-only; ringing, banding and image corruption remain
+  unimplemented and no compliance with a published standard is claimed.
+
 - Cargo workspace with the crates `core`, `model`, `rules`, `pipeline`,
   `profile`, `report`, `cli`, `tauri` and `test`.
 - Content-based asset fingerprinting (SHA-256), independent of file path.

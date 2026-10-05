@@ -30,6 +30,8 @@
     "subtitle.timing": "inconclusive",
     "video.aspect_ratio": "pass",
     "video.black_frames": "pass",
+    "video.blockiness": "inconclusive",
+    "video.blur": "inconclusive",
     "video.color_space": "inconclusive",
     "video.corrupt_frames": "pass",
     "video.dead_pixels": "inconclusive",
@@ -38,6 +40,7 @@
     "video.freeze_frames": "pass",
     "video.hdr": "pass",
     "video.luma_range": "inconclusive",
+    "video.noise": "inconclusive",
     "video.photosensitivity": "pass",
     "video.resolution": "pass",
     "video.scan_format": "pass"

@@ -114,6 +114,36 @@ pub struct VideoMeasurements {
     /// decode pass did not run dead-pixel analysis.
     #[serde(default)]
     pub dead_pixels: Option<DeadPixelStats>,
+    /// No-reference perceptual metrics: blockiness, blur and noise
+    /// ([spec § 8.4]). `None` when the decode pass did not measure them.
+    #[serde(default)]
+    pub perceptual: Option<PerceptualStats>,
+}
+
+/// No-reference perceptual image-quality metrics ([spec § 8.4]).
+///
+/// Every field is `None` when the metric could not be measured for the content —
+/// for example blockiness needs frames that are not essentially flat, and noise
+/// needs enough flat area — so rules can report `Inconclusive` instead of
+/// guessing.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PerceptualStats {
+    pub frames_sampled: u64,
+    /// Mean gradient-across-block-boundaries ÷ gradient-inside-blocks ratio.
+    /// ~1.0 means block structure is indistinguishable from picture detail.
+    pub blockiness: Option<f64>,
+    /// Worst single-frame blockiness ratio, for localised blocking.
+    pub blockiness_max: Option<f64>,
+    /// Frames that contributed to `blockiness` (the rest were too flat).
+    pub blockiness_frames: u32,
+    /// Mean absolute Laplacian, normalised ~0..1. Falls as content blurs.
+    pub blur: Option<f64>,
+    /// Luma standard deviation across flat regions, in codes.
+    pub noise: Option<f64>,
+    /// Frames that contributed to `noise`.
+    pub flat_frames: u32,
+    /// True when the picture was reduced before measuring.
+    pub resolution_limited: bool,
 }
 
 /// A run of pixels that stayed at an extreme value while the rest of the

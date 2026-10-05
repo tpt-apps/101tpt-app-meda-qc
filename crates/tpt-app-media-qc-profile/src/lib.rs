@@ -5,18 +5,20 @@
 //! canonical YAML serialization of this model is what gets hashed for profile
 //! integrity and cache keys ([spec § 14.1], [spec § 19]).
 
+pub mod custom;
 pub mod hash;
 pub mod model;
 pub mod parse;
 
+pub use custom::{CustomOp, CustomOperand, CustomRule, CustomScope, CustomTarget};
 pub use hash::{per_rule_config_hash, profile_sha256};
 pub use model::{
-    AudioRules, ChannelLayoutRule, ContainerRules, CountThresholdRule, DbThresholdRule,
-    DeadPixelRule, DurationThresholdRule, ExpectValueRule, FrameRateRule, LoudnessRule,
-    LoudnessStandard, MinBitrateRule, Policy, Profile, Resolution, ResolutionRule, RuleSetConfig,
-    SubtitleContentRule, SubtitleDurationRule, SubtitleLanguageRule, SubtitlePresenceRule,
-    SubtitleRules, SubtitleTimingRule, TimestampContinuityRule, ToleranceRule, VideoRules,
-    VoiceRules,
+    AudioRules, BlockinessRule, BlurRule, ChannelLayoutRule, ContainerRules, CountThresholdRule,
+    DbThresholdRule, DeadPixelRule, DurationThresholdRule, ExpectValueRule, FrameRateRule,
+    LoudnessRule, LoudnessStandard, MinBitrateRule, NoiseRule, Policy, Profile, Resolution,
+    ResolutionRule, RuleSetConfig, SubtitleContentRule, SubtitleDurationRule, SubtitleLanguageRule,
+    SubtitlePresenceRule, SubtitleRules, SubtitleTimingRule, TimestampContinuityRule,
+    ToleranceRule, VideoRules, VoiceRules,
 };
 pub use parse::{parse_str, ProfileError};
 

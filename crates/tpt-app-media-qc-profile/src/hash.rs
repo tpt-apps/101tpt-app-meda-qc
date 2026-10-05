@@ -67,6 +67,9 @@ pub fn per_rule_config_hash(profile: &Profile, rule_id: &str) -> Option<String> 
         "video.photosensitivity" => hash(&v.photosensitivity),
         "video.hdr" => hash(&v.hdr),
         "video.dead_pixels" => hash(&v.dead_pixels),
+        "video.blockiness" => hash(&v.blockiness),
+        "video.blur" => hash(&v.blur),
+        "video.noise" => hash(&v.noise),
         "audio.sample_rate" => hash(&a.sample_rate),
         "audio.bit_depth" => hash(&a.bit_depth),
         "audio.channel_layout" => hash(&a.channel_layout),
@@ -82,6 +85,12 @@ pub fn per_rule_config_hash(profile: &Profile, rule_id: &str) -> Option<String> 
         "subtitle.timing" => hash(&s.timing),
         "subtitle.content" => hash(&s.content),
         "subtitle.duration_match" => hash(&s.duration_match),
+        custom if custom.starts_with("custom.") => profile
+            .rules
+            .custom
+            .iter()
+            .find(|r| r.id == custom)
+            .and_then(|r| hash(&Some(r))),
         _ => None,
     }
 }

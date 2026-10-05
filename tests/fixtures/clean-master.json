@@ -53,6 +53,7 @@
         "flash": { "transitions_ms": [[], []] },
         "hdr": { "transfer": "bt709", "primaries": "bt709", "matrix": "bt709", "range": "tv" },
         "dead_pixels": { "frames_sampled": 250, "cells_examined": 1920, "resolution_limited": false, "dark_cells": 0, "bright_cells": 0, "flicker_cells": 0, "clusters": [] },
+        "perceptual": { "frames_sampled": 250, "blockiness": 1.41, "blockiness_max": 1.9, "blockiness_frames": 250, "blur": 0.0086, "noise": 1.1, "flat_frames": 250, "resolution_limited": false },
         "frame_rate_observed": "25/1",
         "decode_errors": 0,
         "black_frames": [],

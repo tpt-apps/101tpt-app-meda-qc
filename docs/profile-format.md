@@ -83,6 +83,23 @@ Severities are `info`, `warning`, `error`, `critical`.
 | `photosensitivity` | mapping | `max_flashes_per_second` (default 3). Harding/BT.1702-style: per-pixel opposing luminance transitions (≥ 0.1, darker state < 0.8) over ≥ 25 % of the 10° field, plus a saturated-red test; general and red flashes judged separately; needs full decode (AV1/VP9) |
 | `hdr` | mapping / scalar | `mode` (required): `sdr`, `hdr10` (or `pq`), `hlg` or `hdr` (either PQ or HLG); `require_static_metadata` (default `true` — ST 2086 mastering display and MaxCLL/MaxFALL for PQ); `max_cll_nits`, `max_fall_nits` ceilings. Metadata-driven: also checks BT.2020 primaries/matrix, limited range and ≥ 10-bit depth for HDR, and MaxFALL ≤ MaxCLL always. Unsignalled transfer is `Inconclusive`; light levels are read from static metadata, not measured from pixels |
 | `dead_pixels` | mapping / scalar | `max_pixels` (default 0), `max_clusters` (default 0), `include_flicker` (default `true`), `fail_on_limited_resolution` (default `false`). Needs full decode (AV1/VP9). Flagged pixels are clustered and the largest cluster's position and size are attached to the finding |
+| `blockiness` | mapping | `max_ratio` (required — highest acceptable boundary-to-interior gradient ratio), `max_frame_ratio`, `min_evidence_share` (default 0.5). Needs full decode. Reports `Inconclusive` when too few frames carried picture detail to measure |
+| `blur` | mapping | `min_sharpness` (required — lowest acceptable normalised mean absolute Laplacian). Needs full decode. Content-dependent: a deliberately soft-focus delivery needs a lower minimum |
+| `noise` | mapping | `max_sigma` (required — highest acceptable luma codes of noise in flat areas), `min_evidence_share` (default 1.0). Needs full decode. Reports `Inconclusive` when the picture has too little flat area |
+
+```yaml
+video:
+  blockiness:
+    max_ratio: 1.6        # clean 1080p AV1 of detailed content measures ~1.41
+    max_frame_ratio: 3.0  # catches localised blocking the mean would hide
+    severity: warning
+  blur:
+    min_sharpness: 0.004
+    severity: warning
+  noise:
+    max_sigma: 2.0        # a clean AV1 encode measures ~1.1
+    severity: warning
+```
 
 ## 5. Audio rules (spec §8.5, §8.6)
 
