@@ -54,6 +54,22 @@ const BUNDLED_PROFILES: &[(&str, &str)] = &[
         "streaming-hdr10",
         include_str!("../../../profiles/streaming/hdr10.yaml"),
     ),
+    (
+        "broadcast-uk-hd",
+        include_str!("../../../profiles/broadcast/uk-hd-file-delivery.yaml"),
+    ),
+    (
+        "streaming-ott-premium",
+        include_str!("../../../profiles/streaming/ott-premium.yaml"),
+    ),
+    (
+        "streaming-online-upload",
+        include_str!("../../../profiles/streaming/online-video-upload.yaml"),
+    ),
+    (
+        "streaming-podcast-voice",
+        include_str!("../../../profiles/streaming/podcast-voice.yaml"),
+    ),
 ];
 
 const MAX_IMPORT_FILES: usize = 10_000;

@@ -17,10 +17,11 @@ use crate::model::{
     DeadPixelRule, DurationThresholdRule, ExpectValueRule, FieldOrderExpectation, FrameRateRule,
     HdrMode, HdrRule, LoudnessRule, LoudnessStandard, LumaRangeRule, MinBitrateRule, NoiseRule,
     PhaseRule, PhotosensitivityRule, Policy, Profile, Ratio, Resolution, ResolutionRule,
-    RuleSetConfig, SampleRateRule, ScanExpectation, ScanFormatRule, StreamPresenceRule,
-    SubtitleContentRule, SubtitleDurationRule, SubtitleLanguageRule, SubtitlePresenceRule,
-    SubtitleRules, SubtitleTimingRule, TimestampContinuityRule, ToleranceRule, VideoRules,
-    VoiceRules,
+    RuleSetConfig, SampleRateRule, ScanExpectation, ScanFormatRule, SpeakerChangeRule,
+    SpeakerCountRule, SpeechExpectation, SpeechRule, StreamPresenceRule, SubtitleContentRule,
+    SubtitleDurationRule, SubtitleLanguageRule, SubtitlePresenceRule, SubtitleRules,
+    SubtitleTimingRule, TimestampContinuityRule, ToleranceRule, TranscriptRule, VideoRules,
+    VoiceRules, VoiceSilenceRule,
 };
 use serde_yaml::{Mapping, Value};
 use tpt_app_media_qc_model::severity::Severity;
@@ -107,7 +108,7 @@ fn parse_rules(map: &Mapping) -> Result<RuleSetConfig, ProfileError> {
         video: parse_video(&mapping_at(map, "video")?)?,
         audio: parse_audio(&mapping_at(map, "audio")?)?,
         subtitle: parse_subtitle(&mapping_at(map, "subtitle")?)?,
-        voice: VoiceRules::default(),
+        voice: parse_voice(&mapping_at(map, "voice")?)?,
         custom: parse_custom(map.get(Value::String("custom".into())))?,
     })
 }
@@ -1137,6 +1138,149 @@ fn reject_unknown_keys(m: &Mapping, path: &str, allowed: &[&str]) -> Result<(), 
         }
     }
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Voice (optional, probabilistic - spec 8.8)
+// ---------------------------------------------------------------------------
+
+fn parse_voice(map: &Mapping) -> Result<VoiceRules, ProfileError> {
+    reject_unknown_keys(
+        map,
+        "rules.voice",
+        &[
+            "speech",
+            "silence",
+            "speakers",
+            "speaker_changes",
+            "transcript",
+        ],
+    )?;
+    Ok(VoiceRules {
+        speech: parse_speech(map)?,
+        silence: parse_voice_silence(map)?,
+        speakers: parse_speakers(map)?,
+        speaker_changes: parse_speaker_changes(map)?,
+        transcript: parse_transcript(map)?,
+    })
+}
+
+/// A voice rule has no meaningful scalar form: it needs thresholds.
+fn voice_config<'v>(
+    map: &'v Mapping,
+    name: &str,
+    allowed: &[&str],
+) -> Result<Option<(&'v Mapping, Severity)>, ProfileError> {
+    let Some(spec) = rule_spec(map, name) else {
+        return Ok(None);
+    };
+    let path = format!("rules.voice.{name}");
+    let Some(m) = spec.config else {
+        return Err(err(&path, "expected a mapping with thresholds"));
+    };
+    reject_unknown_keys(m, &path, allowed)?;
+    Ok(Some((m, spec.severity)))
+}
+
+fn parse_speech(map: &Mapping) -> Result<Option<SpeechRule>, ProfileError> {
+    let Some((m, severity)) = voice_config(map, "speech", &["expect", "min_ratio", "severity"])?
+    else {
+        return Ok(None);
+    };
+    let path = "rules.voice.speech";
+    let expect = match required_string(m, "expect", path)?.as_str() {
+        "present" => SpeechExpectation::Present,
+        "absent" => SpeechExpectation::Absent,
+        other => {
+            return Err(err(
+                &format!("{path}.expect"),
+                format!("unknown expectation '{other}' (present, absent)"),
+            ))
+        }
+    };
+    let min_ratio = optional_f64(m, "min_ratio", path)?.unwrap_or(0.05);
+    if !(0.0..=1.0).contains(&min_ratio) {
+        return Err(err(
+            &format!("{path}.min_ratio"),
+            "must be between 0.0 and 1.0",
+        ));
+    }
+    Ok(Some(SpeechRule {
+        expect,
+        min_ratio,
+        severity,
+    }))
+}
+
+fn parse_voice_silence(map: &Mapping) -> Result<Option<VoiceSilenceRule>, ProfileError> {
+    let Some((m, severity)) = voice_config(map, "silence", &["max_non_speech_ms", "severity"])?
+    else {
+        return Ok(None);
+    };
+    Ok(Some(VoiceSilenceRule {
+        max_non_speech_ms: required_u64(m, "max_non_speech_ms", "rules.voice.silence")?,
+        severity,
+    }))
+}
+
+fn parse_speakers(map: &Mapping) -> Result<Option<SpeakerCountRule>, ProfileError> {
+    let Some((m, severity)) = voice_config(map, "speakers", &["min", "max", "severity"])? else {
+        return Ok(None);
+    };
+    let path = "rules.voice.speakers";
+    let min = optional_u64(m, "min", path)?.map(|v| v as u32);
+    let max = optional_u64(m, "max", path)?.map(|v| v as u32);
+    if min.is_none() && max.is_none() {
+        return Err(err(path, "set at least one of 'min' or 'max'"));
+    }
+    if matches!((min, max), (Some(lo), Some(hi)) if lo > hi) {
+        return Err(err(path, "'min' must not exceed 'max'"));
+    }
+    Ok(Some(SpeakerCountRule { min, max, severity }))
+}
+
+fn parse_speaker_changes(map: &Mapping) -> Result<Option<SpeakerChangeRule>, ProfileError> {
+    let Some((m, severity)) =
+        voice_config(map, "speaker_changes", &["max_per_minute", "severity"])?
+    else {
+        return Ok(None);
+    };
+    let path = "rules.voice.speaker_changes";
+    let max_per_minute = required_f64(m, "max_per_minute", path)?;
+    if !max_per_minute.is_finite() || max_per_minute < 0.0 {
+        return Err(err(
+            &format!("{path}.max_per_minute"),
+            "must be a non-negative number",
+        ));
+    }
+    Ok(Some(SpeakerChangeRule {
+        max_per_minute,
+        severity,
+    }))
+}
+
+fn parse_transcript(map: &Mapping) -> Result<Option<TranscriptRule>, ProfileError> {
+    let Some((m, severity)) = voice_config(
+        map,
+        "transcript",
+        &["max_wer", "max_unexpected_words", "severity"],
+    )?
+    else {
+        return Ok(None);
+    };
+    let path = "rules.voice.transcript";
+    let max_wer = required_f64(m, "max_wer", path)?;
+    if !max_wer.is_finite() || max_wer < 0.0 {
+        return Err(err(
+            &format!("{path}.max_wer"),
+            "must be a non-negative number",
+        ));
+    }
+    Ok(Some(TranscriptRule {
+        max_wer,
+        max_unexpected_words: optional_u64(m, "max_unexpected_words", path)?.unwrap_or(0),
+        severity,
+    }))
 }
 
 // ---------------------------------------------------------------------------

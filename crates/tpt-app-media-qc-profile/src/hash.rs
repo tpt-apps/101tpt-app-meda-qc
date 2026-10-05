@@ -43,6 +43,7 @@ pub fn per_rule_config_hash(profile: &Profile, rule_id: &str) -> Option<String> 
     let v = &profile.rules.video;
     let a = &profile.rules.audio;
     let s = &profile.rules.subtitle;
+    let vo = &profile.rules.voice;
     match rule_id {
         "container.readable" => hash(&c.readable),
         "container.container_validity" => hash(&c.container_validity),
@@ -85,6 +86,11 @@ pub fn per_rule_config_hash(profile: &Profile, rule_id: &str) -> Option<String> 
         "subtitle.timing" => hash(&s.timing),
         "subtitle.content" => hash(&s.content),
         "subtitle.duration_match" => hash(&s.duration_match),
+        "voice.speech" => hash(&vo.speech),
+        "voice.silence" => hash(&vo.silence),
+        "voice.speakers" => hash(&vo.speakers),
+        "voice.speaker_changes" => hash(&vo.speaker_changes),
+        "voice.transcript" => hash(&vo.transcript),
         custom if custom.starts_with("custom.") => profile
             .rules
             .custom

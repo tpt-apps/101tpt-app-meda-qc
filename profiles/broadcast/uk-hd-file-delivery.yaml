@@ -1,0 +1,98 @@
+# UK HD broadcast file-delivery flavour (spec §25, Phase 3 "advanced profiles").
+#
+# Encodes the conventions commonly used for UK HD programme delivery:
+# 1920x1080 at 25 fps, 16:9, 48 kHz audio, EBU R128 -23 LUFS (+/-1 LU) with a
+# -1 dBTP ceiling, no clipping, photosensitive-epilepsy flash screening and a
+# strict container. Interlaced vs. progressive scan varies by commissioner,
+# so scan order is not pinned here.
+#
+# NOTE (spec §25): these are indicative values for a delivery *flavour*. They
+# are not a claim of conformance with any broadcaster technical standard;
+# check the commissioning specification and edit the thresholds to match.
+name: "broadcast-uk-hd"
+version: 1
+description: "UK HD programme file delivery flavour: 1080/25, 16:9, EBU R128 -23 LUFS, -1 dBTP, PSE screening."
+
+rules:
+  container:
+    readable: error
+    container_validity: error
+    malformed_metadata: warning
+    duration_consistency:
+      tolerance_ms: 250
+      severity: error
+    timecode_present: warning
+    timestamp_continuity:
+      max_gap_ms: 100
+      severity: error
+    stream_presence:
+      min_video: 1
+      min_audio: 1
+      max_streams: 32
+
+  video:
+    resolution:
+      expected: "1920x1080"
+      severity: error
+    frame_rate:
+      expected: "25/1"
+      tolerance: 0.001
+      severity: error
+    aspect_ratio:
+      expected: "16/9"
+      severity: error
+    color_space:
+      expected: bt709
+      severity: warning
+    black_frames:
+      max_duration_ms: 500
+      severity: error
+    freeze_frames:
+      max_duration_ms: 2000
+      severity: error
+    corrupt_frames:
+      max_events: 0
+      severity: error
+    luma_range:
+      max_out_of_legal: 0.005
+      severity: warning
+    photosensitivity:
+      max_flashes_per_second: 3
+      severity: error
+
+  audio:
+    sample_rate:
+      expected: 48000
+      severity: error
+    bit_depth:
+      expected: 24
+      severity: warning
+    silence:
+      max_duration_ms: 2000
+      severity: error
+    clipping:
+      max_events: 0
+      severity: error
+    true_peak:
+      max_db: -1
+      severity: error
+    loudness:
+      standard: ebu-r128
+      target_lufs: -23
+      tolerance_lu: 1.0
+      severity: error
+    phase:
+      min_correlation: -0.5
+      severity: warning
+
+  subtitle:
+    language:
+      required: ["eng"]
+      severity: info
+    timing:
+      max_overlaps: 0
+      max_invalid_durations: 0
+      severity: warning
+
+policy:
+  fail_on: error

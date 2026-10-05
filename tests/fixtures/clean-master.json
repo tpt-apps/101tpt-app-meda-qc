@@ -2,35 +2,71 @@
   "asset": {
     "id": "00000000-0000-0000-0000-000000000001",
     "path": "fixtures/clean-master.mov",
-    "fingerprint": { "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "size_bytes": 157286400 },
+    "fingerprint": {
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 157286400
+    },
     "size_bytes": 157286400,
     "modified_time": 1700000000,
     "duration": 120,
     "streams": [
       {
-        "index": 0, "kind": "video", "codec": "h264", "codec_profile": "High",
-        "width": 1920, "height": 1080, "pixel_format": "yuv420p",
+        "index": 0,
+        "kind": "video",
+        "codec": "h264",
+        "codec_profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixel_format": "yuv420p",
         "field_order": "progressive",
-        "frame_rate": "25/1", "time_base": "1/12800",
-        "bitrate": 15000000, "duration": 120,
-        "language": null, "channel_layout": null, "channels": null,
-        "sample_rate": null, "bit_depth": null, "metadata": {}
+        "frame_rate": "25/1",
+        "time_base": "1/12800",
+        "bitrate": 15000000,
+        "duration": 120,
+        "language": null,
+        "channel_layout": null,
+        "channels": null,
+        "sample_rate": null,
+        "bit_depth": null,
+        "metadata": {}
       },
       {
-        "index": 1, "kind": "audio", "codec": "pcm_s24le", "codec_profile": null,
-        "width": null, "height": null, "pixel_format": null,
-        "frame_rate": null, "time_base": "1/48000",
-        "bitrate": 2304000, "duration": 120,
-        "language": "en", "channel_layout": "stereo", "channels": 2,
-        "sample_rate": 48000, "bit_depth": 24, "metadata": {}
+        "index": 1,
+        "kind": "audio",
+        "codec": "pcm_s24le",
+        "codec_profile": null,
+        "width": null,
+        "height": null,
+        "pixel_format": null,
+        "frame_rate": null,
+        "time_base": "1/48000",
+        "bitrate": 2304000,
+        "duration": 120,
+        "language": "en",
+        "channel_layout": "stereo",
+        "channels": 2,
+        "sample_rate": 48000,
+        "bit_depth": 24,
+        "metadata": {}
       },
       {
-        "index": 2, "kind": "subtitle", "codec": "subrip", "codec_profile": null,
-        "width": null, "height": null, "pixel_format": null,
-        "frame_rate": null, "time_base": "1/1000",
-        "bitrate": null, "duration": 120,
-        "language": "eng", "channel_layout": null, "channels": null,
-        "sample_rate": null, "bit_depth": null, "metadata": {}
+        "index": 2,
+        "kind": "subtitle",
+        "codec": "subrip",
+        "codec_profile": null,
+        "width": null,
+        "height": null,
+        "pixel_format": null,
+        "frame_rate": null,
+        "time_base": "1/1000",
+        "bitrate": null,
+        "duration": 120,
+        "language": "eng",
+        "channel_layout": null,
+        "channels": null,
+        "sample_rate": null,
+        "bit_depth": null,
+        "metadata": {}
       }
     ]
   },
@@ -50,16 +86,50 @@
       {
         "stream_idx": 0,
         "decoded_frame_count": 3000,
-        "flash": { "transitions_ms": [[], []] },
-        "hdr": { "transfer": "bt709", "primaries": "bt709", "matrix": "bt709", "range": "tv" },
-        "dead_pixels": { "frames_sampled": 250, "cells_examined": 1920, "resolution_limited": false, "dark_cells": 0, "bright_cells": 0, "flicker_cells": 0, "clusters": [] },
-        "perceptual": { "frames_sampled": 250, "blockiness": 1.41, "blockiness_max": 1.9, "blockiness_frames": 250, "blur": 0.0086, "noise": 1.1, "flat_frames": 250, "resolution_limited": false },
+        "flash": {
+          "transitions_ms": [
+            [],
+            []
+          ]
+        },
+        "hdr": {
+          "transfer": "bt709",
+          "primaries": "bt709",
+          "matrix": "bt709",
+          "range": "tv"
+        },
+        "dead_pixels": {
+          "frames_sampled": 250,
+          "cells_examined": 1920,
+          "resolution_limited": false,
+          "dark_cells": 0,
+          "bright_cells": 0,
+          "flicker_cells": 0,
+          "clusters": []
+        },
+        "perceptual": {
+          "frames_sampled": 250,
+          "blockiness": 1.41,
+          "blockiness_max": 1.9,
+          "blockiness_frames": 250,
+          "blur": 0.0086,
+          "noise": 1.1,
+          "flat_frames": 250,
+          "resolution_limited": false
+        },
         "frame_rate_observed": "25/1",
         "decode_errors": 0,
         "black_frames": [],
         "freeze_frames": [],
         "duplicate_frames": [],
-        "luma": { "min": 16, "max": 235, "mean": 52.5, "below_legal": 0.0, "above_legal": 0.0, "clipped_white": 0.0 },
+        "luma": {
+          "min": 16,
+          "max": 235,
+          "mean": 52.5,
+          "below_legal": 0.0,
+          "above_legal": 0.0,
+          "clipped_white": 0.0
+        },
         "colorspace": "bt709"
       }
     ],
@@ -94,6 +164,54 @@
         "covered_until_ms": 120000
       }
     ],
-    "diagnostics": {}
+    "diagnostics": {},
+    "voice": [
+      {
+        "stream_idx": 1,
+        "method": "fixture",
+        "analysed_ms": 120000,
+        "speech_analysed": true,
+        "speech_regions": [
+          {
+            "start_ms": 2000,
+            "end_ms": 110000
+          }
+        ],
+        "speech_ms": 108000,
+        "longest_non_speech": {
+          "start_ms": 110000,
+          "end_ms": 120000
+        },
+        "speaker_turns": [
+          {
+            "speaker": "SPEAKER_00",
+            "start_ms": 2000,
+            "end_ms": 60000,
+            "confidence": 0.9
+          },
+          {
+            "speaker": "SPEAKER_01",
+            "start_ms": 60000,
+            "end_ms": 110000,
+            "confidence": 0.85
+          }
+        ],
+        "speaker_count": 2,
+        "speaker_changes": 1,
+        "transcript": {
+          "source": "sidecar fixture.transcript.txt",
+          "expected_words": 300,
+          "hypothesis_words": 300,
+          "substitutions": 6,
+          "deletions": 0,
+          "insertions": 0,
+          "wer": 0.02,
+          "unexpected_words": [
+            "colour"
+          ],
+          "unexpected_total": 1
+        }
+      }
+    ]
   }
 }

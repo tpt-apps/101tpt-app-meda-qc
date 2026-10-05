@@ -1574,6 +1574,7 @@ dependencies = [
 name = "tpt-app-media-qc-decode"
 version = "0.1.0"
 dependencies = [
+ "serde",
  "serde_json",
  "tpt-app-media-qc-core",
  "tpt-app-media-qc-model",

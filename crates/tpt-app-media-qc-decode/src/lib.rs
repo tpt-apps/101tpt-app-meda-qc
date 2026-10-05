@@ -12,12 +12,16 @@
 //! time.
 
 mod audio;
+pub mod correct;
 mod deadpixels;
 mod loudness;
 mod perception;
 mod pse;
+pub mod transcript;
+mod voice;
 
 pub use audio::{AudioAnalyzerConfig, CadenceAudioInspector};
+pub use voice::{VoiceAnalyzer, VoiceConfig, MAX_ANALYSED_SECONDS};
 
 use tpt_app_media_qc_core::error::{Error, Result};
 use tpt_app_media_qc_model::asset::Asset;

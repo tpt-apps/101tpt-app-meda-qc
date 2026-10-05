@@ -1,0 +1,61 @@
+# Spoken-word / podcast delivery flavour (spec §25, §8.8).
+#
+# Uses the optional voice checks: speech must be present, long stretches
+# without speech are flagged, and an optional sidecar transcript
+# (<name>.expected.txt and <name>.transcript.txt next to the file) is compared
+# word for word. Detector-based voice checks are probabilistic and labelled as
+# such in findings; they need a build with the `voice` feature
+# (`cargo build -p tpt-app-media-qc-cli --features voice`) and report
+# Inconclusive otherwise. Audio must be a WAV, AIFF/AIFC or FLAC file.
+#
+# NOTE (spec §25): -16 LUFS / -1 dBTP are widely used spoken-word delivery
+# conventions, not a conformance claim.
+name: "streaming-podcast-voice"
+version: 1
+description: "Podcast / spoken-word delivery: -16 LUFS, -1 dBTP, speech present, bounded non-speech, optional transcript match."
+
+rules:
+  container:
+    readable: error
+    container_validity: error
+    stream_presence:
+      min_audio: 1
+      max_streams: 8
+
+  audio:
+    sample_rate:
+      expected: 44100
+      severity: info
+    silence:
+      max_duration_ms: 6000
+      severity: warning
+    clipping:
+      max_events: 0
+      severity: error
+    true_peak:
+      max_db: -1
+      severity: error
+    loudness:
+      standard: bs1770
+      target_lufs: -16
+      tolerance_lu: 1.0
+      severity: warning
+    dc_offset:
+      max_offset_percent: 1
+      severity: warning
+
+  voice:
+    speech:
+      expect: present
+      min_ratio: 0.3
+      severity: error
+    silence:
+      max_non_speech_ms: 8000
+      severity: warning
+    transcript:
+      max_wer: 0.05
+      max_unexpected_words: 3
+      severity: warning
+
+policy:
+  fail_on: error

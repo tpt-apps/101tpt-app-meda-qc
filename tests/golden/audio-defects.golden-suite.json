@@ -43,7 +43,12 @@
     "video.noise": "inconclusive",
     "video.photosensitivity": "inconclusive",
     "video.resolution": "pass",
-    "video.scan_format": "pass"
+    "video.scan_format": "pass",
+    "voice.silence": "fail",
+    "voice.speaker_changes": "fail",
+    "voice.speakers": "fail",
+    "voice.speech": "fail",
+    "voice.transcript": "fail"
   },
   "allow_critical_empty": false
 }

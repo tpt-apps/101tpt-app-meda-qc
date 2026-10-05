@@ -51,7 +51,7 @@ pub fn run_watch(config: WatchConfig, profile: Profile, quick: bool) -> i32 {
         }
     }
 
-    let inspector = match make_inspector(quick) {
+    let inspector = match make_inspector(quick, &profile) {
         Ok(i) => i,
         Err(EXIT_NO_INSPECTOR) => {
             eprintln!("error: no probe backend available; cannot watch folders");

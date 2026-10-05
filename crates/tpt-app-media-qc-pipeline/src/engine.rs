@@ -43,6 +43,7 @@ fn merge_inspections(metadata: Inspection, decoded: Inspection) -> Inspection {
     }
     merged.video = merge_by_stream(merged.video, decoded.video, |video| video.stream_idx);
     merged.audio = merge_by_stream(merged.audio, decoded.audio, |audio| audio.stream_idx);
+    merged.voice = merge_by_stream(merged.voice, decoded.voice, |voice| voice.stream_idx);
     merged.diagnostics.extend(decoded.diagnostics);
     merged
 }

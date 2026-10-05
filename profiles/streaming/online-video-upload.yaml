@@ -1,0 +1,54 @@
+# Online video upload (video-sharing platform) flavour (spec §25).
+#
+# Platforms transcode and loudness-normalise uploads rather than rejecting
+# them, so this profile flags problems worth fixing before upload, mostly as
+# warnings: a -14 LUFS programme target, -1 dBTP headroom for lossy
+# transcodes, clipping and corrupt frames.
+#
+# NOTE (spec §25): the reference levels are widely published conventions, not
+# a conformance claim, and platforms change them. Treat results as guidance.
+name: "streaming-online-upload"
+version: 1
+description: "Online video upload checks: -14 LUFS programme target, -1 dBTP headroom, integrity and clipping warnings."
+
+rules:
+  container:
+    readable: error
+    container_validity: error
+    stream_presence:
+      min_video: 1
+      min_audio: 1
+      max_streams: 16
+
+  video:
+    corrupt_frames:
+      max_events: 0
+      severity: error
+    black_frames:
+      max_duration_ms: 3000
+      severity: warning
+    freeze_frames:
+      max_duration_ms: 5000
+      severity: warning
+    photosensitivity:
+      max_flashes_per_second: 3
+      severity: warning
+
+  audio:
+    clipping:
+      max_events: 0
+      severity: warning
+    true_peak:
+      max_db: -1
+      severity: warning
+    loudness:
+      standard: bs1770
+      target_lufs: -14
+      tolerance_lu: 2.0
+      severity: warning
+    silence:
+      max_duration_ms: 5000
+      severity: warning
+
+policy:
+  fail_on: error

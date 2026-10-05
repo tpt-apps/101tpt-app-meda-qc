@@ -11,7 +11,9 @@ use std::process::Command;
 
 use serde::{de::Error as _, Deserialize, Deserializer};
 use tpt_app_media_qc_core::error::{Error, Result};
-use tpt_app_media_qc_decode::{CadenceAudioInspector, KinetixVideoInspector};
+use tpt_app_media_qc_decode::{
+    CadenceAudioInspector, KinetixVideoInspector, VoiceAnalyzer, VoiceConfig,
+};
 use tpt_app_media_qc_model::asset::{Asset, FieldOrder, Stream, StreamId, StreamKind};
 use tpt_app_media_qc_model::finding::TimeRange;
 use tpt_app_media_qc_model::inspection::{
@@ -600,6 +602,7 @@ fn inspection_from_output(out: &FfprobeOutput) -> Inspection {
         video: video_meas,
         audio: audio_meas,
         subtitle: Vec::new(),
+        voice: Vec::new(),
         diagnostics: BTreeMap::new(),
     }
 }
@@ -609,14 +612,36 @@ pub struct HybridInspector {
     metadata: FfprobeInspector,
     video: KinetixVideoInspector,
     audio: CadenceAudioInspector,
+    voice: VoiceAnalyzer,
 }
 
 impl Default for HybridInspector {
     fn default() -> Self {
+        Self::with_voice(VoiceConfig::default())
+    }
+}
+
+impl HybridInspector {
+    /// An inspector that also runs the optional voice analyses in `voice`.
+    pub fn with_voice(voice: VoiceConfig) -> Self {
         Self {
             metadata: FfprobeInspector,
             video: KinetixVideoInspector::new(),
             audio: CadenceAudioInspector::new(),
+            voice: VoiceAnalyzer::new(voice),
+        }
+    }
+
+    /// Voice analyses the profile asks for (spec 8.8). Nothing runs unless
+    /// the profile configures a `rules.voice` check.
+    pub fn voice_config_for(profile: &tpt_app_media_qc_profile::model::Profile) -> VoiceConfig {
+        let v = &profile.rules.voice;
+        VoiceConfig {
+            speech: v.speech.is_some()
+                || v.silence.is_some()
+                || v.speakers.is_some()
+                || v.speaker_changes.is_some(),
+            transcript: v.transcript.is_some(),
         }
     }
 }
@@ -637,7 +662,8 @@ impl Inspector for HybridInspector {
         level: InspectionLevel,
     ) -> Result<Inspection> {
         let video = self.video.inspect_decode(asset, metadata, level)?;
-        self.audio.inspect_decode(asset, &video, level)
+        let audio = self.audio.inspect_decode(asset, &video, level)?;
+        Ok(self.voice.analyze(asset, &audio))
     }
 }
 

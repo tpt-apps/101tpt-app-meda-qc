@@ -30,6 +30,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy -p tpt-app-media-qc-cli --features voice --all-targets -- -D warnings
 
   test:
     name: Test (${{ matrix.os }})
@@ -57,6 +58,8 @@ jobs:
 
       - run: cargo build --workspace --all-targets
       - run: cargo test --workspace
+      - name: Test optional voice analysis
+        run: cargo test -p tpt-app-media-qc-decode --features voice
 
   fuzz:
     name: Fuzz parsers (bounded campaigns)

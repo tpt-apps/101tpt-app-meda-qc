@@ -1,0 +1,93 @@
+# Premium OTT / SVOD mezzanine delivery flavour (spec §25).
+#
+# Conventions common to premium streaming deliveries: strict picture and
+# container integrity, a conservative -2 dBTP ceiling and a programme loudness
+# near -27 LUFS.
+#
+# NOTE (spec §25, §3.4): platform specifications usually measure loudness
+# dialogue-gated. This tool measures programme-integrated BS.1770 loudness, so
+# the loudness result is indicative only. Thresholds are not a claim of
+# conformance with any platform specification; edit them to match the
+# delivery spec you were given.
+name: "streaming-ott-premium"
+version: 1
+description: "Premium OTT mezzanine flavour: integrity checks, -27 LUFS programme loudness (+/-2 LU, integrated not dialogue-gated), -2 dBTP."
+
+rules:
+  container:
+    readable: error
+    container_validity: error
+    malformed_metadata: warning
+    duration_consistency:
+      tolerance_ms: 500
+      severity: error
+    timestamp_continuity:
+      max_gap_ms: 100
+      severity: error
+    stream_presence:
+      min_video: 1
+      min_audio: 1
+      max_streams: 64
+
+  video:
+    color_space:
+      expected: bt709
+      severity: warning
+    black_frames:
+      max_duration_ms: 1000
+      severity: warning
+    freeze_frames:
+      max_duration_ms: 3000
+      severity: warning
+    duplicate_frames:
+      max_events: 0
+      severity: warning
+    corrupt_frames:
+      max_events: 0
+      severity: error
+    photosensitivity:
+      max_flashes_per_second: 3
+      severity: warning
+    blockiness:
+      max_ratio: 1.6
+      severity: warning
+    dead_pixels:
+      max_pixels: 0
+      severity: warning
+
+  audio:
+    sample_rate:
+      expected: 48000
+      severity: error
+    silence:
+      max_duration_ms: 3000
+      severity: warning
+    clipping:
+      max_events: 0
+      severity: error
+    true_peak:
+      max_db: -2
+      severity: error
+    loudness:
+      standard: bs1770
+      target_lufs: -27
+      tolerance_lu: 2.0
+      severity: warning
+    phase:
+      min_correlation: -0.5
+      severity: warning
+
+  subtitle:
+    timing:
+      max_overlaps: 0
+      max_invalid_durations: 0
+      severity: warning
+    content:
+      max_malformed: 0
+      max_empty: 0
+      max_chars_per_line: 42
+      max_lines_per_cue: 2
+      severity: warning
+
+policy:
+  fail_on: error

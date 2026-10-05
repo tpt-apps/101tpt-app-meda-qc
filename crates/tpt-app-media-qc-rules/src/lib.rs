@@ -18,6 +18,7 @@ mod subtitle;
 mod testutil;
 mod util;
 mod video;
+mod voice;
 
 pub mod rule;
 
@@ -39,6 +40,7 @@ pub fn build_rules(profile: &tpt_app_media_qc_profile::model::Profile) -> Vec<Bo
     video::build(profile, &mut rules);
     audio::build(profile, &mut rules);
     subtitle::build(profile, &mut rules);
+    voice::build(profile, &mut rules);
     custom::build(profile, &mut rules);
     rules
 }
@@ -50,6 +52,7 @@ pub fn known_rule_ids() -> Vec<&'static str> {
         .chain(video::RULE_IDS.iter())
         .chain(audio::RULE_IDS.iter())
         .chain(subtitle::RULE_IDS.iter())
+        .chain(voice::RULE_IDS.iter())
         .copied()
         .collect()
 }

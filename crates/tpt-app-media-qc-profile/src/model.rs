@@ -639,7 +639,81 @@ fn default_one() -> u32 {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct VoiceRules {}
+pub struct VoiceRules {
+    /// Speech must be present (or absent) in the audio.
+    pub speech: Option<SpeechRule>,
+    /// Longest tolerated stretch without speech.
+    pub silence: Option<VoiceSilenceRule>,
+    /// Expected number of distinct speakers.
+    pub speakers: Option<SpeakerCountRule>,
+    /// Speaker-change rate limit.
+    pub speaker_changes: Option<SpeakerChangeRule>,
+    /// Supplied transcript versus expected transcript.
+    pub transcript: Option<TranscriptRule>,
+}
+
+/// Whether speech should be present.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeechExpectation {
+    Present,
+    Absent,
+}
+
+/// Probabilistic speech presence check (spec § 8.8).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SpeechRule {
+    pub expect: SpeechExpectation,
+    /// Share of the audio that must be speech to count as "present", and the
+    /// ceiling for "absent" (`0.0`–`1.0`).
+    #[serde(default = "default_speech_ratio")]
+    pub min_ratio: f64,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+pub(crate) fn default_speech_ratio() -> f64 {
+    0.05
+}
+
+/// Longest tolerated stretch without speech.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct VoiceSilenceRule {
+    pub max_non_speech_ms: u64,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+/// Distinct speaker count bounds.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SpeakerCountRule {
+    #[serde(default)]
+    pub min: Option<u32>,
+    #[serde(default)]
+    pub max: Option<u32>,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+/// Speaker changes per minute of audio.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SpeakerChangeRule {
+    pub max_per_minute: f64,
+    #[serde(default)]
+    pub severity: Severity,
+}
+
+/// Transcript comparison limits.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TranscriptRule {
+    /// Highest acceptable word error rate (`0.0`–`1.0`+).
+    pub max_wer: f64,
+    /// Hypothesis words outside the expected transcript that are tolerated.
+    #[serde(default)]
+    pub max_unexpected_words: u64,
+    #[serde(default)]
+    pub severity: Severity,
+}
 
 // ---------------------------------------------------------------------------
 // Verdict policy

@@ -397,6 +397,82 @@ impl SubtitleMeasurements {
     }
 }
 
+/// One speaker turn from diarization.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SpeakerTurn {
+    pub speaker: String,
+    pub start_ms: u64,
+    pub end_ms: u64,
+    /// Clustering confidence, `0.0..=1.0`.
+    pub confidence: f32,
+}
+
+/// Word-level comparison of a supplied transcript against the expected one
+/// (spec § 8.8 "words outside expected transcript"). Pure text comparison:
+/// it is exact for the two texts it is given, whatever produced them.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct TranscriptMeasurements {
+    /// Where the hypothesis came from (a sidecar file or an engine name).
+    pub source: String,
+    pub expected_words: u64,
+    pub hypothesis_words: u64,
+    pub substitutions: u64,
+    pub deletions: u64,
+    pub insertions: u64,
+    /// Word error rate: (S + D + I) / expected words.
+    pub wer: f64,
+    /// Hypothesis words that occur nowhere in the expected transcript.
+    #[serde(default)]
+    pub unexpected_words: Vec<String>,
+    /// Total such words, which may exceed `unexpected_words.len()`.
+    #[serde(default)]
+    pub unexpected_total: u64,
+}
+
+/// Optional voice/content analysis of one audio stream (spec § 8.8).
+///
+/// Everything here is **probabilistic** except the transcript comparison:
+/// speech regions and speaker turns come from heuristic detectors and carry
+/// error. Reports must label findings built on them accordingly.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct VoiceMeasurements {
+    pub stream_idx: u64,
+    /// Detector description, for the report body.
+    #[serde(default)]
+    pub method: String,
+    /// Length of audio analysed.
+    #[serde(default)]
+    pub analysed_ms: u64,
+    /// `true` when speech detection ran (otherwise only the transcript
+    /// comparison, if any, is present).
+    #[serde(default)]
+    pub speech_analysed: bool,
+    #[serde(default)]
+    pub speech_regions: Vec<TimeRange>,
+    #[serde(default)]
+    pub speech_ms: u64,
+    /// Longest stretch without speech, including leading/trailing silence.
+    #[serde(default)]
+    pub longest_non_speech: Option<TimeRange>,
+    #[serde(default)]
+    pub speaker_turns: Vec<SpeakerTurn>,
+    #[serde(default)]
+    pub speaker_count: Option<u32>,
+    /// Adjacent turns by different speakers.
+    #[serde(default)]
+    pub speaker_changes: u32,
+    #[serde(default)]
+    pub transcript: Option<TranscriptMeasurements>,
+}
+
+impl VoiceMeasurements {
+    /// Share of the analysed audio that contains speech, `0.0..=1.0`.
+    pub fn speech_ratio(&self) -> Option<f64> {
+        (self.speech_analysed && self.analysed_ms > 0)
+            .then(|| self.speech_ms as f64 / self.analysed_ms as f64)
+    }
+}
+
 /// The complete inspection of a single asset under one run.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Inspection {
@@ -410,6 +486,10 @@ pub struct Inspection {
     pub audio: Vec<AudioMeasurements>,
     #[serde(default)]
     pub subtitle: Vec<SubtitleMeasurements>,
+    /// Optional, probabilistic voice analysis (spec § 8.8). Empty unless a
+    /// voice analyser ran or a transcript comparison was supplied.
+    #[serde(default)]
+    pub voice: Vec<VoiceMeasurements>,
     /// Raw probe/diagnostic payload preserved for evidence and report body.
     pub diagnostics: BTreeMap<String, serde_json::Value>,
 }
@@ -421,6 +501,10 @@ impl Inspection {
 
     pub fn audio_for(&self, idx: u64) -> Option<&AudioMeasurements> {
         self.audio.iter().find(|a| a.stream_idx == idx)
+    }
+
+    pub fn voice_for(&self, idx: u64) -> Option<&VoiceMeasurements> {
+        self.voice.iter().find(|v| v.stream_idx == idx)
     }
 
     pub fn subtitle_for(&self, idx: u64) -> Option<&SubtitleMeasurements> {

@@ -237,12 +237,12 @@ was bumped and both decoders run strict.
 
 ## Phase 3 — Post-MVP (spec §27)
 
-- [ ] Voice integration (`tpt-voice`)
-- [ ] Transcription validation
-- [ ] Speaker segmentation / analysis
-- [ ] Semantic/content checks (dialogue overlap, transcript alignment, words outside expected transcript, intelligibility metrics — spec §8.8)
-- [ ] Automated correction
-- [ ] Advanced broadcast/OTT profiles
+- [x] Voice integration (`tpt-voice`) — optional `voice` cargo feature (off by default) using tpt-voice's weight-free VAD and classical diarizer, pinned at `05ffff3`; `VoiceMeasurements` in the inspection model; `rules.voice` profile section. Standalone WAV/AIFF/FLAC only, first 3600 s analysed, findings labelled probabilistic. See `docs/voice-and-correction.md`
+- [x] Transcription validation — exact sidecar comparison (`<name>.transcript.txt|json` vs `<name>.expected.txt`): WER with S/D/I counts and words outside the expected transcript (`voice.transcript`). No ASR engine is bundled: tpt-voice has no trained weights yet (its own todo), so producing the transcript is left to the facility's workflow. Timing-aligned transcript checks not implemented
+- [x] Speaker segmentation / analysis — speaker turns, speaker count and change rate (`voice.speakers`, `voice.speaker_changes`) from classical MFCC-statistics clustering; accuracy is limited (heuristic, no trained embeddings)
+- [ ] Semantic/content checks (dialogue overlap, transcript alignment, words outside expected transcript, intelligibility metrics — spec §8.8) — partial: speech present/absent, excessive non-speech, speaker count/changes, WER and words outside the expected transcript are done; dialogue overlap, time-aligned transcript checks and intelligibility metrics are not
+- [x] Automated correction — `tpt-media-qc correct`: single linear loudness gain (refused if it would break the true-peak ceiling; no limiter) and DC-offset removal for WAV/AIFF/FLAC, written to a new 16/24-bit WAV and re-measured. Video, embedded audio, trims and de-clipping not corrected
+- [x] Advanced broadcast/OTT profiles — `broadcast-uk-hd`, `streaming-ott-premium` (integrated, not dialogue-gated, loudness), `streaming-online-upload`, `streaming-podcast-voice`; indicative values, no conformance claim
 
 ---
 

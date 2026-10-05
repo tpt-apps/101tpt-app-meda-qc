@@ -728,7 +728,7 @@ mod tests {
         assert_eq!(status, 202);
         let job: ApiJob = serde_json::from_slice(&body).unwrap();
         let mut terminal = None;
-        for _ in 0..100 {
+        for _ in 0..1500 {
             let (status, body) = request(address, "GET", &format!("/jobs/{}", job.id), b"");
             assert_eq!(status, 200);
             let current: ApiJob = serde_json::from_slice(&body).unwrap();

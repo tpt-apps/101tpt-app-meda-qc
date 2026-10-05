@@ -89,7 +89,7 @@ validated against fixtures.
   `subviewer`. Bitmap/structured formats (`dvdsub`, `hdmv_pgs_subtitle`,
   `dvb_subtitle`, `mov_text`) are timing-only and report `Inconclusive` for the
   text-dependent checks rather than guessing. Cue analysis is capped at 100 000
-  cues per stream. Voice streams remain a placeholder (spec §8.8).
+  cues per stream. Optional voice analysis of standalone WAV/AIFF/FLAC audio is described in [`voice-and-correction.md`](./voice-and-correction.md) (spec §8.8).
 
 ## 5. Security note
 

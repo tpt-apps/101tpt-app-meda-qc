@@ -15,6 +15,7 @@ categories = ["multimedia", "multimedia::video"]
 workspace = true
 
 [dependencies]
+serde.workspace = true
 serde_json.workspace = true
 tpt-app-media-qc-core = { path = "../tpt-app-media-qc-core" }
 tpt-app-media-qc-model = { path = "../tpt-app-media-qc-model" }
@@ -27,6 +28,13 @@ tpt-kinetix-core.workspace = true
 tpt-kinetix-demux.workspace = true
 tpt-kinetix-av1.workspace = true
 tpt-kinetix-vp9.workspace = true
+tpt-av-voice-utils = { workspace = true, optional = true }
+tpt-av-voice-diarize = { workspace = true, optional = true }
+
+[features]
+# Speech detection and speaker clustering (spec 8.8). Off by default: voice
+# analysis is optional and must never be required for basic QC.
+voice = ["dep:tpt-av-voice-utils", "dep:tpt-av-voice-diarize"]
 
 [dev-dependencies]
 tempfile.workspace = true

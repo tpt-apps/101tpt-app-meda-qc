@@ -13,7 +13,8 @@ use tpt_app_media_qc_model::report::{
 };
 use tpt_app_media_qc_model::severity::{Severity, VerdictDecision};
 use tpt_app_media_qc_report::{
-    render_html, render_pdf, write_csv, write_json_report, WriteCsvOptions, WriteHtmlOptions,
+    render_html, render_pdf, write_csv, write_json_report, ReportTemplate, WriteCsvOptions,
+    WriteHtmlOptions,
     WritePdfOptions,
 };
 
@@ -85,8 +86,28 @@ fuzz_target!(|data: &[u8]| {
     };
 
     let prefix = std::env::temp_dir().join(format!("media-qc-fuzz-{}", std::process::id()));
-    let _ = render_pdf(&prefix.with_extension("pdf"), &report, WritePdfOptions {});
-    let _ = render_html(&prefix.with_extension("html"), &report, WriteHtmlOptions { embed_json: true });
-    let _ = write_csv(&prefix.with_extension("csv"), &report, WriteCsvOptions { header: true });
+    for template in ReportTemplate::ALL {
+        let _ = render_pdf(
+            &prefix.with_extension("pdf"),
+            &report,
+            WritePdfOptions { template },
+        );
+        let _ = render_html(
+            &prefix.with_extension("html"),
+            &report,
+            WriteHtmlOptions {
+                embed_json: true,
+                template,
+            },
+        );
+        let _ = write_csv(
+            &prefix.with_extension("csv"),
+            &report,
+            WriteCsvOptions {
+                header: true,
+                template,
+            },
+        );
+    }
     let _ = write_json_report(&prefix.with_extension("json"), &report);
 });

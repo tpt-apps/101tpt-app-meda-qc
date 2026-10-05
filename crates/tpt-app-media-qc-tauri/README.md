@@ -9,9 +9,10 @@ and timeline markers, and JSON/HTML/CSV/PDF report export. The shell reuses
 the CLI's inspection and QC engine — no analysis is duplicated in the
 frontend. Media scanning runs on Tauri's blocking worker pool so the UI stays
 responsive; path validation and staged atomic report writes match the CLI.
-Six delivery profiles are bundled (`generic`, `broadcast-ebu-r128`,
-`broadcast-atsc-a85`, `broadcast-sd-576i`, `streaming-vod`,
-`streaming-hdr10`); custom YAML profiles can be loaded from disk.
+Ten delivery profiles are bundled (`generic`, `broadcast-ebu-r128`,
+`broadcast-atsc-a85`, `broadcast-sd-576i`, `broadcast-uk-hd`, `streaming-vod`,
+`streaming-hdr10`, `streaming-ott-premium`, `streaming-online-upload`,
+`streaming-podcast-voice`); custom YAML profiles can be loaded from disk.
 
 ## Development and bundling
 

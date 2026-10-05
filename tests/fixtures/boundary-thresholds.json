@@ -2,35 +2,71 @@
   "asset": {
     "id": "00000000-0000-0000-0000-000000000005",
     "path": "fixtures/boundary-thresholds.mov",
-    "fingerprint": { "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", "size_bytes": 157286400 },
+    "fingerprint": {
+      "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "size_bytes": 157286400
+    },
     "size_bytes": 157286400,
     "modified_time": 1700000400,
     "duration": 120,
     "streams": [
       {
-        "index": 0, "kind": "video", "codec": "h264", "codec_profile": "High",
-        "width": 1920, "height": 1080, "pixel_format": "yuv420p",
+        "index": 0,
+        "kind": "video",
+        "codec": "h264",
+        "codec_profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixel_format": "yuv420p",
         "field_order": "progressive",
-        "frame_rate": "25/1", "time_base": "1/12800",
-        "bitrate": 15000000, "duration": 120,
-        "language": null, "channel_layout": null, "channels": null,
-        "sample_rate": null, "bit_depth": null, "metadata": {}
+        "frame_rate": "25/1",
+        "time_base": "1/12800",
+        "bitrate": 15000000,
+        "duration": 120,
+        "language": null,
+        "channel_layout": null,
+        "channels": null,
+        "sample_rate": null,
+        "bit_depth": null,
+        "metadata": {}
       },
       {
-        "index": 1, "kind": "audio", "codec": "pcm_s24le", "codec_profile": null,
-        "width": null, "height": null, "pixel_format": null,
-        "frame_rate": null, "time_base": "1/48000",
-        "bitrate": 2304000, "duration": 120,
-        "language": "en", "channel_layout": "stereo", "channels": 2,
-        "sample_rate": 48000, "bit_depth": 24, "metadata": {}
+        "index": 1,
+        "kind": "audio",
+        "codec": "pcm_s24le",
+        "codec_profile": null,
+        "width": null,
+        "height": null,
+        "pixel_format": null,
+        "frame_rate": null,
+        "time_base": "1/48000",
+        "bitrate": 2304000,
+        "duration": 120,
+        "language": "en",
+        "channel_layout": "stereo",
+        "channels": 2,
+        "sample_rate": 48000,
+        "bit_depth": 24,
+        "metadata": {}
       },
       {
-        "index": 2, "kind": "subtitle", "codec": "subrip", "codec_profile": null,
-        "width": null, "height": null, "pixel_format": null,
-        "frame_rate": null, "time_base": "1/1000",
-        "bitrate": null, "duration": 120,
-        "language": "eng", "channel_layout": null, "channels": null,
-        "sample_rate": null, "bit_depth": null, "metadata": {}
+        "index": 2,
+        "kind": "subtitle",
+        "codec": "subrip",
+        "codec_profile": null,
+        "width": null,
+        "height": null,
+        "pixel_format": null,
+        "frame_rate": null,
+        "time_base": "1/1000",
+        "bitrate": null,
+        "duration": 120,
+        "language": "eng",
+        "channel_layout": null,
+        "channels": null,
+        "sample_rate": null,
+        "bit_depth": null,
+        "metadata": {}
       }
     ]
   },
@@ -42,7 +78,12 @@
       "duration": 120000,
       "timestamps_contiguous": true,
       "timecode_present": true,
-      "timestamp_gaps": [{ "start_ms": 10000, "end_ms": 10150 }],
+      "timestamp_gaps": [
+        {
+          "start_ms": 10000,
+          "end_ms": 10150
+        }
+      ],
       "malformed_metadata": [],
       "decode_errors": 0
     },
@@ -50,19 +91,76 @@
       {
         "stream_idx": 0,
         "decoded_frame_count": 3000,
-        "flash": { "transitions_ms": [[10000, 10160, 10320, 10480, 10640, 10800], []] },
-        "hdr": { "transfer": "bt709", "primaries": "bt709", "matrix": "bt709", "range": "tv" },
-        "dead_pixels": { "frames_sampled": 250, "cells_examined": 1920, "resolution_limited": false, "dark_cells": 0, "bright_cells": 0, "flicker_cells": 0, "clusters": [] },
-        "perceptual": { "frames_sampled": 250, "blockiness": 1.6, "blockiness_max": 3.0, "blockiness_frames": 250, "blur": 0.004, "noise": 2.0, "flat_frames": 250, "resolution_limited": false },
+        "flash": {
+          "transitions_ms": [
+            [
+              10000,
+              10160,
+              10320,
+              10480,
+              10640,
+              10800
+            ],
+            []
+          ]
+        },
+        "hdr": {
+          "transfer": "bt709",
+          "primaries": "bt709",
+          "matrix": "bt709",
+          "range": "tv"
+        },
+        "dead_pixels": {
+          "frames_sampled": 250,
+          "cells_examined": 1920,
+          "resolution_limited": false,
+          "dark_cells": 0,
+          "bright_cells": 0,
+          "flicker_cells": 0,
+          "clusters": []
+        },
+        "perceptual": {
+          "frames_sampled": 250,
+          "blockiness": 1.6,
+          "blockiness_max": 3.0,
+          "blockiness_frames": 250,
+          "blur": 0.004,
+          "noise": 2.0,
+          "flat_frames": 250,
+          "resolution_limited": false
+        },
         "frame_rate_observed": "25/1",
         "decode_errors": 0,
-        "black_frames": [{ "start_ms": 1000, "end_ms": 1500 }],
-        "freeze_frames": [{ "start_ms": 2000, "end_ms": 2500 }],
-        "duplicate_frames": [
-          { "start_ms": 20000, "end_ms": 20080 },
-          { "start_ms": 45000, "end_ms": 45080 }
+        "black_frames": [
+          {
+            "start_ms": 1000,
+            "end_ms": 1500
+          }
         ],
-        "luma": { "min": 16, "max": 235, "mean": 52.5, "below_legal": 0.01, "above_legal": 0.01, "clipped_white": 0.0 },
+        "freeze_frames": [
+          {
+            "start_ms": 2000,
+            "end_ms": 2500
+          }
+        ],
+        "duplicate_frames": [
+          {
+            "start_ms": 20000,
+            "end_ms": 20080
+          },
+          {
+            "start_ms": 45000,
+            "end_ms": 45080
+          }
+        ],
+        "luma": {
+          "min": 16,
+          "max": 235,
+          "mean": 52.5,
+          "below_legal": 0.01,
+          "above_legal": 0.01,
+          "clipped_white": 0.0
+        },
         "colorspace": "bt709"
       }
     ],
@@ -71,7 +169,12 @@
         "stream_idx": 1,
         "decoded_frame_count": 5760000,
         "decode_errors": 0,
-        "silence": [{ "start_ms": 5000, "end_ms": 9000 }],
+        "silence": [
+          {
+            "start_ms": 5000,
+            "end_ms": 9000
+          }
+        ],
         "clipping_events": 10,
         "peak_db": -1.0,
         "true_peak_db": -1.0,
@@ -97,6 +200,42 @@
         "covered_until_ms": 119000
       }
     ],
-    "diagnostics": {}
+    "diagnostics": {},
+    "voice": [
+      {
+        "stream_idx": 1,
+        "method": "fixture",
+        "analysed_ms": 60000,
+        "speech_analysed": true,
+        "speech_regions": [
+          {
+            "start_ms": 0,
+            "end_ms": 18000
+          }
+        ],
+        "speech_ms": 18000,
+        "longest_non_speech": {
+          "start_ms": 18000,
+          "end_ms": 28000
+        },
+        "speaker_turns": [],
+        "speaker_count": 3,
+        "speaker_changes": 20,
+        "transcript": {
+          "source": "sidecar fixture",
+          "expected_words": 100,
+          "hypothesis_words": 100,
+          "substitutions": 10,
+          "deletions": 0,
+          "insertions": 0,
+          "wer": 0.1,
+          "unexpected_words": [
+            "a",
+            "b"
+          ],
+          "unexpected_total": 2
+        }
+      }
+    ]
   }
 }

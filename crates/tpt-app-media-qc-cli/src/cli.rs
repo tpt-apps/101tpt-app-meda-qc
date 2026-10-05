@@ -136,6 +136,47 @@ pub enum Command {
         loudness_tolerance_lu: f64,
     },
 
+    /// Correct loudness and DC offset of a standalone WAV/AIFF/FLAC file
+    /// into a new WAV (never touches the original).
+    ///
+    /// Applies one linear gain to reach the target loudness, but only when the
+    /// result stays under the true-peak ceiling (there is no limiter), and
+    /// removes per-channel DC offset. The written file is re-measured so the
+    /// before/after values are real. Targets default to the profile's
+    /// `audio.loudness` and `audio.true_peak` rules.
+    Correct {
+        /// Audio file (WAV, AIFF/AIFC or FLAC).
+        file: PathBuf,
+
+        /// YAML profile supplying the loudness target and true-peak ceiling.
+        #[arg(long, short = 'p')]
+        profile: Option<PathBuf>,
+
+        /// Output WAV path. Default: `<name>.corrected.wav` next to the input.
+        #[arg(long, short = 'o')]
+        out: Option<PathBuf>,
+
+        /// Integrated loudness target in LUFS (overrides the profile).
+        #[arg(long, allow_negative_numbers = true)]
+        target_lufs: Option<f64>,
+
+        /// True-peak ceiling in dBTP (overrides the profile; default -1).
+        #[arg(long, allow_negative_numbers = true)]
+        true_peak_db: Option<f64>,
+
+        /// Do not remove DC offset.
+        #[arg(long)]
+        no_dc: bool,
+
+        /// Output sample size: 16 or 24 bit PCM.
+        #[arg(long, default_value = "24", value_parser = ["16", "24"])]
+        bits: String,
+
+        /// Show the plan without writing a file.
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// List the rules the given profile enables (or the full catalogue).
     ListRules {
         /// YAML profile file.

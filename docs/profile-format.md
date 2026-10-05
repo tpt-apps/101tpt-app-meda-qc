@@ -160,12 +160,28 @@ describe what is rendered rather than how the file encodes it. See
 [`docs/supported-formats.md`](./supported-formats.md) for which subtitle codecs
 are inspected for text.
 
-## 7. Voice rules (post-MVP placeholder, spec § 8.8)
+## 7. Voice rules (optional, spec § 8.8)
 
 ```yaml
 voice:
-  {}                     # reserved
+  speech:                          # is speech present / absent?
+    expect: present                # present | absent
+    min_ratio: 0.3                 # share of audio; default 0.05
+    severity: error
+  silence:                         # longest stretch without speech
+    max_non_speech_ms: 8000
+  speakers: { min: 1, max: 3 }     # distinct speakers (at least one bound)
+  speaker_changes:
+    max_per_minute: 20
+  transcript:                      # sidecar transcript vs expected text
+    max_wer: 0.1
+    max_unexpected_words: 2        # default 0
 ```
+
+Every voice rule needs a mapping (there is no scalar shorthand); `severity`
+defaults to `warning`. Detector-based rules are probabilistic and say so in
+their findings; they need the `voice` build feature and report `Inconclusive`
+without it. See [`voice-and-correction.md`](./voice-and-correction.md).
 
 ## 7a. Custom rules (`rules.custom`)
 

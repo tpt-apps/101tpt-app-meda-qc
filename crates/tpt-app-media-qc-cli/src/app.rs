@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tpt_app_media_qc_core::config::APP_VERSION;
 use tpt_app_media_qc_core::fingerprint::{Fingerprint, FingerprintConfig};
 use tpt_app_media_qc_core::path::{
-    validate_existing_directory, validate_existing_file, validate_media_file,
+    validate_existing_directory, validate_existing_file, validate_media_file, validate_output_path,
 };
 use tpt_app_media_qc_model::asset::{Asset, AssetFingerprint};
 use tpt_app_media_qc_model::report::AnalysisId;
@@ -71,6 +71,25 @@ pub fn run(cli: Cli) -> i32 {
             profile,
             quick,
         } => run_info(file, profile, quick),
+        Command::Correct {
+            file,
+            profile,
+            out,
+            target_lufs,
+            true_peak_db,
+            no_dc,
+            bits,
+            dry_run,
+        } => run_correct(CorrectArgs {
+            file,
+            profile,
+            out,
+            target_lufs,
+            true_peak_db,
+            no_dc,
+            bits,
+            dry_run,
+        }),
         Command::Compare {
             left,
             right,
@@ -202,7 +221,7 @@ pub(crate) fn build_asset(path: &Path) -> Result<Asset, i32> {
     })
 }
 
-pub(crate) fn make_inspector(quick: bool) -> Result<Arc<dyn Inspector>, i32> {
+pub(crate) fn make_inspector(quick: bool, profile: &Profile) -> Result<Arc<dyn Inspector>, i32> {
     if quick {
         // Metadata-only path works without a probe binary but yields an empty
         // inspection; prefer the probe when available.
@@ -213,7 +232,9 @@ pub(crate) fn make_inspector(quick: bool) -> Result<Arc<dyn Inspector>, i32> {
         }
     } else {
         if FfprobeInspector::available() {
-            Ok(arc(HybridInspector::default()))
+            Ok(arc(HybridInspector::with_voice(
+                HybridInspector::voice_config_for(profile),
+            )))
         } else {
             Err(EXIT_NO_INSPECTOR)
         }
@@ -231,8 +252,8 @@ pub fn run_qc(
 ) -> std::result::Result<tpt_app_media_qc_pipeline::QcRun, String> {
     let asset =
         build_asset(path).map_err(|code| format!("could not prepare asset (exit code {code})"))?;
-    let inspector =
-        make_inspector(quick).map_err(|code| format!("no usable inspector (exit code {code})"))?;
+    let inspector = make_inspector(quick, &profile)
+        .map_err(|code| format!("no usable inspector (exit code {code})"))?;
     let level = if quick {
         InspectionLevel::MetadataOnly
     } else {
@@ -376,7 +397,7 @@ fn run_check(
         InspectionLevel::Full
     };
 
-    let inspector = match make_inspector(level == InspectionLevel::MetadataOnly) {
+    let inspector = match make_inspector(level == InspectionLevel::MetadataOnly, &profile) {
         Ok(i) => i,
         Err(code) => return code,
     };
@@ -522,7 +543,7 @@ fn run_batch(
         }
     }
 
-    let inspector = match make_inspector(quick) {
+    let inspector = match make_inspector(quick, &profile) {
         Ok(i) => i,
         Err(code) => return code,
     };
@@ -590,7 +611,7 @@ fn inspect_for_compare(
         ));
     }
     let profile = load_profile(None)?;
-    let inspector = make_inspector(quick)?;
+    let inspector = make_inspector(quick, &profile)?;
     let level = if quick {
         InspectionLevel::MetadataOnly
     } else {
@@ -606,6 +627,123 @@ fn inspect_for_compare(
                 EXIT_ERROR,
             )
         })
+}
+
+struct CorrectArgs {
+    file: PathBuf,
+    profile: Option<PathBuf>,
+    out: Option<PathBuf>,
+    target_lufs: Option<f64>,
+    true_peak_db: Option<f64>,
+    no_dc: bool,
+    bits: String,
+    dry_run: bool,
+}
+
+fn fmt_level(v: Option<f64>, unit: &str) -> String {
+    v.map_or_else(|| "n/a".into(), |v| format!("{v:.2} {unit}"))
+}
+
+fn run_correct(args: CorrectArgs) -> i32 {
+    use tpt_app_media_qc_decode::correct::{self, CorrectionRequest, OutputBits};
+
+    if !args.file.is_file() {
+        return err_exit(
+            format!("asset '{}' not found", args.file.display()),
+            EXIT_PATH,
+        );
+    }
+    let profile = match load_profile(args.profile.as_deref()) {
+        Ok(p) => p,
+        Err(code) => return code,
+    };
+    let audio = &profile.rules.audio;
+    let target_lufs = args
+        .target_lufs
+        .or_else(|| audio.loudness.map(|l| l.target_lufs));
+    let ceiling = args
+        .true_peak_db
+        .or_else(|| audio.true_peak.map(|t| t.max_db))
+        .unwrap_or(-1.0);
+    let bits = OutputBits::parse(&args.bits).unwrap_or_default();
+
+    let request = CorrectionRequest {
+        target_lufs,
+        true_peak_ceiling_db: ceiling,
+        remove_dc: !args.no_dc,
+        bits,
+    };
+    let plan = match correct::plan(&args.file, &request) {
+        Ok(p) => p,
+        Err(e) => {
+            return err_exit(
+                format!("cannot analyse '{}': {e}", args.file.display()),
+                EXIT_ERROR,
+            )
+        }
+    };
+
+    println!("TPT Media QC {} · correction plan", APP_VERSION);
+    println!("input    {}", args.file.display());
+    println!(
+        "before   {} · true peak {} · sample peak {} · max DC {:.3}%",
+        fmt_level(plan.before.loudness_lufs, "LUFS"),
+        fmt_level(plan.before.true_peak_db, "dBTP"),
+        fmt_level(plan.before.sample_peak_db, "dBFS"),
+        plan.before.max_dc * 100.0
+    );
+    match target_lufs {
+        Some(t) => println!("target   {t:.2} LUFS, ceiling {ceiling:.2} dBTP"),
+        None => println!("target   none (loudness left unchanged), ceiling {ceiling:.2} dBTP"),
+    }
+    if let Some(g) = plan.gain_db {
+        println!("plan     gain {g:+.2} dB");
+    }
+    if plan.remove_dc {
+        println!("plan     remove DC offset");
+    }
+    for reason in &plan.refused {
+        println!("refused  {reason}");
+    }
+
+    if !plan.has_changes() {
+        println!("nothing to correct");
+        return if plan.refused.is_empty() {
+            EXIT_OK
+        } else {
+            EXIT_WARN
+        };
+    }
+    if args.dry_run {
+        println!("dry run: no file written");
+        return EXIT_OK;
+    }
+
+    let output = match args.out {
+        Some(p) => match validate_output_path(&p, "wav") {
+            Ok(p) => p,
+            Err(e) => return err_exit(format!("invalid output path: {e}"), EXIT_PATH),
+        },
+        None => args.file.with_extension("corrected.wav"),
+    };
+    match correct::apply(&args.file, &output, &plan, bits) {
+        Ok(report) => {
+            println!(
+                "after    {} · true peak {} · sample peak {} · max DC {:.3}%",
+                fmt_level(report.after.loudness_lufs, "LUFS"),
+                fmt_level(report.after.true_peak_db, "dBTP"),
+                fmt_level(report.after.sample_peak_db, "dBFS"),
+                report.after.max_dc * 100.0
+            );
+            println!("output   {}", report.output.display());
+            if !plan.refused.is_empty() {
+                EXIT_WARN
+            } else {
+                EXIT_OK
+            }
+        }
+        Err(e) => err_exit(format!("correction failed: {e}"), EXIT_ERROR),
+    }
 }
 
 fn run_compare(
@@ -671,7 +809,7 @@ fn run_info(file: PathBuf, profile_path: Option<PathBuf>, quick: bool) -> i32 {
         Ok(p) => p,
         Err(code) => return code,
     };
-    let inspector = match make_inspector(quick) {
+    let inspector = match make_inspector(quick, &profile) {
         Ok(i) => i,
         Err(code) => return code,
     };
@@ -784,6 +922,11 @@ fn profile_has_decode_rules(profile: &Profile) -> bool {
         || profile.rules.audio.loudness.is_some()
         || profile.rules.audio.phase.is_some()
         || profile.rules.audio.dc_offset.is_some()
+        || profile.rules.voice.speech.is_some()
+        || profile.rules.voice.silence.is_some()
+        || profile.rules.voice.speakers.is_some()
+        || profile.rules.voice.speaker_changes.is_some()
+        || profile.rules.voice.transcript.is_some()
 }
 
 // ---------------------------------------------------------------------------

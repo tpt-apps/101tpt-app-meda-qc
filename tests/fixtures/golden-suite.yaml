@@ -146,5 +146,25 @@ rules:
       tolerance_ms: 1000
       severity: error
 
+  voice:
+    speech:
+      expect: present
+      min_ratio: 0.3
+      severity: error
+    silence:
+      max_non_speech_ms: 10000
+      severity: error
+    speakers:
+      min: 1
+      max: 3
+      severity: error
+    speaker_changes:
+      max_per_minute: 20
+      severity: error
+    transcript:
+      max_wer: 0.1
+      max_unexpected_words: 2
+      severity: error
+
 policy:
   fail_on: error

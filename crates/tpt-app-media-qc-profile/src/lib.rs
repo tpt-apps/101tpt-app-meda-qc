@@ -16,9 +16,10 @@ pub use model::{
     AudioRules, BlockinessRule, BlurRule, ChannelLayoutRule, ContainerRules, CountThresholdRule,
     DbThresholdRule, DeadPixelRule, DurationThresholdRule, ExpectValueRule, FrameRateRule,
     LoudnessRule, LoudnessStandard, MinBitrateRule, NoiseRule, Policy, Profile, Resolution,
-    ResolutionRule, RuleSetConfig, SubtitleContentRule, SubtitleDurationRule, SubtitleLanguageRule,
+    ResolutionRule, RuleSetConfig, SpeakerChangeRule, SpeakerCountRule, SpeechExpectation,
+    SpeechRule, SubtitleContentRule, SubtitleDurationRule, SubtitleLanguageRule,
     SubtitlePresenceRule, SubtitleRules, SubtitleTimingRule, TimestampContinuityRule,
-    ToleranceRule, VideoRules, VoiceRules,
+    ToleranceRule, TranscriptRule, VideoRules, VoiceRules, VoiceSilenceRule,
 };
 pub use parse::{parse_str, ProfileError};
 

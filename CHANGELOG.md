@@ -8,6 +8,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Voice checks (spec §8.8, optional): `rules.voice` with `speech`, `silence`,
+  `speakers`, `speaker_changes` and `transcript`. Speech and speaker analysis
+  uses `tpt-voice`'s weight-free voice-activity detection and speaker
+  clustering behind the new `voice` cargo feature (off by default), on
+  standalone WAV/AIFF/FLAC audio; those findings are labelled
+  `[probabilistic]`. Transcript validation compares sidecar
+  `<name>.transcript.txt|json` against `<name>.expected.txt` (word error rate,
+  S/D/I counts, words outside the expected text) with no feature flag. No
+  speech-to-text engine is bundled. See `docs/voice-and-correction.md`.
+
+- `correct` command: loudness gain and DC-offset removal for standalone
+  audio, written to a new WAV and re-measured. Gain is refused when it would
+  exceed the true-peak ceiling (no limiter); the input is never modified.
+
+- Profiles: `broadcast-uk-hd`, `streaming-ott-premium`,
+  `streaming-online-upload` and `streaming-podcast-voice`, bundled in the
+  desktop app. Indicative values, no conformance claim.
+
 - Custom rule builder: `rules.custom` in a profile declares user-defined
   metadata rules (`id: custom.<name>`, `scope`, `metric`, `op`, `value`,
   optional `streams`, `tolerance`, `severity`, `message`) over a closed metric
