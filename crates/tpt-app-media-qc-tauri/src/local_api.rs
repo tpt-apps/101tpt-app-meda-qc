@@ -686,8 +686,8 @@ mod tests {
 
     /// A minimal but *valid* 16-bit mono PCM WAV: 44-byte canonical header plus
     /// eight samples of silence. The local API job runs the real engine, whose
-    /// metadata pass shells out to `ffprobe`, so the fixture must be parseable
-    /// media — a bare `RIFF` magic prefix is rejected by current FFmpeg builds.
+    /// metadata pass parses the file, so the fixture must be valid media — a
+    /// bare `RIFF` magic prefix is reported as a corrupt container.
     fn minimal_wav() -> Vec<u8> {
         const SAMPLES: u32 = 8;
         let data_len = SAMPLES * 2;

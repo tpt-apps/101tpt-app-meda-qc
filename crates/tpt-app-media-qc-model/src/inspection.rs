@@ -1,5 +1,5 @@
 //! Inspection results — the measurement boundary between probe front-ends
-//! (ffprobe, and later the TPT foundation crates) and the QC rules.
+//! (the in-process container probe and the decode adapters) and the QC rules.
 //!
 //! Rules consume *measurements*, not raw media bytes ([spec § 3.5]). The
 //! inspection model is the stable exchange format: a probe fills it in, rules

@@ -4,7 +4,7 @@
 //! this crate reduces decoded frames to the stable [`Inspection`] model
 //! consumed by QC rules. H.264 is deliberately not decoded: the AVC patent
 //! pools license decoders as well as encoders. Files in other codecs still get
-//! full ffprobe metadata QC, and their frame-decode rules stay inconclusive.
+//! refused as an unsupported format by the metadata inspector.
 //! Both decoders run in Kinetix strict mode, so a stream they cannot
 //! reconstruct faithfully is reported as unmeasurable instead of being
 //! analysed. The pinned demuxers are in-memory, so large inputs are refused
@@ -100,6 +100,62 @@ struct VideoSource {
     expected_packets: Option<usize>,
 }
 
+/// The video stream the metadata pass chose, so decode and metadata agree on
+/// which stream a measurement belongs to even when a container parser drops a
+/// damaged track the other one kept.
+#[derive(Clone, Copy, Debug)]
+struct PreferredVideo {
+    /// Stream index in the metadata inspection.
+    stream_idx: u64,
+    /// The container's own identifier (track id, track number or PID).
+    native_id: u64,
+}
+
+/// First AV1/VP9 video stream in the metadata inspection that carries its
+/// container-native id.
+fn preferred_video(metadata: &Inspection) -> Option<PreferredVideo> {
+    metadata.streams.iter().find_map(|stream| {
+        let is_decodable = stream.kind == tpt_app_media_qc_model::asset::StreamKind::Video
+            && matches!(stream.codec.as_deref(), Some("av1" | "vp9"));
+        let native_id = stream.metadata.get("native_id")?.parse().ok()?;
+        is_decodable.then_some(PreferredVideo {
+            stream_idx: stream.index.as_u64(),
+            native_id,
+        })
+    })
+}
+
+/// A decodable track found in a demuxer.
+struct Candidate {
+    /// Position in the demuxer's own track list.
+    index: usize,
+    native_id: u64,
+    /// Sample count when the container reports it up front.
+    samples: Option<usize>,
+    codec: VideoCodec,
+}
+
+/// Pick the candidate the metadata pass chose (by native id), else the first.
+/// Returns the candidate and the stream index to report measurements under.
+fn choose(
+    candidates: Vec<Candidate>,
+    preferred: Option<PreferredVideo>,
+) -> Option<(Candidate, u64)> {
+    let by_id = preferred.and_then(|p| {
+        candidates
+            .iter()
+            .position(|c| c.native_id == p.native_id)
+            .map(|at| (at, p.stream_idx))
+    });
+    match by_id {
+        Some((at, stream_idx)) => candidates.into_iter().nth(at).map(|c| (c, stream_idx)),
+        None => candidates.into_iter().next().map(|c| {
+            let idx = c.index as u64;
+            (c, idx)
+        }),
+    }
+}
+
 fn is_mkv(bytes: &[u8]) -> bool {
     bytes.starts_with(&[0x1A, 0x45, 0xDF, 0xA3])
 }
@@ -122,33 +178,42 @@ fn is_mpeg_ts(bytes: &[u8]) -> bool {
     bytes.len() >= TS_PACKET_LEN * 2 && bytes[0] == SYNC_BYTE && bytes[TS_PACKET_LEN] == SYNC_BYTE
 }
 
-fn open_video_source(bytes: Vec<u8>) -> std::result::Result<VideoSource, DecodeFailure> {
+fn open_video_source(
+    bytes: Vec<u8>,
+    preferred: Option<PreferredVideo>,
+) -> std::result::Result<VideoSource, DecodeFailure> {
     if is_mkv(&bytes) {
         let demuxer = MkvDemuxer::new(bytes).map_err(|error| {
             DecodeFailure::Failed(Error::Probe(format!("Kinetix MKV demux failed: {error}")))
         })?;
-        let found = demuxer
+        let candidates: Vec<Candidate> = demuxer
             .tracks()
             .iter()
             .enumerate()
-            .find_map(|(index, track)| {
+            .filter_map(|(index, track)| {
                 let codec = match track.codec_id.as_str() {
                     "V_AV1" => VideoCodec::Av1,
                     "V_VP9" => VideoCodec::Vp9,
                     _ => return None,
                 };
-                Some((index, track.track_number, codec))
-            });
-        let Some((index, track_number, codec)) = found else {
+                Some(Candidate {
+                    index,
+                    native_id: track.track_number,
+                    samples: None,
+                    codec,
+                })
+            })
+            .collect();
+        let Some((found, stream_idx)) = choose(candidates, preferred) else {
             return Err(unsupported_video_codec(
                 demuxer.tracks().iter().map(|track| track.codec_id.as_str()),
             ));
         };
         return Ok(VideoSource {
             demuxer: Box::new(demuxer),
-            codec,
-            stream_idx: index as u64,
-            packet_stream: track_number as u32,
+            codec: found.codec,
+            stream_idx,
+            packet_stream: found.native_id as u32,
             expected_packets: None,
         });
     }
@@ -156,11 +221,11 @@ fn open_video_source(bytes: Vec<u8>) -> std::result::Result<VideoSource, DecodeF
         let demuxer = Mp4Demuxer::new(bytes).map_err(|error| {
             DecodeFailure::Failed(Error::Probe(format!("Kinetix MP4 demux failed: {error}")))
         })?;
-        let found = demuxer
+        let candidates: Vec<Candidate> = demuxer
             .tracks()
             .iter()
             .enumerate()
-            .find_map(|(index, track)| {
+            .filter_map(|(index, track)| {
                 if track.media_type != MediaType::Video {
                     return None;
                 }
@@ -169,9 +234,15 @@ fn open_video_source(bytes: Vec<u8>) -> std::result::Result<VideoSource, DecodeF
                     Some(CodecId::Vp9) => VideoCodec::Vp9,
                     _ => return None,
                 };
-                Some((index, track.sample_count(), codec))
-            });
-        let Some((index, samples, codec)) = found else {
+                Some(Candidate {
+                    index,
+                    native_id: u64::from(track.track_id),
+                    samples: Some(track.sample_count()),
+                    codec,
+                })
+            })
+            .collect();
+        let Some((found, stream_idx)) = choose(candidates, preferred) else {
             return Err(unsupported_video_codec(
                 demuxer
                     .tracks()
@@ -182,10 +253,10 @@ fn open_video_source(bytes: Vec<u8>) -> std::result::Result<VideoSource, DecodeF
         };
         return Ok(VideoSource {
             demuxer: Box::new(demuxer),
-            codec,
-            stream_idx: index as u64,
-            packet_stream: index as u32,
-            expected_packets: Some(samples),
+            codec: found.codec,
+            stream_idx,
+            packet_stream: found.index as u32,
+            expected_packets: found.samples,
         });
     }
     if is_mpeg_ts(&bytes) {
@@ -194,22 +265,29 @@ fn open_video_source(bytes: Vec<u8>) -> std::result::Result<VideoSource, DecodeF
                 "Kinetix MPEG-TS demux failed: {error}"
             )))
         })?;
-        // `streams()` is PID-ordered, which is also how ffprobe enumerates
-        // transport-stream streams, so the ordinal lines up with the metadata
-        // pass.
+        // `streams()` is PID-ordered, the same order the metadata pass uses.
         let streams = demuxer.streams();
-        let found = streams.iter().enumerate().find_map(|(index, stream)| {
-            if stream.media_type != MediaType::Video {
-                return None;
-            }
-            let codec = match stream.codec {
-                Some(CodecId::Av1) => VideoCodec::Av1,
-                Some(CodecId::Vp9) => VideoCodec::Vp9,
-                _ => return None,
-            };
-            Some((index, stream.pid, codec))
-        });
-        let Some((index, pid, codec)) = found else {
+        let candidates: Vec<Candidate> = streams
+            .iter()
+            .enumerate()
+            .filter_map(|(index, stream)| {
+                if stream.media_type != MediaType::Video {
+                    return None;
+                }
+                let codec = match stream.codec {
+                    Some(CodecId::Av1) => VideoCodec::Av1,
+                    Some(CodecId::Vp9) => VideoCodec::Vp9,
+                    _ => return None,
+                };
+                Some(Candidate {
+                    index,
+                    native_id: u64::from(stream.pid),
+                    samples: None,
+                    codec,
+                })
+            })
+            .collect();
+        let Some((found, stream_idx)) = choose(candidates, preferred) else {
             return Err(unsupported_video_codec(
                 streams
                     .iter()
@@ -219,9 +297,9 @@ fn open_video_source(bytes: Vec<u8>) -> std::result::Result<VideoSource, DecodeF
         };
         return Ok(VideoSource {
             demuxer: Box::new(demuxer),
-            codec,
-            stream_idx: index as u64,
-            packet_stream: u32::from(pid),
+            codec: found.codec,
+            stream_idx,
+            packet_stream: found.native_id as u32,
             expected_packets: None,
         });
     }
@@ -315,7 +393,7 @@ impl KinetixVideoInspector {
         }
         let bytes =
             std::fs::read(&asset.path).map_err(|error| DecodeFailure::Failed(error.into()))?;
-        let mut source = open_video_source(bytes)?;
+        let mut source = open_video_source(bytes, preferred_video(metadata))?;
         let codec = source.codec;
         let stream_idx = source.stream_idx;
         let nominal_frame_rate = metadata

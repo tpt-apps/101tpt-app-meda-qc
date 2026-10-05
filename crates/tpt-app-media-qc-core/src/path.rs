@@ -9,12 +9,13 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
 
-/// Extensions recognised by the batch/import workflows. An explicitly selected
+/// Extensions of the formats the in-process inspector can read
+/// (`docs/supported-formats.md`), recognised by the batch/import workflows. An explicitly selected
 /// file is still probed by callers; this list is used only for directory scans
 /// and desktop import filtering.
 const MEDIA_EXTENSIONS: &[&str] = &[
-    "aac", "ac3", "avi", "eac3", "flac", "m2ts", "m4v", "mkv", "mov", "mp3", "mp4", "mxf", "mts",
-    "opus", "ts", "w64", "wav", "webm",
+    "aif", "aifc", "aiff", "flac", "m4v", "mkv", "mov", "mp4", "mts", "oga", "ogg", "opus", "ts",
+    "wav", "webm",
 ];
 
 /// Validate an existing regular file and return its canonical path.

@@ -14,7 +14,7 @@ use tpt_app_media_qc_pipeline::{InspectionLevel, QcEngine};
 use tpt_app_media_qc_profile::model::Profile;
 
 use crate::app::{build_asset, is_media_file, make_inspector, write_reports};
-use crate::exit::{EXIT_ERROR, EXIT_NO_INSPECTOR, EXIT_PATH};
+use crate::exit::{EXIT_ERROR, EXIT_PATH};
 use tpt_app_media_qc_report::ReportTemplate;
 
 /// Configuration for a watch-folder session (spec § 13 example).
@@ -51,14 +51,7 @@ pub fn run_watch(config: WatchConfig, profile: Profile, quick: bool) -> i32 {
         }
     }
 
-    let inspector = match make_inspector(quick, &profile) {
-        Ok(i) => i,
-        Err(EXIT_NO_INSPECTOR) => {
-            eprintln!("error: no probe backend available; cannot watch folders");
-            return EXIT_NO_INSPECTOR;
-        }
-        Err(code) => return code,
-    };
+    let inspector = make_inspector(quick, &profile);
     let level = if quick {
         InspectionLevel::MetadataOnly
     } else {

@@ -6,6 +6,34 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed (breaking)
+
+- **ffprobe and FFmpeg are gone.** Container and stream metadata now come from
+  the new in-process crate `tpt-app-media-qc-probe` (`NativeInspector`), which
+  reads only royalty-free formats: ISO-BMFF (MP4/M4V/MOV), Matroska/WebM,
+  MPEG-TS, WAV, AIFF/AIFC, FLAC and Ogg, carrying AV1/VP9 video and
+  Opus/Vorbis/FLAC/PCM audio, plus WebVTT/SRT/ASS/`wvtt`/`tx3g` subtitles.
+  Formats are detected from content, not extension. No external tool is needed
+  for quick or full scans, and nothing is bundled, so there are no FFmpeg
+  licence or decoder/parser patent obligations to carry.
+- Files whose audio or video uses any other codec (H.264, HEVC, AAC, ProRes,
+  MPEG-2, AC-3, MP3, ...) or any unrecognised container (MXF, AVI, ...) are
+  **refused**: `unsupported: <what was found>`, exit code 3, no report, and no
+  bitstream of such a codec is parsed. Batch and watch continue past them.
+- A damaged file in a supported container is now a `container.readable` /
+  `container.container_validity` finding (exit 2) instead of an aborted scan.
+  `container.timestamp_continuity` and `container.malformed_metadata` are now
+  fed from real sample timing and table checks (they previously always passed).
+  Frame rate comes from sample timing rather than a declared value.
+- Removed the `EXIT_NO_INSPECTOR` code path and the `ffprobe_json` fuzz target
+  (replaced by `container_probe`). Directory scans and the desktop picker now
+  recognise only `mp4 m4v mov mkv webm ts mts wav aif aiff aifc flac ogg oga
+  opus`. The README exit-code table now matches the real codes.
+- Decode adapters now pick their video track by the container's native track
+  id, so decode and metadata agree on stream indices.
+- Not yet read: fragmented MP4 (`moof`), `ctts`/edit lists. See
+  `docs/supported-formats.md`.
+
 ### Added
 
 - Plugin SDK and third-party rules (spec §27): plugins are separate programs

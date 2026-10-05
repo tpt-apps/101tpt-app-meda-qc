@@ -92,8 +92,11 @@ trait Inspector {
 }
 ```
 
-- `FfprobeInspector` (CLI crate) remains the metadata front-end and shells out
-  to `ffprobe`.
+- `NativeInspector` (`tpt-app-media-qc-probe`) is the metadata front-end: an
+  in-process, royalty-free-only reader for ISO-BMFF, Matroska/WebM, MPEG-TS,
+  WAV, AIFF, FLAC and Ogg. It detects the container from content, refuses any
+  file with a non-royalty-free codec, and reports damaged files as container
+  findings. No external program is involved.
 - `HybridInspector` (CLI crate) composes that metadata front-end with
   `KinetixVideoInspector` and `CadenceAudioInspector` for full scans. Kinetix
   demuxes MP4/ISO-BMFF, Matroska/WebM and MPEG-TS and reconstructs AV1 and VP9,
@@ -101,9 +104,10 @@ trait Inspector {
   frame-rate measurements. Cadence streams standalone WAV, AIFF/AIFC and FLAC PCM
   through silence, clipping, sample-peak, stereo-phase and DC-offset
   measurements.
-- **Patent-safe decode:** no H.264/AVC decoder is linked or shipped — AVC patent
-  pools license decoders as well as encoders. H.264 assets keep full ffprobe
-  metadata/container QC while their frame-decode rules report `Inconclusive`.
+- **Patent-safe by construction:** no H.264/AVC, HEVC or AAC decoder, and no
+  parser for those bitstreams, is linked or shipped — their patent pools
+  license decoders as well as encoders. Such files are refused as an
+  unsupported format.
 - The pinned Kinetix demuxers are in-memory; `KinetixVideoInspector` applies
   a 512 MiB input bound. Both adapters record unsupported or incomplete
   coverage instead of claiming a pass; unsupported containers/codecs are reported

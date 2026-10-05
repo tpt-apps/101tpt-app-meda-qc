@@ -1552,6 +1552,7 @@ dependencies = [
  "tpt-app-media-qc-model",
  "tpt-app-media-qc-pipeline",
  "tpt-app-media-qc-plugin",
+ "tpt-app-media-qc-probe",
  "tpt-app-media-qc-profile",
  "tpt-app-media-qc-report",
  "tpt-app-media-qc-rules",
@@ -1604,6 +1605,7 @@ dependencies = [
  "tpt-app-media-qc-model",
  "tpt-app-media-qc-plugin",
  "tpt-app-media-qc-plugin-sdk",
+ "tpt-app-media-qc-probe",
  "tpt-app-media-qc-profile",
  "tpt-app-media-qc-report",
 ]
@@ -1655,6 +1657,18 @@ dependencies = [
  "serde",
  "serde_json",
  "tpt-app-media-qc-model",
+]
+
+[[package]]
+name = "tpt-app-media-qc-probe"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tpt-app-media-qc-core",
+ "tpt-app-media-qc-model",
+ "tpt-app-media-qc-pipeline",
+ "tpt-kinetix-av1",
+ "tpt-kinetix-core",
 ]
 
 [[package]]

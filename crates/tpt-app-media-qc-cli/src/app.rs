@@ -13,7 +13,7 @@ use tpt_app_media_qc_model::asset::{Asset, AssetFingerprint};
 use tpt_app_media_qc_model::report::AnalysisId;
 use tpt_app_media_qc_model::severity::VerdictDecision;
 use tpt_app_media_qc_pipeline::compare::{compare, CompareTolerances, DifferenceKind};
-use tpt_app_media_qc_pipeline::{arc, InspectionLevel, Inspector, NoopInspector, QcEngine};
+use tpt_app_media_qc_pipeline::{arc, InspectionLevel, Inspector, QcEngine};
 use tpt_app_media_qc_plugin::PluginRegistry;
 use tpt_app_media_qc_profile::model::Profile;
 use tpt_app_media_qc_profile::{parse_str, profile_sha256};
@@ -24,11 +24,11 @@ use tpt_app_media_qc_report::{
 use tpt_app_media_qc_rules::known_rule_ids;
 
 use crate::cli::{Cli, Command};
-use crate::probe::{FfprobeInspector, HybridInspector};
+use crate::probe::HybridInspector;
+use tpt_app_media_qc_probe::NativeInspector;
 
 use crate::exit::{
-    exit_code_for_verdict, EXIT_ERROR, EXIT_FAIL, EXIT_NO_INSPECTOR, EXIT_OK, EXIT_PATH,
-    EXIT_PROFILE, EXIT_WARN,
+    exit_code_for_verdict, EXIT_ERROR, EXIT_FAIL, EXIT_OK, EXIT_PATH, EXIT_PROFILE, EXIT_WARN,
 };
 
 /// Run the parsed CLI and return the process exit code.
@@ -275,23 +275,14 @@ pub(crate) fn build_asset(path: &Path) -> Result<Asset, i32> {
     })
 }
 
-pub(crate) fn make_inspector(quick: bool, profile: &Profile) -> Result<Arc<dyn Inspector>, i32> {
+/// The inspector for a scan depth. Nothing external is needed at either depth.
+pub(crate) fn make_inspector(quick: bool, profile: &Profile) -> Arc<dyn Inspector> {
     if quick {
-        // Metadata-only path works without a probe binary but yields an empty
-        // inspection; prefer the probe when available.
-        if FfprobeInspector::available() {
-            Ok(arc(FfprobeInspector))
-        } else {
-            Ok(arc(NoopInspector))
-        }
+        arc(NativeInspector)
     } else {
-        if FfprobeInspector::available() {
-            Ok(arc(HybridInspector::with_voice(
-                HybridInspector::voice_config_for(profile),
-            )))
-        } else {
-            Err(EXIT_NO_INSPECTOR)
-        }
+        arc(HybridInspector::with_voice(
+            HybridInspector::voice_config_for(profile),
+        ))
     }
 }
 
@@ -306,8 +297,7 @@ pub fn run_qc(
 ) -> std::result::Result<tpt_app_media_qc_pipeline::QcRun, String> {
     let asset =
         build_asset(path).map_err(|code| format!("could not prepare asset (exit code {code})"))?;
-    let inspector = make_inspector(quick, &profile)
-        .map_err(|code| format!("no usable inspector (exit code {code})"))?;
+    let inspector = make_inspector(quick, &profile);
     let level = if quick {
         InspectionLevel::MetadataOnly
     } else {
@@ -451,10 +441,7 @@ fn run_check(
         InspectionLevel::Full
     };
 
-    let inspector = match make_inspector(level == InspectionLevel::MetadataOnly, &profile) {
-        Ok(i) => i,
-        Err(code) => return code,
-    };
+    let inspector = make_inspector(level == InspectionLevel::MetadataOnly, &profile);
 
     let asset = match build_asset(&file) {
         Ok(a) => a,
@@ -469,7 +456,7 @@ fn run_check(
         Ok(r) => r,
         Err(e) => {
             return err_exit(
-                format!("probe failed for '{}': {e}", file.display()),
+                format!("cannot inspect '{}': {e}", file.display()),
                 EXIT_ERROR,
             )
         }
@@ -563,9 +550,10 @@ fn collect_dir_inner(
 }
 
 pub fn is_media_file(path: &Path) -> bool {
+    // Only formats the in-process inspector can read; see docs/supported-formats.md.
     const EXTS: &[&str] = &[
-        "mov", "mp4", "mxf", "m4v", "mkv", "ts", "mts", "m2ts", "wav", "aac", "w64", "ac3", "eac3",
-        "mp3", "flac", "opus", "webm", "avi",
+        "mp4", "m4v", "mov", "mkv", "webm", "ts", "mts", "wav", "aif", "aiff", "aifc", "flac",
+        "ogg", "oga", "opus",
     ];
     path.extension()
         .and_then(|e| e.to_str())
@@ -600,10 +588,7 @@ fn run_batch(
         }
     }
 
-    let inspector = match make_inspector(quick, &profile) {
-        Ok(i) => i,
-        Err(code) => return code,
-    };
+    let inspector = make_inspector(quick, &profile);
     let level = if quick {
         InspectionLevel::MetadataOnly
     } else {
@@ -671,7 +656,7 @@ fn inspect_for_compare(
         ));
     }
     let profile = load_profile(None)?;
-    let inspector = make_inspector(quick, &profile)?;
+    let inspector = make_inspector(quick, &profile);
     let level = if quick {
         InspectionLevel::MetadataOnly
     } else {
@@ -869,10 +854,7 @@ fn run_info(file: PathBuf, profile_path: Option<PathBuf>, quick: bool) -> i32 {
         Ok(p) => p,
         Err(code) => return code,
     };
-    let inspector = match make_inspector(quick, &profile) {
-        Ok(i) => i,
-        Err(code) => return code,
-    };
+    let inspector = make_inspector(quick, &profile);
     let level = if quick {
         InspectionLevel::MetadataOnly
     } else {

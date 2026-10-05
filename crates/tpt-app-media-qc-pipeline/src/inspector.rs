@@ -1,6 +1,6 @@
 //! The inspection boundary ([spec § 11]).
 //!
-//! A probe front-end (ffprobe today; the TPT foundation crates later)
+//! A probe front-end (the in-process `tpt-app-media-qc-probe` inspector)
 //! implements [`Inspector`]. The engine calls it for a metadata-only pass and
 //! optionally a decode pass, and rules only ever see measurements.
 
@@ -21,7 +21,7 @@ pub enum InspectionLevel {
 
 /// Inspection provider boundary.
 pub trait Inspector: Send + Sync {
-    /// Human-readable probe name, e.g. `ffprobe`.
+    /// Human-readable probe name, e.g. `tpt-native-probe`.
     fn name(&self) -> &str;
 
     /// The metadata-only pass: container validity, format, durations,

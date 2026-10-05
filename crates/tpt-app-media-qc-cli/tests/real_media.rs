@@ -1,58 +1,54 @@
-//! Real-file CLI integration coverage. Requires `ffmpeg` and `ffprobe` on PATH.
+//! Real-file CLI integration coverage. Files are generated in-process (no
+//! external tools), then exercised through the real CLI binary.
 
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-fn tool_available(name: &str) -> bool {
-    Command::new(name)
-        .arg("-version")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
-}
-
 fn cli_path() -> &'static str {
     env!("CARGO_BIN_EXE_tpt-media-qc")
 }
 
-fn generate_wav(path: &Path) -> bool {
-    let output = Command::new("ffmpeg")
-        .args([
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            "sine=frequency=1000:sample_rate=48000:duration=1",
-            "-ac",
-            "2",
-            "-c:a",
-            "pcm_s16le",
-        ])
-        .arg(path)
-        .output();
-    output
-        .map(|result| result.status.success())
-        .unwrap_or(false)
+/// Write a 16-bit PCM WAV containing a sine tone.
+fn write_tone(path: &Path, frequency: f32, amplitude_db: f32, channels: u16, seconds: u32) {
+    const RATE: u32 = 48_000;
+    let amplitude = 10f32.powf(amplitude_db / 20.0);
+    let frames = RATE * seconds;
+    let data_bytes = frames * u32::from(channels) * 2;
+    let mut out = Vec::with_capacity(44 + data_bytes as usize);
+    out.extend(b"RIFF");
+    out.extend((36 + data_bytes).to_le_bytes());
+    out.extend(b"WAVEfmt ");
+    out.extend(16u32.to_le_bytes());
+    out.extend(1u16.to_le_bytes());
+    out.extend(channels.to_le_bytes());
+    out.extend(RATE.to_le_bytes());
+    out.extend((RATE * u32::from(channels) * 2).to_le_bytes());
+    out.extend((channels * 2).to_le_bytes());
+    out.extend(16u16.to_le_bytes());
+    out.extend(b"data");
+    out.extend(data_bytes.to_le_bytes());
+    for n in 0..frames {
+        let t = n as f32 / RATE as f32;
+        let sample = (amplitude * (2.0 * std::f32::consts::PI * frequency * t).sin() * 32767.0)
+            .round() as i16;
+        for _ in 0..channels {
+            out.extend(sample.to_le_bytes());
+        }
+    }
+    std::fs::write(path, out).expect("write WAV fixture");
+}
+
+fn generate_wav(path: &Path) {
+    write_tone(path, 1000.0, 0.0, 2, 1);
 }
 
 #[test]
-fn real_wav_info_and_full_check_use_ffprobe_and_decode_audio() {
-    if !tool_available("ffmpeg") || !tool_available("ffprobe") {
-        eprintln!("skipping real-media CLI test: ffmpeg/ffprobe is unavailable");
-        return;
-    }
-
+fn real_wav_info_and_full_check_decode_audio() {
     let directory = tempfile::tempdir().expect("temporary directory");
     let wav = directory.path().join("sample.wav");
-    assert!(
-        generate_wav(&wav),
-        "ffmpeg could not generate the WAV fixture"
-    );
+    generate_wav(&wav);
 
     let info = Command::new(cli_path())
         .args(["info", "--quick"])
@@ -97,19 +93,11 @@ fn real_wav_info_and_full_check_use_ffprobe_and_decode_audio() {
 
 #[test]
 fn real_batch_continues_after_a_probe_failure() {
-    if !tool_available("ffmpeg") || !tool_available("ffprobe") {
-        eprintln!("skipping real batch test: ffmpeg/ffprobe is unavailable");
-        return;
-    }
-
     let directory = tempfile::tempdir().expect("temporary directory");
     let valid = directory.path().join("valid.wav");
     let corrupt = directory.path().join("corrupt.wav");
     let reports = directory.path().join("reports");
-    assert!(
-        generate_wav(&valid),
-        "ffmpeg could not generate the valid WAV"
-    );
+    generate_wav(&valid);
     std::fs::write(&corrupt, b"not a media container").expect("write corrupt fixture");
 
     let output = Command::new(cli_path())
@@ -143,11 +131,6 @@ fn real_batch_continues_after_a_probe_failure() {
 
 #[test]
 fn real_watch_routes_a_preexisting_asset() {
-    if !tool_available("ffmpeg") || !tool_available("ffprobe") {
-        eprintln!("skipping real watch test: ffmpeg/ffprobe is unavailable");
-        return;
-    }
-
     let directory = tempfile::tempdir().expect("temporary directory");
     let input = directory.path().join("incoming");
     let pass = directory.path().join("approved");
@@ -163,10 +146,7 @@ fn real_watch_routes_a_preexisting_asset() {
     .expect("write watch profile");
 
     let wav = input.join("sample.wav");
-    assert!(
-        generate_wav(&wav),
-        "ffmpeg could not generate the watch WAV"
-    );
+    generate_wav(&wav);
 
     let mut child = Command::new(cli_path())
         .args(["watch", "--input"])
@@ -214,41 +194,15 @@ fn real_watch_routes_a_preexisting_asset() {
     );
 }
 
-fn generate_tone(path: &Path, frequency: u32, amplitude_db: i32, channels: &str) -> bool {
-    Command::new("ffmpeg")
-        .args([
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-f",
-            "lavfi",
-            "-i",
-        ])
-        .arg(format!(
-            "sine=frequency={frequency}:sample_rate=48000:duration=4"
-        ))
-        .args(["-af", &format!("volume={amplitude_db}dB"), "-ac", channels])
-        .args(["-c:a", "pcm_s16le"])
-        .arg(path)
-        .output()
-        .map(|result| result.status.success())
-        .unwrap_or(false)
-}
-
 #[test]
 fn real_compare_reports_identity_and_audio_differences() {
-    if !tool_available("ffmpeg") || !tool_available("ffprobe") {
-        eprintln!("skipping real-media compare test: ffmpeg/ffprobe is unavailable");
-        return;
-    }
     let directory = tempfile::tempdir().expect("temporary directory");
     let (a, b) = (
         directory.path().join("a.wav"),
         directory.path().join("b.wav"),
     );
-    assert!(generate_tone(&a, 1000, -10, "2"));
-    assert!(generate_tone(&b, 1000, -20, "1"));
+    write_tone(&a, 1000.0, -10.0, 2, 4);
+    write_tone(&b, 1000.0, -20.0, 1, 4);
 
     let same = Command::new(cli_path())
         .arg("compare")
@@ -277,4 +231,108 @@ fn real_compare_reports_identity_and_audio_differences() {
     assert!(stdout.contains("channels"), "{stdout}");
     assert!(stdout.contains("integrated loudness"), "{stdout}");
     assert!(json.is_file());
+}
+
+/// Path to a committed encoded fixture.
+fn encoded_fixture(name: &str) -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/encoded")
+        .join(name)
+}
+
+fn mp4_box(kind: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+    let mut out = ((payload.len() + 8) as u32).to_be_bytes().to_vec();
+    out.extend(kind);
+    out.extend(payload);
+    out
+}
+
+/// A minimal MP4 whose only track is `fourcc` video (no sample data).
+fn mp4_with_video_codec(fourcc: &[u8; 4]) -> Vec<u8> {
+    let mut hdlr = vec![0u8; 8];
+    hdlr.extend(b"vide");
+    hdlr.extend([0u8; 13]);
+    let mut entry = vec![0u8; 78];
+    entry[7] = 1;
+    let mut stsd = vec![0, 0, 0, 0, 0, 0, 0, 1];
+    stsd.extend(mp4_box(fourcc, &entry));
+    let stbl = mp4_box(b"stbl", &mp4_box(b"stsd", &stsd));
+    let minf = mp4_box(b"minf", &stbl);
+    let mdia = mp4_box(b"mdia", &[mp4_box(b"hdlr", &hdlr), minf].concat());
+    let trak = mp4_box(b"trak", &mdia);
+    let mut file = mp4_box(b"ftyp", b"isom\0\0\0\0isom");
+    file.extend(mp4_box(b"moov", &trak));
+    file
+}
+
+#[test]
+fn patent_encumbered_codecs_are_refused_not_inspected() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let h264 = directory.path().join("camera.mp4");
+    std::fs::write(&h264, mp4_with_video_codec(b"avc1")).expect("write fixture");
+    let hevc = directory.path().join("hevc.mp4");
+    std::fs::write(&hevc, mp4_with_video_codec(b"hvc1")).expect("write fixture");
+
+    for (file, needle) in [(&h264, "H.264"), (&hevc, "HEVC")] {
+        let out = Command::new(cli_path())
+            .args(["check", "--quick"])
+            .arg(file)
+            .output()
+            .expect("CLI starts");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(3), "{stderr}");
+        assert!(stderr.contains("unsupported"), "{stderr}");
+        assert!(stderr.contains(needle), "{stderr}");
+        assert!(stderr.contains("royalty-free"), "{stderr}");
+        assert!(
+            String::from_utf8_lossy(&out.stdout).trim().is_empty(),
+            "a refused file must not produce a verdict"
+        );
+    }
+}
+
+#[test]
+fn a_truncated_wav_is_a_container_failure_not_a_crash() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let wav = directory.path().join("cut.wav");
+    write_tone(&wav, 440.0, -6.0, 2, 2);
+    let full = std::fs::read(&wav).expect("read WAV");
+    std::fs::write(&wav, &full[..full.len() / 2]).expect("truncate WAV");
+
+    let out = Command::new(cli_path())
+        .args(["check", "--quick"])
+        .arg(&wav)
+        .output()
+        .expect("CLI starts");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(2), "{stdout}");
+    assert!(stdout.contains("container.readable"), "{stdout}");
+    assert!(stdout.contains("data chunk declares"), "{stdout}");
+}
+
+#[test]
+fn committed_vp9_fixtures_inspect_without_any_external_tool() {
+    for (name, format) in [
+        ("vp9-clip.mp4", "mov,mp4"),
+        ("vp9-clip.webm", "matroska,webm"),
+    ] {
+        // An empty PATH proves nothing outside this binary is used.
+        let out = Command::new(cli_path())
+            .args(["info", "--quick"])
+            .arg(encoded_fixture(name))
+            .env("PATH", "")
+            .output()
+            .expect("CLI starts");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.code().is_some_and(|c| c <= 2),
+            "{name}: {stdout}"
+        );
+        assert!(
+            stdout.contains(&format!("format        {format}")),
+            "{name}: {stdout}"
+        );
+        assert!(stdout.contains("video s0   fps 10/1"), "{name}: {stdout}");
+        assert!(stdout.contains("duration      300 ms"), "{name}: {stdout}");
+    }
 }

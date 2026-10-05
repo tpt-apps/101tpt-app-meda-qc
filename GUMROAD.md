@@ -17,24 +17,17 @@ open. Revisit item-by-item before the first upload.
       whether that's acceptable (paying for convenience/support) or whether
       the repo needs to go private / license needs to change first. Deferred
       as of 2026-09-25; revisit before launch.
-- [ ] `ffprobe` dependency: the app shells out to a system `ffprobe` binary
-      (`crates/tpt-app-media-qc-cli/src/probe.rs`). Either bundle a static
-      ffmpeg/ffprobe binary with the installer, or clearly document it as a
-      required separate install — customers won't have it by default.
-      **Patent caveat:** stock ffmpeg/ffprobe builds contain H.264 (and AAC,
-      HEVC…) decoders, and AVC patent pools license decoders as well as
-      encoders. Nothing is bundled today (the release workflow and Tauri
-      config ship no ffmpeg), so the app itself ships no H.264 decoder. If you
-      choose to bundle, use a custom ffprobe build with those decoders
-      disabled, or take licensing advice first; documenting ffprobe as a
-      customer-installed prerequisite keeps that liability with the customer.
-- [x] H.264 decode removed from the product (patent licensing). Full-decode
-      video QC now covers royalty-free AV1 and VP9 (MP4 and Matroska/WebM)
-      through `tpt-kinetix-av1` / `tpt-kinetix-vp9`; H.264 and other codecs
-      still get full ffprobe metadata and container QC, with frame-decode rules
-      reported `Inconclusive`. AAC was never decoded. Not legal advice —
-      re-check the remaining codec/patent posture (Kinetix `PATENTS.md`,
-      ffprobe distribution, rav1e licence terms) before the first paid release.
+- [x] `ffprobe` dependency **removed**. The metadata pass is now an in-process,
+      royalty-free-only inspector (`crates/tpt-app-media-qc-probe`), so there is
+      no FFmpeg to bundle, document, or license (no LGPL obligations, no
+      decoder/parser patent exposure from a bundled binary).
+- [x] Patent posture: no H.264/HEVC/AAC decoder **or parser** is linked. Files in
+      those codecs (and ProRes, MPEG-2, AC-3, MP3, ...) are refused as
+      "unsupported". Full-decode video QC covers royalty-free AV1 and VP9
+      through `tpt-kinetix-av1` / `tpt-kinetix-vp9`. State this limit plainly on
+      the listing: the product does not inspect most broadcast/camera delivery
+      formats. Not legal advice — re-check the remaining posture (Kinetix
+      `PATENTS.md`, rav1e licence terms) before the first paid release.
 
 ## Build & packaging
 
@@ -58,10 +51,11 @@ open. Revisit item-by-item before the first upload.
 
 - [ ] Product title, one-line pitch, and description (pull from `spec.txt` /
       README feature list — content-based fingerprinting, rule-based QC
-      profiles, deterministic reports). State the codec scope honestly: frame
-      analysis for AV1/VP9, WAV/AIFF/FLAC audio decode, and metadata/container
-      QC for everything ffprobe can read (including H.264/AAC, which are not
-      decoded).
+      profiles, deterministic reports). State the codec scope honestly:
+      royalty-free formats only (AV1/VP9 video; Opus/Vorbis/FLAC/PCM audio; MP4,
+      Matroska/WebM, MPEG-TS, WAV, AIFF, FLAC, Ogg), with frame analysis for
+      AV1/VP9 and audio decode for WAV/AIFF/FLAC. H.264, HEVC, AAC, ProRes and
+      MXF files are not supported.
 - [ ] Screenshots/demo video of the actual GUI (the Tauri shell now exists;
       capture and approve store-ready assets before launch).
 - [ ] Pricing tier(s) — one-time license vs. subscription; single-seat vs.

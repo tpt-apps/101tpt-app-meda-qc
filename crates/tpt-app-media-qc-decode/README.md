@@ -11,10 +11,9 @@ corrupt-frame errors, luma statistics, dead-pixel clustering, flash
 screening, silence, clipping, peak, stereo phase, DC offset, BS.1770
 loudness and true peak.
 
-Royalty-free codecs only: H.264 is deliberately **not** decoded (AVC patent
-pools license decoders as well as encoders). Such assets keep full
-ffprobe metadata/container QC and their frame-decode rules report
-`Inconclusive`. Both video decoders run in strict mode — a stream that
+Royalty-free codecs only: H.264 is deliberately **not** decoded or parsed (AVC
+patent pools license decoders as well as encoders); the metadata inspector
+refuses such files as an unsupported format. Both video decoders run in strict mode — a stream that
 cannot be reconstructed faithfully is unmeasurable, not approximated. The
 pinned demuxers are in-memory, so inputs over 512 MiB are refused
 (`DEFAULT_MAX_DECODE_INPUT_BYTES`); frames are analysed one at a time.

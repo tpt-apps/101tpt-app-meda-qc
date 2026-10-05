@@ -99,7 +99,7 @@ async function pickMedia(kind) {
   try {
     const selected = await dialog.open(kind === "folder" ? { directory: true, multiple: false } : {
       multiple: true,
-      filters: [{ name: "Media", extensions: ["mov", "mp4", "mxf", "m4v", "mkv", "ts", "mts", "m2ts", "wav", "aac", "w64", "ac3", "eac3", "mp3", "flac", "opus", "webm", "avi"] }],
+      filters: [{ name: "Media", extensions: ["mp4", "m4v", "mov", "mkv", "webm", "ts", "mts", "wav", "aif", "aiff", "aifc", "flac", "ogg", "oga", "opus"] }],
     });
     if (!selected) return;
     await importPaths(Array.isArray(selected) ? selected : [selected], recursive);

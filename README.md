@@ -15,14 +15,16 @@ no mandatory network access are required.
 
 - **Content-based asset fingerprinting** — identity is SHA-256 of content, not
   path, so moved/replaced files are detected ([spec §6.1]).
-- **Stream/container inspection** — ffprobe-backed metadata plus a Kinetix-backed
-  AV1/VP9 video decode pass (MP4/ISO-BMFF, Matroska/WebM and MPEG-TS) and a
-  Cadence-backed standalone audio decode pass for WAV, AIFF/AIFC and FLAC. The
-  video pass measures frame rate, black/freeze/duplicate segments, corrupt-frame
-  errors and luma statistics; the audio pass measures silence, clipping, sample
-  peak, stereo phase and DC offset. H.264 is deliberately **not** decoded (AVC
-  patent licensing): those assets keep full metadata/container QC and their
-  frame-decode rules report `Inconclusive`.
+- **Stream/container inspection** — an in-process, **royalty-free-only**
+  inspector (no FFmpeg, no external tools) reads MP4/MOV, Matroska/WebM,
+  MPEG-TS, WAV, AIFF, FLAC and Ogg files carrying AV1/VP9 video and
+  Opus/Vorbis/FLAC/PCM audio. A Kinetix-backed AV1/VP9 decode pass measures
+  frame rate, black/freeze/duplicate segments, corrupt-frame errors and luma
+  statistics, and a Cadence-backed pass measures standalone WAV/AIFF/FLAC audio
+  (silence, clipping, peaks, loudness, phase, DC offset). Files in H.264, HEVC,
+  AAC, ProRes and other patent-encumbered or unsupported formats are **refused**
+  with an "unsupported" message and never parsed (see
+  [`docs/supported-formats.md`](./docs/supported-formats.md)).
 - **Rule-based QC profiles** — human-readable, versioned, deterministic YAML profiles ([spec §9]).
 - **Container, video and audio rules** — readability, validity, duration/bitrate
   consistency, timecode/timebase/timestamp continuity, resolution, frame rate,
@@ -66,8 +68,8 @@ unsigned Windows, macOS and Linux bundles on native runners and attaches them
 to a draft GitHub Release. The workflow does not sign, notarize or upload to
 Gumroad; those remain launch gates in [`GUMROAD.md`](./GUMROAD.md).
 
-`ffprobe` must be on `PATH` for full and metadata scans. The current release is
-unsigned until a signing certificate and Windows release configuration are
+No external tools are needed: the metadata pass is built in. The current release
+is unsigned until a signing certificate and Windows release configuration are
 approved.
 
 ### Optional local API
@@ -103,17 +105,16 @@ tpt-media-qc compare master_v1.mov master_v2.mov --json diff.json
 tpt-media-qc list-rules --profile profiles/generic/generic.yaml
 ```
 
-Exit codes are stable per spec §16: `0` = PASS, `1` = WARN, `2` = FAIL,
-`3` = INCONCLUSIVE, `4` = CONFIGURATION_ERROR, `5` = INPUT_ERROR, `6` =
-INTERNAL_ERROR.
+Exit codes are stable per spec §16: `0` = PASS, `1` = WARN or inconclusive,
+`2` = FAIL, `3` = execution error (including an unsupported or unreadable
+format), `4` = asset not found, `5` = profile missing or invalid.
 
-Full scans use `ffprobe` for the metadata pass, the pinned TPT Kinetix AV1 and
-VP9 decoders for MP4/ISO-BMFF, Matroska/WebM and MPEG-TS video, and pinned TPT
-Cadence readers for standalone WAV, AIFF/AIFC and FLAC audio. The current Kinetix
-demuxers are in-memory, so that video adapter refuses inputs over 512 MiB.
-Embedded audio, true-peak, BS.1770 loudness and undecoded video codecs
-(H.264, HEVC, ProRes…) remain explicitly unsupported or `Inconclusive` until
-their complete decode/measurement paths are integrated.
+Container and stream metadata come from the built-in royalty-free inspector.
+Full scans add the pinned TPT Kinetix AV1 and VP9 decoders for MP4/ISO-BMFF,
+Matroska/WebM and MPEG-TS video, and pinned TPT Cadence readers for standalone
+WAV, AIFF/AIFC and FLAC audio. The current Kinetix demuxers are in-memory, so
+that video adapter refuses inputs over 512 MiB. Embedded and Ogg audio are
+inspected for metadata only, so their audio measurements stay `Inconclusive`.
 
 ## Repository layout
 

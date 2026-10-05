@@ -87,7 +87,7 @@ impl MediaFixture {
 
 /// An [`Inspector`] that replays a fixture's canned [`Inspection`] instead of
 /// probing real media. This seam makes the whole rule engine testable without
-/// encoded media files or an `ffprobe` installation.
+/// encoded media files or any external tool.
 pub struct FixtureInspector {
     inspection: Inspection,
 }

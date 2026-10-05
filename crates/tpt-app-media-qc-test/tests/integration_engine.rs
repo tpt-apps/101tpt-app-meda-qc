@@ -1,7 +1,7 @@
 //! End-to-end pipeline integration test ([spec § 11, § 14]).
 //!
 //! Fixture inspector → QC engine → immutable report → JSON/HTML/CSV/PDF
-//! exports, all offline (no media files, no `ffprobe` requirement).
+//! exports, all offline (no media files, no external tools).
 
 use std::sync::Arc;
 

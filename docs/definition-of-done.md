@@ -8,9 +8,9 @@ alone. Re-run this audit before declaring the MVP complete (todo item 28).
 
 | # | Spec §30 item | Status | Evidence |
 |---|---------------|--------|----------|
-| 1 | Install without development tooling | **Partial** | `.github/workflows/release.yml` builds unsigned per-OS bundles on tag; `ffprobe` requirement is documented (`GUMROAD.md`, `docs/supported-formats.md`). Signing/notarization and an installer UX check need external credentials — see `GUMROAD.md`. |
+| 1 | Install without development tooling | **Partial** | `.github/workflows/release.yml` builds unsigned per-OS bundles on tag; no external tool is required (the metadata inspector is built in; `docs/supported-formats.md`). Signing/notarization and an installer UX check need external credentials — see `GUMROAD.md`. |
 | 2 | Drag a media file into the application | Done | Desktop import card + drag-and-drop overlay (`crates/tpt-app-media-qc-tauri/ui/app.js`), folder import, `MAX_IMPORT_FILES` bound. |
-| 3 | Inspect all supported streams | Done (declared scope) | AV1/VP9 in MP4, Matroska/WebM and MPEG-TS via Kinetix (H.264 deliberately not decoded, patent licensing), WAV/AIFF/FLAC via Cadence, metadata via `ffprobe`; unsupported codecs are reported as such, never guessed (`docs/supported-formats.md`). |
+| 3 | Inspect all supported streams | Done (declared scope) | AV1/VP9 in MP4, Matroska/WebM and MPEG-TS via Kinetix, WAV/AIFF/FLAC via Cadence, metadata via the built-in royalty-free inspector (`tpt-app-media-qc-probe`); files with patent-encumbered codecs (H.264, HEVC, AAC, ProRes...) are refused as unsupported, never guessed (`docs/supported-formats.md`). |
 | 4 | QC profile can be selected or created | Done | Profile selector in the desktop app, custom YAML profile picker, bundled `profiles/` tree with strict parser (`docs/profile-format.md`); creation is editing YAML in any editor by design (spec §9). |
 | 5 | Complete QC job runs offline | Done | No network in the engine; the only optional listener is the loopback-only local API (`crates/tpt-app-media-qc-tauri/src/local_api.rs`). |
 | 6 | Multiple files processed concurrently | Done | Cost-class scheduler with bounded concurrency and backpressure (`crates/tpt-app-media-qc-pipeline/src/scheduler.rs`). |
@@ -22,10 +22,10 @@ alone. Re-run this audit before declaring the MVP complete (todo item 28).
 | 12 | Watch-folder processing works | Done | `watch` command (spec §13) with pass/warn/fail routing; exercised by real-process integration tests. |
 | 13 | Corrupt file cannot crash the batch | Done | Per-job failure isolation; covered by `real_media.rs` batch-isolation test and `media_boundary` fuzz target. |
 | 14 | Golden-media tests cover every production rule | Done | All-rules `golden-suite` profile + manifests pin verdict/status for the full catalogue (incl. `video.scan_format`, `video.hdr`, `video.dead_pixels`, `video.blockiness`/`blur`/`noise`, `subtitle.*`), `tests/golden/`. |
-| 15 | Fuzz testing covers parsers and media boundaries | Done | Seven targets: `profile_parse`, `ffprobe_json`, `result_parser`, `report_generation`, `clap_args`, `media_boundary`, `plugin_boundary`; bounded campaigns run on every push/PR in CI (Linux — libFuzzer is not linkable on Windows/MSVC). Long-running scheduled campaigns remain optional hardening. |
+| 15 | Fuzz testing covers parsers and media boundaries | Done | Seven targets: `profile_parse`, `container_probe`, `result_parser`, `report_generation`, `clap_args`, `media_boundary`, `plugin_boundary`; bounded campaigns run on every push/PR in CI (Linux — libFuzzer is not linkable on Windows/MSVC). Long-running scheduled campaigns remain optional hardening. |
 | 16 | Reproducible from fingerprint + profile + versions | Done | Cache keys and report integrity fields: asset SHA-256, profile SHA-256, app version, ruleset version (`docs/report-format.md`, `docs/performance.md`). |
 | 17 | No internet connection required | Done | Offline-first; no telemetry, no cloud upload (spec §22). |
-| 18 | Clean-machine installation tested | **External** | Requires a pristine machine per OS with the produced bundles; blockers are signing (optional) and `ffprobe` availability (`GUMROAD.md`). |
+| 18 | Clean-machine installation tested | **External** | Requires a pristine machine per OS with the produced bundles; the remaining blocker is signing (optional). |
 | 19 | Performance benchmarked on representative HD/UHD | **Partial** | `qc-bench` micro-benchmarks with committed baseline (`tests/performance/baseline.md`); representative *media* benchmarks grow with decode coverage AV1 HD/UHD decode + analysis benchmarked with the `decode_bench` example on synthetic content; VP9 measured on libvpx test clips; real high-bitrate masters and peak RSS pending; other codecs capability-gated. |
 
 ## Remaining before MVP completion

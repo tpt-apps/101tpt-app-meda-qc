@@ -1,101 +1,111 @@
 # Supported Formats
 
-This page documents which containers, codecs and stream kinds TPT Media QC
-inspects today and how format coverage is governed. **Format support is driven
-by the capabilities of the probe stack**, not hard-coded UI logic (spec §8.7).
+TPT Media QC reads **royalty-free formats only**, with its own in-process
+parsers. It does not use FFmpeg, ffprobe or any other external program, and it
+never parses the bitstream of a patent-encumbered codec. This page lists what
+is inspected, what is refused, and why.
 
-## 1. Current status: ffprobe metadata front-end
+## 1. What is inspected
 
-The shipped probe boundary (`FfprobeInspector` in the CLI crate) shells out to
-the system `ffprobe`. Every container and codec `ffprobe` can parse is visible
-to the metadata rules; the *supported* set is therefore whatever your `ffprobe`
-build supports. The media extensions the CLI batch scanner recognises are:
+| Kind | Inspected |
+|------|-----------|
+| Containers | ISO-BMFF (`.mp4`, `.m4v`, `.mov`), Matroska/WebM (`.mkv`, `.webm`), MPEG-TS (`.ts`, `.mts`), WAV, AIFF/AIFC, FLAC, Ogg |
+| Video codecs | AV1, VP9 |
+| Audio codecs | Opus, Vorbis, FLAC, PCM (integer and float) |
+| Subtitles | WebVTT, SRT, ASS/SSA (Matroska); `wvtt`, `tx3g` (MP4) |
+| Other tracks | MOV/MP4 `tmcd` timecode is read as metadata; other data, image-subtitle and attachment tracks are listed but not interpreted |
 
-`mov`, `mp4`, `mxf`, `m4v`, `mkv`, `ts`, `mts`, `m2ts`, `wav`, `aac`, `w64`,
-`ac3`, `eac3`, `mp3`, `flac`, `opus`, `webm`, `avi`.
+The container is identified from the file's **content**, never its extension.
 
-Metadata inspection covers, per stream: codec, codec profile, dimensions,
-pixel format, frame rate, time base, bitrate, duration, language, channel
-layout, channels, sample rate and bit depth, plus container format, duration,
-bitrate and timecode presence.
+Per stream the metadata pass reports: codec, codec profile, dimensions, pixel
+format, frame rate (from the container's sample timing, not a declared value),
+time base, bitrate, duration, language, channel layout, channels, sample rate,
+bit depth and stream tags; for video also colour tags and HDR static metadata
+(ST 2086 mastering display, MaxCLL/MaxFALL) and field order; and per container
+the format, duration, bitrate, timecode presence, timestamp gaps and
+malformed-metadata notes.
 
-## 2. Full-decode coverage
+## 2. What is refused
 
-Full-decode adapters are deliberately narrow and capability-driven:
+A file containing **any audio or video codec outside the table above** is
+refused as an unsupported format. The tool prints
+`unsupported: <what was found>. TPT Media QC inspects royalty-free formats only (...)`, exits with code 3, and writes no
+report; batch and watch-folder runs continue with the next file. Nothing in
+such a file is parsed (the track list is classified by codec name only).
 
-- **Video containers:** MP4/ISO-BMFF, Matroska/WebM and MPEG-TS (188-byte transport
-  streams, incl. HLS segments) through `tpt-kinetix-demux`.
-- **Video codec:** AV1 and VP9 through `tpt-kinetix-av1` / `tpt-kinetix-vp9`.
-  **No H.264/AVC decoder ships.** AVC patent pools license decoders as well as
-  encoders, so H.264 assets are still fully inspected for metadata and container
-  rules by `ffprobe`, while their frame-decode rules report `Inconclusive`.
-- **Video measurements:** observed frame rate, black-frame ranges, freeze-frame
-  ranges, duplicate-frame ranges, decode-error count and all-sample luma
-  statistics (min/max/mean/legal-range fractions).
-- **Standalone audio containers:** WAV, AIFF/AIFC and FLAC through the pinned
-  Cadence readers.
-- **Audio measurements:** decoded-frame coverage, silence ranges, clipping
-  events, sample peak, true peak (BS.1770-4 Annex 2), gated integrated
-  loudness (BS.1770-4 K-weighting and §5 gating), stereo phase correlation and
-  DC offset. Silence ranges are bounded; if their retention limit is reached,
-  the silence rule returns `Inconclusive`. Loudness range (EBU Tech 3342) needs
-  at least 3 s of audio, and integrated loudness needs at least one complete 400 ms
-  gating block — shorter files report it as unmeasured rather than as a
-  compliant value.
-- **Unsupported/incomplete input:** adapters record no decoded coverage or an
-  explicit incomplete state and the affected rules return `Inconclusive`; they
-  never turn an empty measurement into a pass. A container or codec that cannot
-  be decoded (H.264, HEVC, ProRes, MXF, …) is reported as unsupported and never
-  as a decode error, so `video.corrupt_frames` cannot fail an asset simply
-  because it was not decoded.
+This covers, among others: H.264/AVC, HEVC/H.265, MPEG-2, MPEG-4 visual,
+Apple ProRes, DNxHD/HR, XDCAM, AAC, AC-3/E-AC-3, DTS, MP3, Apple Lossless,
+and the MXF, AVI, FLV, MPEG-PS and Matroska files that carry them. A file
+whose container is not recognised at all (MXF, AVI, raw ADTS/MP3, ...) is
+refused the same way.
 
-The pinned Kinetix demuxers are currently in-memory. The video adapter
-therefore refuses files over 512 MiB rather than allocating without a bound.
-Embedded audio, HEVC, MXF and other containers remain follow-up work through
-the Kinetix/Cadence bridge and other foundation crates. MPEG-TS coverage is
-188-byte packets only: audio elementary streams inside a transport stream are
-demuxed but not decoded (the Cadence readers take standalone files), so a
-broadcast `.ts` gets full video frame QC while its audio silence/clipping/
-loudness findings stay `Inconclusive`.
+Why: AVC, HEVC, AAC and the other MPEG-family codecs are covered by patent
+pools that license decoders and encoders. Reading even their headers would
+mean shipping code that implements part of those standards, so the product
+does not. AV1 and VP9 are designed to be royalty-free. If a delivery you need
+to QC is in a refused format, transcode it to a supported one first or use a
+tool that carries the licences.
 
-## 3. Intended target coverage (post-integration)
+## 3. Damaged files are findings, not errors
 
-- **Containers:** MP4/MOV (QuickTime), MXF (OP1a, OP-Atom), MPEG-TS/M2TS, MKV,
-  WebM, AVI, WAV/W64, MP3, FLAC, Ogg/Opus, AC-3/E-AC-3, AAC (in supported
-  containers).
-- **Video codecs:** AV1, VP9 today; H.265/HEVC, ProRes, XAVC, DNxHD/HR,
-  MPEG-2, VC-1 as the foundation matures. H.264/AVC is intentionally absent
-  (patent licensing); its assets stay metadata-inspectable.
-- **Audio codecs:** PCM, AAC, AC-3/E-AC-3, MP3, FLAC, Opus, DTS as handled by
-  `tpt-cadence`.
+A file in a **supported** container that is damaged (truncated, missing its
+index, bad chunk sizes) is not refused. It is inspected as far as possible and
+reported as a container-validity problem, so `container.readable` and
+`container.container_validity` fail with an explanation. Timestamp gaps and
+backward jumps, MPEG-TS continuity/CRC errors, and inconsistent sample tables
+are reported through `container.timestamp_continuity` and
+`container.malformed_metadata`.
 
-Coverage claims will be updated here when the decode stack is integrated and
-validated against fixtures.
+Fragmented MP4 (CMAF/DASH segments, `moof` boxes) is not read yet: fields that
+depend on sample tables are left unmeasured and the affected rules report
+`Inconclusive`.
 
-## 4. Handling unknown formats
+## 4. Full-decode coverage
 
-- **Metadata path:** unreadable/non-media files surface as a container
-  validity finding (`readable`, `container_validity`) rather than a crash —
-  a single corrupt asset must never terminate a batch (spec §21).
-- **Batch scanning:** only the extensions listed above are picked up for
-  directory scans; explicit files are attempted regardless of extension.
-- **Subtitle/caption streams:** validated by the `subtitle.*` rules (spec §8.7) —
-  presence, language, cue timing (overlaps, invalid durations, gaps, cue length),
-  cue content (malformed/empty payloads, characters per line, lines per cue) and
-  coverage against the video duration. Cue timing is read for **every** subtitle
-  codec. Cue *text* — and therefore the character-limit, empty-cue and
-  malformed-payload checks — requires a text-based payload and is limited to
-  `subrip`, `srt`, `ass`, `ssa`, `webvtt`, `text`, `microdvd`, `mpl2` and
-  `subviewer`. Bitmap/structured formats (`dvdsub`, `hdmv_pgs_subtitle`,
-  `dvb_subtitle`, `mov_text`) are timing-only and report `Inconclusive` for the
-  text-dependent checks rather than guessing. Cue analysis is capped at 100 000
-  cues per stream. Optional voice analysis of standalone WAV/AIFF/FLAC audio is described in [`voice-and-correction.md`](./voice-and-correction.md) (spec §8.8).
+Decode adapters are narrow and capability-driven:
 
-## 5. Security note
+- **Video:** AV1 and VP9 in MP4, Matroska/WebM and MPEG-TS, through
+  `tpt-kinetix-demux`, `tpt-kinetix-av1` and `tpt-kinetix-vp9`. Measurements:
+  observed frame rate, black/freeze/duplicate-frame ranges, decode-error count,
+  luma statistics and the perceptual, dead-pixel and flash analyses.
+- **Standalone audio:** WAV, AIFF/AIFC and FLAC through the pinned Cadence
+  readers. Measurements: decoded-frame coverage, silence ranges, clipping, sample
+  peak, true peak (BS.1770-4 Annex 2), gated integrated loudness (BS.1770-4),
+  loudness range (EBU Tech 3342), stereo phase and DC offset. Loudness needs at
+  least one complete 400 ms gating block and loudness range at least 3 s; shorter
+  audio reports them as unmeasured, never as a compliant value.
+- **Not decoded:** audio inside MP4/Matroska/MPEG-TS (Opus, Vorbis, FLAC, PCM
+  elementary streams) and Ogg files are inspected for metadata only, so their
+  silence, clipping, peak and loudness rules report `Inconclusive`. The video
+  adapter refuses inputs over 512 MiB because the pinned demuxers are
+  in-memory.
+- Unsupported or incomplete coverage always yields `Inconclusive`; an empty
+  measurement is never turned into a pass.
 
-Media parsers never *execute* embedded content, and parser code is a target
-for fuzzing (spec §22, §24.4). The probe boundary runs `ffprobe` as a separate
-process; when the in-process TPT stack is integrated, its parsers will be fuzz
-tested before being accepted. Media/profile inputs are canonicalized before
-use, and report exporters stage output in securely created temporary files
-before replacing the requested destination.
+## 5. Subtitles and captions
+
+The `subtitle.*` rules (spec §8.7) cover presence, language, cue timing
+(overlaps, invalid durations, gaps, cue length), cue content (malformed and
+empty payloads, characters per line, lines per cue) and coverage against the
+video duration. Cue timing is read for every subtitle track. Cue text, and
+therefore the character-limit, empty-cue and malformed-payload checks, needs a
+text codec: `subrip`, `ass`, `ssa`, `webvtt` or `tx3g`. Image and other
+subtitle tracks are listed and checked for timing only and report
+`Inconclusive` for text-dependent checks. Cue analysis is capped at 100 000 cues
+per stream. Optional voice analysis of standalone audio is described in
+[`voice-and-correction.md`](./voice-and-correction.md).
+
+## 6. Batch scanning
+
+Directory scans pick up files with these extensions: `mp4`, `m4v`, `mov`,
+`mkv`, `webm`, `ts`, `mts`, `wav`, `aif`, `aiff`, `aifc`, `flac`, `ogg`,
+`oga`, `opus`. An explicitly named file is attempted whatever its extension.
+
+## 7. Security note
+
+Parsers never execute embedded content and are fuzz-tested (spec §22, §24.4):
+the `container_probe` target feeds arbitrary bytes to the container detector
+and every reader. Readers walk files with bounded, seek-based reads and
+checked arithmetic, so a hostile or truncated file cannot make the inspector
+allocate without bound. Media and profile inputs are canonicalised before use,
+and report exporters stage output in securely created temporary files.

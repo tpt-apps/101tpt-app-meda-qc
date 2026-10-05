@@ -24,6 +24,7 @@ serde_json = "1"
 tpt-app-media-qc-profile = { path = "../crates/tpt-app-media-qc-profile" }
 tpt-app-media-qc-report = { path = "../crates/tpt-app-media-qc-report" }
 tpt-app-media-qc-cli = { path = "../crates/tpt-app-media-qc-cli" }
+tpt-app-media-qc-probe = { path = "../crates/tpt-app-media-qc-probe" }
 tpt-app-media-qc-plugin = { path = "../crates/tpt-app-media-qc-plugin" }
 tpt-app-media-qc-plugin-sdk = { path = "../crates/tpt-app-media-qc-plugin-sdk" }
 
@@ -35,8 +36,8 @@ doc = false
 bench = false
 
 [[bin]]
-name = "ffprobe_json"
-path = "fuzz_targets/ffprobe_json.rs"
+name = "container_probe"
+path = "fuzz_targets/container_probe.rs"
 test = false
 doc = false
 bench = false

@@ -145,6 +145,16 @@ Ordered per spec §31 (Recommended Implementation Order), scoped per spec §26 (
 
 ---
 
+## Remove ffprobe / FFmpeg (royalty-free-only inspector)
+
+- [x] New crate `tpt-app-media-qc-probe`: content sniffing, royalty-free allow-list (AV1/VP9, Opus/Vorbis/FLAC/PCM, text subtitles), refusal of everything else, readers for ISO-BMFF, Matroska/WebM, MPEG-TS, WAV, AIFF, FLAC and Ogg with bounded seek-based I/O; damaged files become `Corrupt` findings; timestamp gaps and malformed metadata now measured
+- [x] Cut over: ffprobe code deleted from the CLI, `make_inspector` infallible, CI no longer installs ffmpeg, `real_media` tests generate files in Rust, fuzz target `container_probe`, docs/GUMROAD/README updated
+- [ ] Fragmented MP4 (`moof/trun/sidx`) — CMAF/DASH AV1 is not read yet; affected rules report `Inconclusive`
+- [ ] AV1 in MPEG-TS without a registration descriptor (as written by some muxers) is listed as a data stream
+- [ ] Truncated FLAC/Ogg files are only detected when decoded (no index to cross-check)
+
+---
+
 ## Cross-cutting / Ongoing
 
 Applies continuously across all phases, not a one-time gate.

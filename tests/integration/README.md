@@ -15,11 +15,15 @@ engine-level suites are implemented and run with `cargo test --workspace` from
   profile parsing and result aggregation.
 - `crates/tpt-app-media-qc-tauri/src/local_api.rs` — loopback enforcement plus
   live health/profile/job/result tests using the existing local QC engine.
-- `crates/tpt-app-media-qc-cli/tests/real_media.rs` — when `ffmpeg` and
-  `ffprobe` are available, generate a deterministic WAV and exercise the real
-  `info` and full `check` binary, including the Cadence audio decode path. The
-  same target also verifies real-process batch failure isolation and watch-folder
-  routing; those cases skip cleanly when the tools are unavailable.
+- `crates/tpt-app-media-qc-cli/tests/real_media.rs` — generates deterministic
+  WAVs in Rust (no external tools) and exercises the real `info`, `check`,
+  `batch`, `watch` and `compare` binary, including the Cadence audio decode
+  path, real-process batch failure isolation and watch-folder routing. It also
+  checks that patent-encumbered codecs are refused, that a truncated file
+  becomes a container failure, and that the committed VP9 fixtures inspect with
+  an empty `PATH`.
+- `crates/tpt-app-media-qc-test/tests/plugins.rs` — real child-process tests of
+  the plugin host.
 
 Integration tests that need fixtures take them from
 [`../fixtures/`](../fixtures/) with expectations in

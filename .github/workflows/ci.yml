@@ -44,18 +44,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install ffmpeg (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-
-      - name: Install ffmpeg (macOS)
-        if: runner.os == 'macOS'
-        run: brew install ffmpeg
-
-      - name: Install ffmpeg (Windows)
-        if: runner.os == 'Windows'
-        run: choco install ffmpeg -y
-
       - run: cargo build --workspace --all-targets
       - run: cargo test --workspace
       - name: Test optional voice analysis
@@ -78,7 +66,7 @@ jobs:
           tool: cargo-fuzz
       - name: Run bounded fuzz campaigns (60s per target)
         run: |
-          for target in profile_parse ffprobe_json result_parser report_generation clap_args media_boundary plugin_boundary; do
+          for target in profile_parse container_probe result_parser report_generation clap_args media_boundary plugin_boundary; do
             echo "::group::fuzz $target"
             cargo fuzz run "$target" -- -max_total_time=60 -rss_limit_mb=4096
             echo "::endgroup::"

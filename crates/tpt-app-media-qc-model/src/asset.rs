@@ -43,7 +43,7 @@ pub struct AssetFingerprint {
     pub size_bytes: u64,
 }
 
-/// Media stream abbreviations mirroring ffprobe/container conventions.
+/// Media stream kinds, following common container conventions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum StreamKind {
@@ -75,7 +75,7 @@ pub struct StreamId(pub u64);
 
 /// Scanning order (interlacement) reported for a video stream.
 ///
-/// Values mirror what container/probe front-ends expose (ffprobe's
+/// Values mirror what container/probe front-ends expose (the conventional
 /// `field_order`). Mixed coded/display orders (`tb`/`bt`) carry no reliable
 /// display order and are reported as [`FieldOrder::Unknown`] rather than
 /// guessed.
@@ -113,7 +113,7 @@ impl FieldOrder {
         )
     }
 
-    /// Parse a probe-reported field-order tag (e.g. ffprobe `field_order`).
+    /// Parse a probe-reported field-order tag (e.g. `tff`, `bb`, `progressive`).
     /// Recognised values are matched case-insensitively; unknown tags yield
     /// `None` so callers can distinguish "not reported" from "unrecognised".
     pub fn parse_probe(raw: &str) -> Option<Self> {

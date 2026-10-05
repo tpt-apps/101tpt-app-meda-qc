@@ -1,0 +1,26 @@
+[package]
+name = "tpt-app-media-qc-probe"
+description = "In-process, royalty-free-only container inspector for TPT Media QC (replaces the external ffprobe)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["media", "qc", "probe", "av1", "vp9"]
+categories = ["multimedia", "parser-implementations"]
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json.workspace = true
+tpt-app-media-qc-core = { path = "../tpt-app-media-qc-core" }
+tpt-app-media-qc-model = { path = "../tpt-app-media-qc-model" }
+tpt-app-media-qc-pipeline = { path = "../tpt-app-media-qc-pipeline" }
+tpt-kinetix-core.workspace = true
+tpt-kinetix-av1.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -12,8 +12,6 @@ pub const EXIT_ERROR: i32 = 3;
 pub const EXIT_PATH: i32 = 4;
 /// Profile missing or invalid.
 pub const EXIT_PROFILE: i32 = 5;
-/// No usable inspector available for the requested depth.
-pub const EXIT_NO_INSPECTOR: i32 = 6;
 
 /// Map a pipeline verdict onto the exit-code contract.
 pub fn exit_code_for_verdict(verdict: tpt_app_media_qc_model::severity::VerdictDecision) -> i32 {

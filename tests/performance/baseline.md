@@ -73,8 +73,8 @@ measured yet, and no real professional master has been timed (pass one to
 - **Fingerprinting** sustains ~2 GiB/s SHA-256 — a 4 GiB master hashes in
   ~2 s, comfortably inside the import budget.
 - **Rule engine** (`run_rules`, 29 rules over a two-stream inspection) is
-  ~1.5 µs — metadata QC is effectively free next to any probe I/O; the
-  "~1 second per file" budget (spec §20) is dominated by `ffprobe`, not QC.
+  ~1.5 µs — metadata QC is effectively free next to any file I/O; the
+  "~1 second per file" budget (spec §20) is dominated by file I/O and decode, not QC.
 - **Report rendering** (PDF ≈ 0.75 ms, HTML ≈ 1 ms per report) is negligible
   per asset; watch-folder/batch routing will not be report-bound.
 - These are engine-side numbers only. The pinned Kinetix and Cadence decode
